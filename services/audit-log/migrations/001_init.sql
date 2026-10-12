@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS audit_entries (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), actor_id uuid NOT NULL, action text NOT NULL, resource_type text NOT NULL, resource_id text NOT NULL, reason text NOT NULL DEFAULT '', occurred_at timestamptz NOT NULL DEFAULT now());

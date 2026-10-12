@@ -1,0 +1,16 @@
+syntax = "proto3";
+package drukleague.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1";
+import "google/protobuf/timestamp.proto";
+service TournamentService {
+  rpc CreateTournament(CreateTournamentRequest) returns (CreateTournamentResponse);
+  rpc GetTournament(GetTournamentRequest) returns (GetTournamentResponse);
+  rpc ListTournaments(ListTournamentsRequest) returns (ListTournamentsResponse);
+}
+message Tournament { string id=1; string name=2; string sport=3; string season=4; string status=5; string venue=6; google.protobuf.Timestamp starts_at=7; string dzongkhag=8; }
+message CreateTournamentRequest { string name=1; string sport=2; string season=3; string venue=4; google.protobuf.Timestamp starts_at=5; string dzongkhag=6; }
+message GetTournamentRequest { string id=1; }
+message ListTournamentsRequest { string season=1; int32 page_size=2; string page_token=3; }
+message ListTournamentsResponse { repeated Tournament tournaments=1; string next_page_token=2; }
+message CreateTournamentResponse { Tournament tournament=1; }
+message GetTournamentResponse { Tournament tournament=1; }

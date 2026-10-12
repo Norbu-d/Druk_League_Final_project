@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS standings (tournament_id uuid NOT NULL, team_id uuid NOT NULL, played integer NOT NULL DEFAULT 0, won integer NOT NULL DEFAULT 0, drawn integer NOT NULL DEFAULT 0, lost integer NOT NULL DEFAULT 0, goals_for integer NOT NULL DEFAULT 0, goals_against integer NOT NULL DEFAULT 0, points integer NOT NULL DEFAULT 0, PRIMARY KEY(tournament_id,team_id));

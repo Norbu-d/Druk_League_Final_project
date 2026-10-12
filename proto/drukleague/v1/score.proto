@@ -1,0 +1,13 @@
+syntax = "proto3";
+package drukleague.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1";
+import "google/protobuf/timestamp.proto";
+service ScoreService {
+  rpc UpdateLiveScore(UpdateLiveScoreRequest) returns (UpdateLiveScoreResponse);
+  rpc FinalizeMatch(FinalizeMatchRequest) returns (FinalizeMatchResponse);
+}
+message Score { string match_id=1; int32 home_score=2; int32 away_score=3; bool finalized=4; google.protobuf.Timestamp updated_at=5; }
+message UpdateLiveScoreRequest { string match_id=1; int32 home_score=2; int32 away_score=3; }
+message UpdateLiveScoreResponse { Score score=1; }
+message FinalizeMatchRequest { string match_id=1; string reason=2; }
+message FinalizeMatchResponse { Score score=1; }

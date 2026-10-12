@@ -1,0 +1,13 @@
+syntax = "proto3";
+package drukleague.audit_log.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/audit_log/v1;auditlogv1";
+import "google/protobuf/timestamp.proto";
+service AuditLogService {
+  rpc RecordAuditEntry(RecordAuditEntryRequest) returns (RecordAuditEntryResponse);
+  rpc ListAuditEntries(ListAuditEntriesRequest) returns (ListAuditEntriesResponse);
+}
+message AuditEntry { string id=1; string actor_id=2; string action=3; string resource_type=4; string resource_id=5; string reason=6; google.protobuf.Timestamp occurred_at=7; }
+message RecordAuditEntryRequest { string actor_id=1; string action=2; string resource_type=3; string resource_id=4; string reason=5; }
+message RecordAuditEntryResponse { AuditEntry entry=1; }
+message ListAuditEntriesRequest { string resource_type=1; string resource_id=2; int32 page_size=3; string page_token=4; }
+message ListAuditEntriesResponse { repeated AuditEntry entries=1; string next_page_token=2; }

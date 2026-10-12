@@ -1,0 +1,19 @@
+syntax = "proto3";
+package drukleague.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1";
+import "google/protobuf/timestamp.proto";
+service MatchService {
+  rpc CreateMatch(CreateMatchRequest) returns (CreateMatchResponse);
+  rpc GetMatch(GetMatchRequest) returns (GetMatchResponse);
+  rpc ListMatches(ListMatchesRequest) returns (ListMatchesResponse);
+  rpc AssignOfficial(AssignOfficialRequest) returns (AssignOfficialResponse);
+}
+message Match { string id=1; string tournament_id=2; string home_team_id=3; string away_team_id=4; string venue=5; google.protobuf.Timestamp kickoff=6; string status=7; string official_id=8; }
+message CreateMatchRequest { string tournament_id=1; string home_team_id=2; string away_team_id=3; string venue=4; google.protobuf.Timestamp kickoff=5; }
+message CreateMatchResponse { Match match=1; }
+message GetMatchRequest { string id=1; }
+message GetMatchResponse { Match match=1; }
+message ListMatchesRequest { string tournament_id=1; google.protobuf.Timestamp after=2; int32 page_size=3; string page_token=4; }
+message ListMatchesResponse { repeated Match matches=1; string next_page_token=2; }
+message AssignOfficialRequest { string match_id=1; string official_id=2; }
+message AssignOfficialResponse { Match match=1; }

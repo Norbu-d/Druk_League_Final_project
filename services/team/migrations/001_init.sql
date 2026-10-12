@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS teams (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, short_code text NOT NULL, dzongkhag text NOT NULL, tournament_id uuid, created_at timestamptz NOT NULL DEFAULT now());

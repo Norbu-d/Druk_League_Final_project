@@ -1,0 +1,12 @@
+syntax = "proto3";
+package drukleague.configuration.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/configuration/v1;configurationv1";
+service ConfigurationService {
+  rpc GetConfiguration(GetConfigurationRequest) returns (GetConfigurationResponse);
+  rpc SetConfiguration(SetConfigurationRequest) returns (SetConfigurationResponse);
+}
+message ConfigurationEntry { string key=1; string value=2; }
+message GetConfigurationRequest { string key=1; }
+message GetConfigurationResponse { ConfigurationEntry entry=1; }
+message SetConfigurationRequest { string key=1; string value=2; }
+message SetConfigurationResponse { ConfigurationEntry entry=1; }

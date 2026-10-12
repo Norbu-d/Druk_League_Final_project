@@ -1,0 +1,8 @@
+syntax = "proto3";
+package drukleague.analytics.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/analytics/v1;analyticsv1";
+service AnalyticsService {
+  rpc GetDashboardMetrics(GetDashboardMetricsRequest) returns (GetDashboardMetricsResponse);
+}
+message GetDashboardMetricsRequest { string season=1; string dzongkhag=2; }
+message GetDashboardMetricsResponse { int32 tournaments=1; int32 teams=2; int32 players=3; int32 matches=4; int32 completed_matches=5; }

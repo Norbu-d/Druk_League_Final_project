@@ -1,0 +1,9 @@
+syntax = "proto3";
+package drukleague.search.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/search/v1;searchv1";
+service SearchService {
+  rpc Search(SearchRequest) returns (SearchResponse);
+}
+message SearchRequest { string query=1; repeated string entity_types=2; int32 page_size=3; string page_token=4; }
+message SearchHit { string entity_type=1; string entity_id=2; string title=3; string subtitle=4; }
+message SearchResponse { repeated SearchHit hits=1; string next_page_token=2; }

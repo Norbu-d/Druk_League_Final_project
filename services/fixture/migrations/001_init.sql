@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS fixtures (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tournament_id uuid NOT NULL, home_team_id uuid NOT NULL, away_team_id uuid NOT NULL, venue_id uuid, kickoff timestamptz, created_at timestamptz NOT NULL DEFAULT now());

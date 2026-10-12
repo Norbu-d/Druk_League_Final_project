@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS players (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), team_id uuid NOT NULL, given_name text NOT NULL, family_name text NOT NULL, shirt_number text NOT NULL DEFAULT '', created_at timestamptz NOT NULL DEFAULT now());

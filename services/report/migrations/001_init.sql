@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS report_jobs (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), report_type text NOT NULL, status text NOT NULL DEFAULT 'pending', requester_id uuid NOT NULL, created_at timestamptz NOT NULL DEFAULT now());

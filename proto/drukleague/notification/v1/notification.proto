@@ -1,0 +1,13 @@
+syntax = "proto3";
+package drukleague.notification.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/notification/v1;notificationv1";
+import "google/protobuf/timestamp.proto";
+service NotificationService {
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+}
+message Notification { string id=1; string user_id=2; string channel=3; string subject=4; string body=5; google.protobuf.Timestamp created_at=6; }
+message SendNotificationRequest { string user_id=1; string channel=2; string subject=3; string body=4; }
+message SendNotificationResponse { Notification notification=1; }
+message ListNotificationsRequest { string user_id=1; int32 page_size=2; string page_token=3; }
+message ListNotificationsResponse { repeated Notification notifications=1; string next_page_token=2; }

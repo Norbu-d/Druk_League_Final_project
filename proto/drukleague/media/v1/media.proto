@@ -1,0 +1,16 @@
+syntax = "proto3";
+package drukleague.media.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/media/v1;mediav1";
+import "google/protobuf/timestamp.proto";
+service MediaService {
+  rpc RegisterMedia(RegisterMediaRequest) returns (RegisterMediaResponse);
+  rpc GetMedia(GetMediaRequest) returns (GetMediaResponse);
+  rpc DeleteMedia(DeleteMediaRequest) returns (DeleteMediaResponse);
+}
+message MediaAsset { string id=1; string owner_id=2; string object_key=3; string content_type=4; int64 size_bytes=5; google.protobuf.Timestamp created_at=6; }
+message RegisterMediaRequest { string owner_id=1; string object_key=2; string content_type=3; int64 size_bytes=4; }
+message RegisterMediaResponse { MediaAsset asset=1; }
+message GetMediaRequest { string id=1; }
+message GetMediaResponse { MediaAsset asset=1; }
+message DeleteMediaRequest { string id=1; }
+message DeleteMediaResponse { bool deleted=1; }

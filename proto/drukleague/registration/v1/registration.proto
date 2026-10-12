@@ -1,0 +1,16 @@
+syntax = "proto3";
+package drukleague.registration.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1;registrationv1";
+import "google/protobuf/timestamp.proto";
+service RegistrationService {
+  rpc RegisterTeam(RegisterTeamRequest) returns (RegisterTeamResponse);
+  rpc ReviewRegistration(ReviewRegistrationRequest) returns (ReviewRegistrationResponse);
+  rpc ListRegistrations(ListRegistrationsRequest) returns (ListRegistrationsResponse);
+}
+message Registration { string id=1; string tournament_id=2; string team_id=3; string status=4; google.protobuf.Timestamp submitted_at=5; }
+message RegisterTeamRequest { string tournament_id=1; string team_id=2; }
+message RegisterTeamResponse { Registration registration=1; }
+message ReviewRegistrationRequest { string registration_id=1; bool approved=2; string reason=3; }
+message ReviewRegistrationResponse { Registration registration=1; }
+message ListRegistrationsRequest { string tournament_id=1; string status=2; int32 page_size=3; string page_token=4; }
+message ListRegistrationsResponse { repeated Registration registrations=1; string next_page_token=2; }

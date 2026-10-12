@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS scores (match_id uuid PRIMARY KEY, home_score integer NOT NULL DEFAULT 0, away_score integer NOT NULL DEFAULT 0, finalized_at timestamptz, updated_at timestamptz NOT NULL DEFAULT now());

@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS search_documents (entity_type text NOT NULL, entity_id uuid NOT NULL, content text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(entity_type,entity_id));

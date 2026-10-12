@@ -1,0 +1,15 @@
+syntax = "proto3";
+package drukleague.venue.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1;venuev1";
+service VenueService {
+  rpc CreateVenue(CreateVenueRequest) returns (CreateVenueResponse);
+  rpc GetVenue(GetVenueRequest) returns (GetVenueResponse);
+  rpc ListVenues(ListVenuesRequest) returns (ListVenuesResponse);
+}
+message Venue { string id=1; string name=2; string dzongkhag=3; int32 capacity=4; }
+message CreateVenueRequest { string name=1; string dzongkhag=2; int32 capacity=3; }
+message CreateVenueResponse { Venue venue=1; }
+message GetVenueRequest { string id=1; }
+message GetVenueResponse { Venue venue=1; }
+message ListVenuesRequest { string dzongkhag=1; int32 page_size=2; string page_token=3; }
+message ListVenuesResponse { repeated Venue venues=1; string next_page_token=2; }

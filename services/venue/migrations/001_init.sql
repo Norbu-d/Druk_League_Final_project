@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS venues (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), name text NOT NULL, dzongkhag text NOT NULL, capacity integer NOT NULL DEFAULT 0, created_at timestamptz NOT NULL DEFAULT now());

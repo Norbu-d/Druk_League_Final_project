@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS analytics_snapshots (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), metric_name text NOT NULL, metric_value numeric NOT NULL, dimensions jsonb NOT NULL DEFAULT '{}'::jsonb, captured_at timestamptz NOT NULL DEFAULT now());

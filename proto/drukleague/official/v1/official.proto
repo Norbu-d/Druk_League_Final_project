@@ -1,0 +1,13 @@
+syntax = "proto3";
+package drukleague.official.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1;officialv1";
+import "google/protobuf/timestamp.proto";
+service OfficialService {
+  rpc AssignOfficial(AssignOfficialRequest) returns (AssignOfficialResponse);
+  rpc ListAssignments(ListAssignmentsRequest) returns (ListAssignmentsResponse);
+}
+message OfficialAssignment { string id=1; string match_id=2; string official_user_id=3; google.protobuf.Timestamp assigned_at=4; }
+message AssignOfficialRequest { string match_id=1; string official_user_id=2; }
+message AssignOfficialResponse { OfficialAssignment assignment=1; }
+message ListAssignmentsRequest { string official_user_id=1; string tournament_id=2; }
+message ListAssignmentsResponse { repeated OfficialAssignment assignments=1; }

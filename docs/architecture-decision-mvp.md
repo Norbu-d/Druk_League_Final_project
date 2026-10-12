@@ -1,0 +1,15 @@
+# Architecture decision: DrukLeague 20-service target
+
+**Status:** Accepted target; implementation is staged.
+
+The current proposal defines 20 independently deployable Go microservices. The running product began as a single Go HTTP API MVP and is not the final target architecture. On 7 Oct 2026, the project owner confirmed that the team is building toward all 20 services.
+
+The target service boundaries use ports and adapters: domain and application code depend on ports; PostgreSQL and gRPC adapters implement those ports. Each service owns a database and migration set. The API gateway and BFF route browser requests to service gRPC APIs. The current code has a shared PostgreSQL MVP API plus 20 Go module shells, contracts, migrations, and Dockerfiles. Only the Dzongkhag service currently implements domain gRPC methods; the other modules currently expose gRPC health.
+
+The MVP commits the MatchFinalized event to an outbox in the same transaction as the immutable result and standings updates. A publisher forwards committed events to NATS JetStream with a stable message ID. Consumers, retry/dead-letter policy, and service-level event handling remain to be implemented.
+
+Final results cannot be edited in place in the MVP. The correction policy remains open between an audited admin correction with reason and append-only correction events followed by standings recalculation.
+
+Fixture clash validation rejects another match at the same exact kickoff timestamp when a team or non-empty venue overlaps. Venue availability windows and configurable match durations remain future work.
+
+The current default bootstrap user and secrets are for local development only. Deployment must override them with unique secrets.

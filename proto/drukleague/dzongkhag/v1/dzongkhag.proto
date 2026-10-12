@@ -1,0 +1,12 @@
+syntax = "proto3";
+package drukleague.dzongkhag.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/dzongkhag/v1;dzongkhagv1";
+service DzongkhagService {
+  rpc GetDzongkhag(GetDzongkhagRequest) returns (GetDzongkhagResponse);
+  rpc ListDzongkhags(ListDzongkhagsRequest) returns (ListDzongkhagsResponse);
+}
+message Dzongkhag { string code=1; string name=2; }
+message GetDzongkhagRequest { string code=1; }
+message GetDzongkhagResponse { Dzongkhag dzongkhag=1; }
+message ListDzongkhagsRequest {}
+message ListDzongkhagsResponse { repeated Dzongkhag dzongkhags=1; }

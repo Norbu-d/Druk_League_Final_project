@@ -1,0 +1,9 @@
+syntax = "proto3";
+package drukleague.standings.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1;standingsv1";
+service StandingsService {
+  rpc GetStandings(GetStandingsRequest) returns (GetStandingsResponse);
+}
+message Standing { string team_id=1; string team_name=2; string dzongkhag=3; int32 played=4; int32 won=5; int32 drawn=6; int32 lost=7; int32 goals_for=8; int32 goals_against=9; int32 goal_difference=10; int32 points=11; }
+message GetStandingsRequest { string tournament_id=1; }
+message GetStandingsResponse { repeated Standing standings=1; }

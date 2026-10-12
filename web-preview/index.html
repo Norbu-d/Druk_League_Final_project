@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#142c27" />
+    <meta name="description" content="DrukLeague tournament management for Bhutan." />
+    <title>DrukLeague — Tournament operations</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#dashboard" aria-label="DrukLeague dashboard">
+          <span class="brand-logo-wrap"><img class="brand-logo" src="./assets/drukleague-logo.png" alt="" /></span>
+          <span class="brand-type">druk<span>league</span><small>TOURNAMENT OPERATIONS</small></span>
+        </a>
+        <div class="workspace-label">WORKSPACE</div>
+        <nav class="primary-nav" aria-label="Main navigation">
+          <a href="#dashboard" class="nav-link active" data-page="dashboard"><span class="nav-icon" data-icon="grid"></span>Overview</a>
+          <a href="#tournaments" class="nav-link" data-page="tournaments"><span class="nav-icon" data-icon="trophy"></span>Tournaments<span class="nav-count">4</span></a>
+          <a href="#teams" class="nav-link" data-page="teams"><span class="nav-icon" data-icon="users"></span>Teams &amp; dzongkhags</a>
+          <a href="#matches" class="nav-link" data-page="matches"><span class="nav-icon" data-icon="calendar"></span>Matches &amp; scores<span class="live-dot"></span></a>
+          <a href="#standings" class="nav-link" data-page="standings"><span class="nav-icon" data-icon="chart"></span>Standings</a>
+          <a href="#officials" class="nav-link" data-page="officials"><span class="nav-icon" data-icon="shield"></span>Officials</a>
+        </nav>
+        <div class="sidebar-divider"></div>
+        <div class="workspace-label">MANAGE</div>
+        <nav class="primary-nav" aria-label="Management navigation">
+          <a href="#venues" class="nav-link" data-page="venues"><span class="nav-icon" data-icon="pin"></span>Venues</a>
+          <a href="#reports" class="nav-link" data-page="reports"><span class="nav-icon" data-icon="file"></span>Reports</a>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="help-card"><span class="help-spark">✳</span><strong>Need a hand?</strong><p>Explore the quick guide to get your tournament moving.</p><button class="text-button" id="help-button">Open quick guide <span>↗</span></button></div>
+          <button class="profile-button"><span class="avatar avatar-gold">PD</span><span class="profile-copy"><strong>Pema Dorji</strong><small>League administrator</small></span><span class="profile-more">···</span></button>
+        </div>
+      </aside>
+      <main class="main-area">
+        <header class="topbar">
+          <button class="icon-button mobile-menu" id="menu-button" aria-label="Open navigation"><span data-icon="menu"></span></button>
+          <div class="breadcrumb"><span>DrukLeague</span><span class="crumb-slash">/</span><strong id="crumb-current">Overview</strong></div>
+          <div class="topbar-actions">
+            <label class="searchbox"><span data-icon="search"></span><input id="global-search" type="search" placeholder="Search anything..." aria-label="Search anything" /><kbd>⌘ K</kbd></label>
+            <button class="season-button" id="season-button"><span class="season-dot"></span>2025 season<span class="chevron">⌄</span></button>
+            <button class="icon-button notification-button" id="notifications-button" aria-label="Notifications"><span data-icon="bell"></span><i></i></button>
+            <button class="avatar avatar-gold top-avatar auth-button" id="auth-button" type="button" aria-label="Sign in to DrukLeague">PD</button>
+          </div>
+        </header>
+        <section class="page-content" id="page-content" aria-live="polite"></section>
+        <footer class="app-footer"><span>© 2025 DrukLeague</span><span>Made for the game, across all 20 dzongkhags <b>✳</b></span><a href="#help">Help &amp; support <span>↗</span></a></footer>
+      </main>
+    </div>
+    <div id="modal-root"></div>
+    <div class="toast-region" id="toast-region" aria-live="polite"></div>
+    <script src="./app.js" defer></script>
+    <script src="./api.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+syntax = "proto3";
+package drukleague.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1";
+import "google/protobuf/timestamp.proto";
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+}
+message User { string id=1; string username=2; string role=3; reserved 4; google.protobuf.Timestamp created_at=5; }
+message CreateUserRequest { string username=1; string password=2; string role=3; reserved 4; }
+message CreateUserResponse { User user=1; }
+message GetUserRequest { string id=1; }
+message GetUserResponse { User user=1; }
+message ListUsersRequest { string role=1; int32 page_size=2; string page_token=3; }
+message ListUsersResponse { repeated User users=1; string next_page_token=2; }

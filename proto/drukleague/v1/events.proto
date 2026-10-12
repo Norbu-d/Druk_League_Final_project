@@ -1,0 +1,14 @@
+syntax = "proto3";
+package drukleague.v1;
+option go_package = "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1";
+import "google/protobuf/timestamp.proto";
+message MatchFinalized {
+  string event_id=1;
+  string match_id=2;
+  string tournament_id=3;
+  string home_team_id=4;
+  string away_team_id=5;
+  int32 home_score=6;
+  int32 away_score=7;
+  google.protobuf.Timestamp finalized_at=8;
+}
