@@ -7,10 +7,10 @@ service TeamService {
   rpc GetTeam(GetTeamRequest) returns (GetTeamResponse);
   rpc ListTeams(ListTeamsRequest) returns (ListTeamsResponse);
 }
-message Team { string id=1; string name=2; string short_code=3; string dzongkhag=4; string tournament_id=5; google.protobuf.Timestamp created_at=6; }
+message Team { string id=1; string name=2; string short_code=3; string dzongkhag=4; string tournament_id=5; google.protobuf.Timestamp created_at=6; string manager_id=7; }
 message CreateTeamRequest { string name=1; string short_code=2; string dzongkhag=3; string tournament_id=4; }
 message GetTeamRequest { string id=1; }
-message ListTeamsRequest { string tournament_id=1; string dzongkhag=2; int32 page_size=3; string page_token=4; }
+message ListTeamsRequest { string tournament_id=1; string dzongkhag=2; int32 page_size=3; string page_token=4; string manager_id=5; }
 message ListTeamsResponse { repeated Team teams=1; string next_page_token=2; }
 message CreateTeamResponse { Team team=1; }
 message GetTeamResponse { Team team=1; }

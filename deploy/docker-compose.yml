@@ -63,6 +63,9 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      USER_SERVICE_ADDR: user:50051
+      ACCESS_TOKEN_TTL: 30m
+      REFRESH_TOKEN_TTL: 168h
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -75,6 +78,9 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      # Creates the first super admin in the User service if none exists (never overwrites one).
+      BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-admin}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-drukleague-dev}
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -135,9 +141,12 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      NATS_URL: nats://nats:4222
     depends_on:
       db-init:
         condition: service_completed_successfully
+      nats:
+        condition: service_started
   score:
     build:
       context: ..
@@ -147,9 +156,13 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      MATCH_SERVICE_ADDR: match:50051
+      NATS_URL: nats://nats:4222
     depends_on:
       db-init:
         condition: service_completed_successfully
+      nats:
+        condition: service_started
   fixture:
     build:
       context: ..
@@ -159,9 +172,16 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      TOURNAMENT_SERVICE_ADDR: tournament:50051
+      TEAM_SERVICE_ADDR: team:50051
+      VENUE_SERVICE_ADDR: venue:50051
+      MATCH_SERVICE_ADDR: match:50051
+      NATS_URL: nats://nats:4222
     depends_on:
       db-init:
         condition: service_completed_successfully
+      nats:
+        condition: service_started
   standings:
     build:
       context: ..
@@ -171,9 +191,13 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      TEAM_SERVICE_ADDR: team:50051
+      NATS_URL: nats://nats:4222
     depends_on:
       db-init:
         condition: service_completed_successfully
+      nats:
+        condition: service_started
   venue:
     build:
       context: ..
@@ -183,6 +207,7 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      DZONGKHAG_SERVICE_ADDR: dzongkhag:50051
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -195,6 +220,7 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      MATCH_SERVICE_ADDR: match:50051
     depends_on:
       db-init:
         condition: service_completed_successfully

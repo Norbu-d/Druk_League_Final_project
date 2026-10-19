@@ -394,6 +394,102 @@ func (x *ListUsersResponse) GetNextPageToken() string {
 	return ""
 }
 
+type VerifyCredentialsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyCredentialsRequest) Reset() {
+	*x = VerifyCredentialsRequest{}
+	mi := &file_drukleague_v1_user_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyCredentialsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyCredentialsRequest) ProtoMessage() {}
+
+func (x *VerifyCredentialsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_drukleague_v1_user_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyCredentialsRequest.ProtoReflect.Descriptor instead.
+func (*VerifyCredentialsRequest) Descriptor() ([]byte, []int) {
+	return file_drukleague_v1_user_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *VerifyCredentialsRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *VerifyCredentialsRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+type VerifyCredentialsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *User                  `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *VerifyCredentialsResponse) Reset() {
+	*x = VerifyCredentialsResponse{}
+	mi := &file_drukleague_v1_user_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *VerifyCredentialsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VerifyCredentialsResponse) ProtoMessage() {}
+
+func (x *VerifyCredentialsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_drukleague_v1_user_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VerifyCredentialsResponse.ProtoReflect.Descriptor instead.
+func (*VerifyCredentialsResponse) Descriptor() ([]byte, []int) {
+	return file_drukleague_v1_user_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *VerifyCredentialsResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
 var File_drukleague_v1_user_proto protoreflect.FileDescriptor
 
 const file_drukleague_v1_user_proto_rawDesc = "" +
@@ -422,12 +518,18 @@ const file_drukleague_v1_user_proto_rawDesc = "" +
 	"page_token\x18\x03 \x01(\tR\tpageToken\"f\n" +
 	"\x11ListUsersResponse\x12)\n" +
 	"\x05users\x18\x01 \x03(\v2\x13.drukleague.v1.UserR\x05users\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken2\xfa\x01\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"R\n" +
+	"\x18VerifyCredentialsRequest\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\"D\n" +
+	"\x19VerifyCredentialsResponse\x12'\n" +
+	"\x04user\x18\x01 \x01(\v2\x13.drukleague.v1.UserR\x04user2\xe2\x02\n" +
 	"\vUserService\x12Q\n" +
 	"\n" +
 	"CreateUser\x12 .drukleague.v1.CreateUserRequest\x1a!.drukleague.v1.CreateUserResponse\x12H\n" +
 	"\aGetUser\x12\x1d.drukleague.v1.GetUserRequest\x1a\x1e.drukleague.v1.GetUserResponse\x12N\n" +
-	"\tListUsers\x12\x1f.drukleague.v1.ListUsersRequest\x1a .drukleague.v1.ListUsersResponseBRZPgithub.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1b\x06proto3"
+	"\tListUsers\x12\x1f.drukleague.v1.ListUsersRequest\x1a .drukleague.v1.ListUsersResponse\x12f\n" +
+	"\x11VerifyCredentials\x12'.drukleague.v1.VerifyCredentialsRequest\x1a(.drukleague.v1.VerifyCredentialsResponseBRZPgithub.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1b\x06proto3"
 
 var (
 	file_drukleague_v1_user_proto_rawDescOnce sync.Once
@@ -441,33 +543,38 @@ func file_drukleague_v1_user_proto_rawDescGZIP() []byte {
 	return file_drukleague_v1_user_proto_rawDescData
 }
 
-var file_drukleague_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_drukleague_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_drukleague_v1_user_proto_goTypes = []any{
-	(*User)(nil),                  // 0: drukleague.v1.User
-	(*CreateUserRequest)(nil),     // 1: drukleague.v1.CreateUserRequest
-	(*CreateUserResponse)(nil),    // 2: drukleague.v1.CreateUserResponse
-	(*GetUserRequest)(nil),        // 3: drukleague.v1.GetUserRequest
-	(*GetUserResponse)(nil),       // 4: drukleague.v1.GetUserResponse
-	(*ListUsersRequest)(nil),      // 5: drukleague.v1.ListUsersRequest
-	(*ListUsersResponse)(nil),     // 6: drukleague.v1.ListUsersResponse
-	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*User)(nil),                      // 0: drukleague.v1.User
+	(*CreateUserRequest)(nil),         // 1: drukleague.v1.CreateUserRequest
+	(*CreateUserResponse)(nil),        // 2: drukleague.v1.CreateUserResponse
+	(*GetUserRequest)(nil),            // 3: drukleague.v1.GetUserRequest
+	(*GetUserResponse)(nil),           // 4: drukleague.v1.GetUserResponse
+	(*ListUsersRequest)(nil),          // 5: drukleague.v1.ListUsersRequest
+	(*ListUsersResponse)(nil),         // 6: drukleague.v1.ListUsersResponse
+	(*VerifyCredentialsRequest)(nil),  // 7: drukleague.v1.VerifyCredentialsRequest
+	(*VerifyCredentialsResponse)(nil), // 8: drukleague.v1.VerifyCredentialsResponse
+	(*timestamppb.Timestamp)(nil),     // 9: google.protobuf.Timestamp
 }
 var file_drukleague_v1_user_proto_depIdxs = []int32{
-	7, // 0: drukleague.v1.User.created_at:type_name -> google.protobuf.Timestamp
+	9, // 0: drukleague.v1.User.created_at:type_name -> google.protobuf.Timestamp
 	0, // 1: drukleague.v1.CreateUserResponse.user:type_name -> drukleague.v1.User
 	0, // 2: drukleague.v1.GetUserResponse.user:type_name -> drukleague.v1.User
 	0, // 3: drukleague.v1.ListUsersResponse.users:type_name -> drukleague.v1.User
-	1, // 4: drukleague.v1.UserService.CreateUser:input_type -> drukleague.v1.CreateUserRequest
-	3, // 5: drukleague.v1.UserService.GetUser:input_type -> drukleague.v1.GetUserRequest
-	5, // 6: drukleague.v1.UserService.ListUsers:input_type -> drukleague.v1.ListUsersRequest
-	2, // 7: drukleague.v1.UserService.CreateUser:output_type -> drukleague.v1.CreateUserResponse
-	4, // 8: drukleague.v1.UserService.GetUser:output_type -> drukleague.v1.GetUserResponse
-	6, // 9: drukleague.v1.UserService.ListUsers:output_type -> drukleague.v1.ListUsersResponse
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0, // 4: drukleague.v1.VerifyCredentialsResponse.user:type_name -> drukleague.v1.User
+	1, // 5: drukleague.v1.UserService.CreateUser:input_type -> drukleague.v1.CreateUserRequest
+	3, // 6: drukleague.v1.UserService.GetUser:input_type -> drukleague.v1.GetUserRequest
+	5, // 7: drukleague.v1.UserService.ListUsers:input_type -> drukleague.v1.ListUsersRequest
+	7, // 8: drukleague.v1.UserService.VerifyCredentials:input_type -> drukleague.v1.VerifyCredentialsRequest
+	2, // 9: drukleague.v1.UserService.CreateUser:output_type -> drukleague.v1.CreateUserResponse
+	4, // 10: drukleague.v1.UserService.GetUser:output_type -> drukleague.v1.GetUserResponse
+	6, // 11: drukleague.v1.UserService.ListUsers:output_type -> drukleague.v1.ListUsersResponse
+	8, // 12: drukleague.v1.UserService.VerifyCredentials:output_type -> drukleague.v1.VerifyCredentialsResponse
+	9, // [9:13] is the sub-list for method output_type
+	5, // [5:9] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_drukleague_v1_user_proto_init() }
@@ -481,7 +588,7 @@ func file_drukleague_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_drukleague_v1_user_proto_rawDesc), len(file_drukleague_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

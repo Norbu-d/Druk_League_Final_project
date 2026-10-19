@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	ScoreService_UpdateLiveScore_FullMethodName = "/drukleague.v1.ScoreService/UpdateLiveScore"
 	ScoreService_FinalizeMatch_FullMethodName   = "/drukleague.v1.ScoreService/FinalizeMatch"
+	ScoreService_GetScore_FullMethodName        = "/drukleague.v1.ScoreService/GetScore"
 )
 
 // ScoreServiceClient is the client API for ScoreService service.
@@ -29,6 +30,7 @@ const (
 type ScoreServiceClient interface {
 	UpdateLiveScore(ctx context.Context, in *UpdateLiveScoreRequest, opts ...grpc.CallOption) (*UpdateLiveScoreResponse, error)
 	FinalizeMatch(ctx context.Context, in *FinalizeMatchRequest, opts ...grpc.CallOption) (*FinalizeMatchResponse, error)
+	GetScore(ctx context.Context, in *GetScoreRequest, opts ...grpc.CallOption) (*GetScoreResponse, error)
 }
 
 type scoreServiceClient struct {
@@ -59,12 +61,23 @@ func (c *scoreServiceClient) FinalizeMatch(ctx context.Context, in *FinalizeMatc
 	return out, nil
 }
 
+func (c *scoreServiceClient) GetScore(ctx context.Context, in *GetScoreRequest, opts ...grpc.CallOption) (*GetScoreResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetScoreResponse)
+	err := c.cc.Invoke(ctx, ScoreService_GetScore_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ScoreServiceServer is the server API for ScoreService service.
 // All implementations must embed UnimplementedScoreServiceServer
 // for forward compatibility.
 type ScoreServiceServer interface {
 	UpdateLiveScore(context.Context, *UpdateLiveScoreRequest) (*UpdateLiveScoreResponse, error)
 	FinalizeMatch(context.Context, *FinalizeMatchRequest) (*FinalizeMatchResponse, error)
+	GetScore(context.Context, *GetScoreRequest) (*GetScoreResponse, error)
 	mustEmbedUnimplementedScoreServiceServer()
 }
 
@@ -80,6 +93,9 @@ func (UnimplementedScoreServiceServer) UpdateLiveScore(context.Context, *UpdateL
 }
 func (UnimplementedScoreServiceServer) FinalizeMatch(context.Context, *FinalizeMatchRequest) (*FinalizeMatchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FinalizeMatch not implemented")
+}
+func (UnimplementedScoreServiceServer) GetScore(context.Context, *GetScoreRequest) (*GetScoreResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetScore not implemented")
 }
 func (UnimplementedScoreServiceServer) mustEmbedUnimplementedScoreServiceServer() {}
 func (UnimplementedScoreServiceServer) testEmbeddedByValue()                      {}
@@ -138,6 +154,24 @@ func _ScoreService_FinalizeMatch_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ScoreService_GetScore_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetScoreRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ScoreServiceServer).GetScore(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ScoreService_GetScore_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ScoreServiceServer).GetScore(ctx, req.(*GetScoreRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ScoreService_ServiceDesc is the grpc.ServiceDesc for ScoreService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -152,6 +186,10 @@ var ScoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "FinalizeMatch",
 			Handler:    _ScoreService_FinalizeMatch_Handler,
+		},
+		{
+			MethodName: "GetScore",
+			Handler:    _ScoreService_GetScore_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

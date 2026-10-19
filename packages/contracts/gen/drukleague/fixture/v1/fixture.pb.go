@@ -30,6 +30,8 @@ type Fixture struct {
 	AwayTeamId    string                 `protobuf:"bytes,4,opt,name=away_team_id,json=awayTeamId,proto3" json:"away_team_id,omitempty"`
 	VenueId       string                 `protobuf:"bytes,5,opt,name=venue_id,json=venueId,proto3" json:"venue_id,omitempty"`
 	Kickoff       *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=kickoff,proto3" json:"kickoff,omitempty"`
+	MatchId       string                 `protobuf:"bytes,7,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	Round         int32                  `protobuf:"varint,8,opt,name=round,proto3" json:"round,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -106,10 +108,25 @@ func (x *Fixture) GetKickoff() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *Fixture) GetMatchId() string {
+	if x != nil {
+		return x.MatchId
+	}
+	return ""
+}
+
+func (x *Fixture) GetRound() int32 {
+	if x != nil {
+		return x.Round
+	}
+	return 0
+}
+
 type GenerateFixturesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TournamentId  string                 `protobuf:"bytes,1,opt,name=tournament_id,json=tournamentId,proto3" json:"tournament_id,omitempty"`
 	Format        string                 `protobuf:"bytes,2,opt,name=format,proto3" json:"format,omitempty"`
+	StartsAt      *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=starts_at,json=startsAt,proto3" json:"starts_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -156,6 +173,13 @@ func (x *GenerateFixturesRequest) GetFormat() string {
 		return x.Format
 	}
 	return ""
+}
+
+func (x *GenerateFixturesRequest) GetStartsAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartsAt
+	}
+	return nil
 }
 
 type GenerateFixturesResponse struct {
@@ -326,7 +350,7 @@ var File_drukleague_fixture_v1_fixture_proto protoreflect.FileDescriptor
 
 const file_drukleague_fixture_v1_fixture_proto_rawDesc = "" +
 	"\n" +
-	"#drukleague/fixture/v1/fixture.proto\x12\x15drukleague.fixture.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd3\x01\n" +
+	"#drukleague/fixture/v1/fixture.proto\x12\x15drukleague.fixture.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x84\x02\n" +
 	"\aFixture\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12#\n" +
 	"\rtournament_id\x18\x02 \x01(\tR\ftournamentId\x12 \n" +
@@ -335,10 +359,13 @@ const file_drukleague_fixture_v1_fixture_proto_rawDesc = "" +
 	"\faway_team_id\x18\x04 \x01(\tR\n" +
 	"awayTeamId\x12\x19\n" +
 	"\bvenue_id\x18\x05 \x01(\tR\avenueId\x124\n" +
-	"\akickoff\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\akickoff\"V\n" +
+	"\akickoff\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\akickoff\x12\x19\n" +
+	"\bmatch_id\x18\a \x01(\tR\amatchId\x12\x14\n" +
+	"\x05round\x18\b \x01(\x05R\x05round\"\x8f\x01\n" +
 	"\x17GenerateFixturesRequest\x12#\n" +
 	"\rtournament_id\x18\x01 \x01(\tR\ftournamentId\x12\x16\n" +
-	"\x06format\x18\x02 \x01(\tR\x06format\"{\n" +
+	"\x06format\x18\x02 \x01(\tR\x06format\x127\n" +
+	"\tstarts_at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\bstartsAt\"{\n" +
 	"\x18GenerateFixturesResponse\x12:\n" +
 	"\bfixtures\x18\x01 \x03(\v2\x1e.drukleague.fixture.v1.FixtureR\bfixtures\x12#\n" +
 	"\rcreated_count\x18\x02 \x01(\x05R\fcreatedCount\"v\n" +
@@ -377,17 +404,18 @@ var file_drukleague_fixture_v1_fixture_proto_goTypes = []any{
 }
 var file_drukleague_fixture_v1_fixture_proto_depIdxs = []int32{
 	5, // 0: drukleague.fixture.v1.Fixture.kickoff:type_name -> google.protobuf.Timestamp
-	0, // 1: drukleague.fixture.v1.GenerateFixturesResponse.fixtures:type_name -> drukleague.fixture.v1.Fixture
-	0, // 2: drukleague.fixture.v1.ListFixturesResponse.fixtures:type_name -> drukleague.fixture.v1.Fixture
-	1, // 3: drukleague.fixture.v1.FixtureService.GenerateFixtures:input_type -> drukleague.fixture.v1.GenerateFixturesRequest
-	3, // 4: drukleague.fixture.v1.FixtureService.ListFixtures:input_type -> drukleague.fixture.v1.ListFixturesRequest
-	2, // 5: drukleague.fixture.v1.FixtureService.GenerateFixtures:output_type -> drukleague.fixture.v1.GenerateFixturesResponse
-	4, // 6: drukleague.fixture.v1.FixtureService.ListFixtures:output_type -> drukleague.fixture.v1.ListFixturesResponse
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	5, // 1: drukleague.fixture.v1.GenerateFixturesRequest.starts_at:type_name -> google.protobuf.Timestamp
+	0, // 2: drukleague.fixture.v1.GenerateFixturesResponse.fixtures:type_name -> drukleague.fixture.v1.Fixture
+	0, // 3: drukleague.fixture.v1.ListFixturesResponse.fixtures:type_name -> drukleague.fixture.v1.Fixture
+	1, // 4: drukleague.fixture.v1.FixtureService.GenerateFixtures:input_type -> drukleague.fixture.v1.GenerateFixturesRequest
+	3, // 5: drukleague.fixture.v1.FixtureService.ListFixtures:input_type -> drukleague.fixture.v1.ListFixturesRequest
+	2, // 6: drukleague.fixture.v1.FixtureService.GenerateFixtures:output_type -> drukleague.fixture.v1.GenerateFixturesResponse
+	4, // 7: drukleague.fixture.v1.FixtureService.ListFixtures:output_type -> drukleague.fixture.v1.ListFixturesResponse
+	6, // [6:8] is the sub-list for method output_type
+	4, // [4:6] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_drukleague_fixture_v1_fixture_proto_init() }

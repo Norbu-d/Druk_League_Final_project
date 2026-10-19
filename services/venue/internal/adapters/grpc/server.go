@@ -2,96 +2,53 @@ package grpcadapter
 
 import (
 	"context"
-	"database/sql"
-	"errors"
-	"strconv"
-	"strings"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	"github.com/drukleague/platform/services/venue/internal/app"
+	"github.com/drukleague/platform/services/venue/internal/domain"
 )
 
 type Server struct {
 	v1.UnimplementedVenueServiceServer
-	db *sql.DB
+	service *app.Service
 }
 
-func New(db *sql.DB) *Server { return &Server{db: db} }
+func New(service *app.Service) *Server { return &Server{service: service} }
+
 func (s *Server) CreateVenue(ctx context.Context, req *v1.CreateVenueRequest) (*v1.CreateVenueResponse, error) {
-	name, district := strings.TrimSpace(req.GetName()), strings.TrimSpace(req.GetDzongkhag())
-	if name == "" || district == "" {
-		return nil, status.Error(codes.InvalidArgument, "venue name and dzongkhag are required")
-	}
-	if req.GetCapacity() < 0 {
-		return nil, status.Error(codes.InvalidArgument, "capacity cannot be negative")
-	}
-	v := new(v1.Venue)
-	err := s.db.QueryRowContext(ctx, `INSERT INTO venues(name,dzongkhag,capacity) VALUES($1,$2,$3) RETURNING id::text,name,dzongkhag,capacity`, name, district, req.GetCapacity()).Scan(&v.Id, &v.Name, &v.Dzongkhag, &v.Capacity)
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	v, err := s.service.Create(ctx, identity.Role, domain.Venue{Name: req.GetName(), Dzongkhag: req.GetDzongkhag(), Capacity: req.GetCapacity()})
 	if err != nil {
-		return nil, status.Error(codes.Internal, "could not create venue")
+		return nil, servicekit.ToStatus(err)
 	}
-	return &v1.CreateVenueResponse{Venue: v}, nil
+	return &v1.CreateVenueResponse{Venue: toProto(v)}, nil
 }
+
 func (s *Server) GetVenue(ctx context.Context, req *v1.GetVenueRequest) (*v1.GetVenueResponse, error) {
-	id := strings.TrimSpace(req.GetId())
-	if id == "" {
-		return nil, status.Error(codes.InvalidArgument, "venue id is required")
-	}
-	v := new(v1.Venue)
-	err := s.db.QueryRowContext(ctx, `SELECT id::text,name,dzongkhag,capacity FROM venues WHERE id=$1`, id).Scan(&v.Id, &v.Name, &v.Dzongkhag, &v.Capacity)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, status.Error(codes.NotFound, "venue not found")
-	}
+	v, err := s.service.Get(ctx, req.GetId())
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "venue id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not read venue")
+		return nil, servicekit.ToStatus(err)
 	}
-	return &v1.GetVenueResponse{Venue: v}, nil
+	return &v1.GetVenueResponse{Venue: toProto(v)}, nil
 }
+
 func (s *Server) ListVenues(ctx context.Context, req *v1.ListVenuesRequest) (*v1.ListVenuesResponse, error) {
-	size, offset, err := page(req.GetPageSize(), req.GetPageToken())
+	size, offset, err := servicekit.Page(req.GetPageSize(), req.GetPageToken())
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,name,dzongkhag,capacity FROM venues WHERE ($1='' OR dzongkhag=$1) ORDER BY dzongkhag,name,id LIMIT $2 OFFSET $3`, strings.TrimSpace(req.GetDzongkhag()), size+1, offset)
+	items, more, err := s.service.List(ctx, req.GetDzongkhag(), size, offset)
 	if err != nil {
-		return nil, status.Error(codes.Internal, "could not list venues")
+		return nil, servicekit.ToStatus(err)
 	}
-	defer rows.Close()
-	result := &v1.ListVenuesResponse{Venues: make([]*v1.Venue, 0, size)}
-	for rows.Next() {
-		v := new(v1.Venue)
-		if err := rows.Scan(&v.Id, &v.Name, &v.Dzongkhag, &v.Capacity); err != nil {
-			return nil, status.Error(codes.Internal, "could not read venues")
-		}
-		if int32(len(result.Venues)) == size {
-			result.NextPageToken = strconv.Itoa(offset + int(size))
-			break
-		}
-		result.Venues = append(result.Venues, v)
+	response := &v1.ListVenuesResponse{Venues: make([]*v1.Venue, 0, len(items)), NextPageToken: servicekit.NextPageToken(offset, len(items), more)}
+	for _, v := range items {
+		response.Venues = append(response.Venues, toProto(v))
 	}
-	if err := rows.Err(); err != nil {
-		return nil, status.Error(codes.Internal, "could not read venues")
-	}
-	return result, nil
+	return response, nil
 }
-func page(size int32, token string) (int32, int, error) {
-	if size <= 0 {
-		size = 50
-	}
-	if size > 100 {
-		size = 100
-	}
-	offset := 0
-	if token != "" {
-		n, err := strconv.Atoi(token)
-		if err != nil || n < 0 {
-			return 0, 0, status.Error(codes.InvalidArgument, "invalid page token")
-		}
-		offset = n
-	}
-	return size, offset, nil
+
+func toProto(v domain.Venue) *v1.Venue {
+	return &v1.Venue{Id: v.ID, Name: v.Name, Dzongkhag: v.Dzongkhag, Capacity: v.Capacity}
 }

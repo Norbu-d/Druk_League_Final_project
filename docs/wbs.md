@@ -8,9 +8,9 @@
 | 4 | Identity and access | Login, signed sessions, roles, dzongkhag reference data | MVP complete; Auth/User service extraction pending |
 | 5 | Tournament operations | Create/list tournaments, register/list teams | MVP complete; service extraction and team-user role pending |
 | 6 | Fixture operations | Clash-aware match creation and round-robin generation | MVP complete; Fixture/Venue extraction pending |
-| 7 | Score workflow | Live updates, official assignment, immutable finalization, standings transaction | MVP complete; Match/Score/Standings extraction pending |
-| 8 | Event delivery | Transactional outbox and JetStream publication | Publisher complete; consumer functions pending |
-| 9 | Service architecture | Twenty gRPC services, API gateway and BFF | Contracts and Go shells generated; Dzongkhag Get/List implemented; 19 domain APIs and gateway/BFF pending |
+| 7 | Score workflow | Live updates, official assignment, immutable finalization, standings updates | Monolith MVP complete; Match/Score/Standings extracted and event flow verified; gateway/frontend integration pending |
+| 8 | Event delivery | Transactional outbox and JetStream publication/consumption | Score outbox/publisher plus Match and Standings consumers verified; outage/reconnect, dead-letter and other consumers pending |
+| 9 | Service architecture | Twenty gRPC services, API gateway and BFF | Contracts generated; 9 services have verified domain handlers; 11 domain APIs and gateway/BFF pending |
 | 10 | Frontend integration | Login and core write/read paths | Partial; dashboards, officials, venues, and reports need API data |
 | 11 | Quality engineering | SWE302 plan, traceability, automation, CI | Documentation underway; automated suite and CI pending |
 | 12 | Submission and demo | Reproducible deployment, demo script, known limitations | Compose configured; engine stopped responding during full service image build |

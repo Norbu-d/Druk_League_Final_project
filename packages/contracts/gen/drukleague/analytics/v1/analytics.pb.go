@@ -74,14 +74,17 @@ func (x *GetDashboardMetricsRequest) GetDzongkhag() string {
 }
 
 type GetDashboardMetricsResponse struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	Tournaments      int32                  `protobuf:"varint,1,opt,name=tournaments,proto3" json:"tournaments,omitempty"`
-	Teams            int32                  `protobuf:"varint,2,opt,name=teams,proto3" json:"teams,omitempty"`
-	Players          int32                  `protobuf:"varint,3,opt,name=players,proto3" json:"players,omitempty"`
-	Matches          int32                  `protobuf:"varint,4,opt,name=matches,proto3" json:"matches,omitempty"`
-	CompletedMatches int32                  `protobuf:"varint,5,opt,name=completed_matches,json=completedMatches,proto3" json:"completed_matches,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Tournaments          int32                  `protobuf:"varint,1,opt,name=tournaments,proto3" json:"tournaments,omitempty"`
+	Teams                int32                  `protobuf:"varint,2,opt,name=teams,proto3" json:"teams,omitempty"`
+	Players              int32                  `protobuf:"varint,3,opt,name=players,proto3" json:"players,omitempty"`
+	Matches              int32                  `protobuf:"varint,4,opt,name=matches,proto3" json:"matches,omitempty"`
+	CompletedMatches     int32                  `protobuf:"varint,5,opt,name=completed_matches,json=completedMatches,proto3" json:"completed_matches,omitempty"`
+	Venues               int32                  `protobuf:"varint,6,opt,name=venues,proto3" json:"venues,omitempty"`
+	Officials            int32                  `protobuf:"varint,7,opt,name=officials,proto3" json:"officials,omitempty"`
+	PendingRegistrations int32                  `protobuf:"varint,8,opt,name=pending_registrations,json=pendingRegistrations,proto3" json:"pending_registrations,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *GetDashboardMetricsResponse) Reset() {
@@ -149,6 +152,27 @@ func (x *GetDashboardMetricsResponse) GetCompletedMatches() int32 {
 	return 0
 }
 
+func (x *GetDashboardMetricsResponse) GetVenues() int32 {
+	if x != nil {
+		return x.Venues
+	}
+	return 0
+}
+
+func (x *GetDashboardMetricsResponse) GetOfficials() int32 {
+	if x != nil {
+		return x.Officials
+	}
+	return 0
+}
+
+func (x *GetDashboardMetricsResponse) GetPendingRegistrations() int32 {
+	if x != nil {
+		return x.PendingRegistrations
+	}
+	return 0
+}
+
 var File_drukleague_analytics_v1_analytics_proto protoreflect.FileDescriptor
 
 const file_drukleague_analytics_v1_analytics_proto_rawDesc = "" +
@@ -156,13 +180,16 @@ const file_drukleague_analytics_v1_analytics_proto_rawDesc = "" +
 	"'drukleague/analytics/v1/analytics.proto\x12\x17drukleague.analytics.v1\"R\n" +
 	"\x1aGetDashboardMetricsRequest\x12\x16\n" +
 	"\x06season\x18\x01 \x01(\tR\x06season\x12\x1c\n" +
-	"\tdzongkhag\x18\x02 \x01(\tR\tdzongkhag\"\xb6\x01\n" +
+	"\tdzongkhag\x18\x02 \x01(\tR\tdzongkhag\"\xa1\x02\n" +
 	"\x1bGetDashboardMetricsResponse\x12 \n" +
 	"\vtournaments\x18\x01 \x01(\x05R\vtournaments\x12\x14\n" +
 	"\x05teams\x18\x02 \x01(\x05R\x05teams\x12\x18\n" +
 	"\aplayers\x18\x03 \x01(\x05R\aplayers\x12\x18\n" +
 	"\amatches\x18\x04 \x01(\x05R\amatches\x12+\n" +
-	"\x11completed_matches\x18\x05 \x01(\x05R\x10completedMatches2\x95\x01\n" +
+	"\x11completed_matches\x18\x05 \x01(\x05R\x10completedMatches\x12\x16\n" +
+	"\x06venues\x18\x06 \x01(\x05R\x06venues\x12\x1c\n" +
+	"\tofficials\x18\a \x01(\x05R\tofficials\x123\n" +
+	"\x15pending_registrations\x18\b \x01(\x05R\x14pendingRegistrations2\x95\x01\n" +
 	"\x10AnalyticsService\x12\x80\x01\n" +
 	"\x13GetDashboardMetrics\x123.drukleague.analytics.v1.GetDashboardMetricsRequest\x1a4.drukleague.analytics.v1.GetDashboardMetricsResponseB[ZYgithub.com/drukleague/platform/packages/contracts/gen/drukleague/analytics/v1;analyticsv1b\x06proto3"
 

@@ -48,7 +48,7 @@ func Run(serviceName string, register ...func(*grpc.Server, *sql.DB) error) erro
 	if err := db.PingContext(pingCtx); err != nil {
 		return fmt.Errorf("connect to service database: %w", err)
 	}
-	if err := applyMigrations(ctx, db, migrationsDir); err != nil {
+	if err := ApplyMigrations(ctx, db, migrationsDir); err != nil {
 		return fmt.Errorf("apply service migrations: %w", err)
 	}
 
@@ -56,11 +56,12 @@ func Run(serviceName string, register ...func(*grpc.Server, *sql.DB) error) erro
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "local-development-secret-change-before-deployment"
-	}
-	server := grpc.NewServer(grpc.UnaryInterceptor(AuthUnaryInterceptor([]byte(secret))))
+	// Recovery runs first so a panic anywhere below becomes codes.Internal; logging assigns the request id.
+	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		RecoveryUnaryInterceptor(),
+		LoggingUnaryInterceptor(serviceName),
+		AuthUnaryInterceptor(Secret()),
+	))
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus(serviceName, healthpb.HealthCheckResponse_SERVING)
@@ -80,12 +81,15 @@ func Run(serviceName string, register ...func(*grpc.Server, *sql.DB) error) erro
 		}
 		return nil
 	case <-ctx.Done():
+		healthServer.Shutdown()
 		server.GracefulStop()
 		return nil
 	}
 }
 
-func applyMigrations(ctx context.Context, db *sql.DB, dir string) error {
+// ApplyMigrations runs every *.sql file in dir in name order, each in its own transaction.
+// Migrations must be idempotent (CREATE ... IF NOT EXISTS) because they run on every start.
+func ApplyMigrations(ctx context.Context, db *sql.DB, dir string) error {
 	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
 	if err != nil {
 		return err
