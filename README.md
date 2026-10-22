@@ -71,7 +71,7 @@ Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details a
 
 - **Auth:** shared HS256 secret (any verifying service can mint tokens); no distinct service identity; no explicit user → official mapping; no password change, admin reset or deactivate; lockout can be abused to lock out an account; `manager_id` ownership not enforced.
 - **Registration:** the tournament link should move from Team to Registration (with `pending`/`approved`/`rejected`/`withdrawn` status) and Fixture should read approved registrations; deadline, capacity and roster-lock rules are undefined.
-- **Matches and fixtures:** no correction path for a wrongly finalised result; finalise uses the last saved live score, not a submitted one; only `scheduled`/`completed` states; byes, withdrawals and late teams not handled; no official-overlap check; tie-breakers undefined; `starts_at` should be stored in UTC (Bhutan is UTC+6).
+- **Matches and fixtures:** no correction path for a wrongly finalised result; only `scheduled`/`completed` states; withdrawals and late teams not handled; tie-breakers undefined. *Done 23 Oct:* finalise through the bff uses the submitted score; matches occupy a two-hour slot and Match refuses overlapping bookings of a team, venue or official; Fixture moves a fixture to another venue or a later kickoff the same day when its planned slot is taken; byes and UTC storage were already handled.
 - **Operations:** Standings cannot be rebuilt, the dead-letter stream cannot be inspected or replayed, no backup script, no outbox or stream retention, no idempotency on create calls, no readiness checks in Compose.
 - **Edge and frontend:** rate limiting, CORS and security headers at nginx; JWT storage in the frontend; the `web-preview/` duplicate copy.
 - **CI and evidence:** `buf breaking`, govulncheck, gosec, Trivy and a coverage gate in CI; a k6 performance test; requirement → test traceability.
@@ -93,7 +93,7 @@ End-to-end smoke test against the running Compose stack (39 checks across login,
 docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2e -e E2E_ADMIN_PASSWORD=<your BOOTSTRAP_ADMIN_PASSWORD> drukleague-service-builder:local go run .
 ```
 
-HTTP smoke test of the web API (the bff), driving the same routes as the browser, from login through fixtures, scoring and standings (16 checks). It reads the admin password from `deploy/.env` without printing it:
+HTTP smoke test of the web API (the bff), driving the same routes as the browser, from login through fixtures (including a same-day tournament that must be rescheduled), scoring and standings (17 checks). It reads the admin password from `deploy/.env` without printing it:
 
 ```powershell
 .\scripts\bff-smoke.ps1

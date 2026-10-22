@@ -49,6 +49,33 @@ func NormalizeFormat(format string) (string, error) {
 	return "", core.Invalid("format must be round_robin or double_round_robin")
 }
 
+// SameDaySlots are the kickoff shifts tried when a planned slot is already taken by another
+// tournament: the planned time, then three and six hours later (10:00, 13:00 and 16:00
+// Bhutan time for the default start). Three hours clears Match's two-hour booking.
+var SameDaySlots = []time.Duration{0, 3 * time.Hour, 6 * time.Hour}
+
+// Alternatives lists the slots to try for a fixture, planned slot first: every venue in the
+// district at the planned time, then the same venues later the same day. A tournament plays
+// at most one fixture a day (see Schedule), so a same-day move never collides with its own
+// schedule.
+func Alternatives(f Fixture, venues []Venue) []Fixture {
+	order := []Venue{{ID: f.VenueID, Name: f.VenueName}}
+	for _, v := range venues {
+		if v.ID != f.VenueID {
+			order = append(order, v)
+		}
+	}
+	slots := make([]Fixture, 0, len(order)*len(SameDaySlots))
+	for _, shift := range SameDaySlots {
+		for _, v := range order {
+			slot := f
+			slot.VenueID, slot.VenueName, slot.Kickoff = v.ID, v.Name, f.Kickoff.Add(shift)
+			slots = append(slots, slot)
+		}
+	}
+	return slots
+}
+
 // DefaultStart is the default first kickoff: one week ahead at 10:00 Bhutan time (04:00 UTC).
 func DefaultStart(now time.Time) time.Time {
 	day := now.UTC().AddDate(0, 0, 7)

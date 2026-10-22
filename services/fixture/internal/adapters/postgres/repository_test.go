@@ -36,12 +36,21 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	if err != nil || created || len(again) != 3 || again[0].ID != stored[0].ID {
 		t.Fatalf("second save: %v %v %d", err, created, len(again))
 	}
-	if err := repo.LinkMatch(ctx, stored[0].ID, matchID); err != nil {
+	booked := stored[0]
+	booked.MatchID, booked.VenueID, booked.VenueName, booked.Kickoff = matchID, "", "", start.Add(3*time.Hour)
+	if err := repo.LinkMatch(ctx, booked); err != nil {
 		t.Fatal(err)
 	}
 	page, more, err := repo.List(ctx, tournament, 2, 0)
-	if err != nil || len(page) != 2 || !more || page[0].MatchID != matchID || !page[0].Kickoff.Equal(start) {
-		t.Fatalf("list: %v %v %+v", err, more, page)
+	if err != nil || len(page) != 2 || !more || page[0].MatchID != matchID || !page[0].Kickoff.Equal(start.Add(3*time.Hour)) || page[0].VenueID != "" {
+		t.Fatalf("linking should store the slot actually booked: %v %v %+v", err, more, page)
+	}
+	booked.MatchID = "11111111-1111-4111-8111-111111111111"
+	if err := repo.LinkMatch(ctx, booked); err != nil {
+		t.Fatal(err)
+	}
+	if again, _, _ := repo.List(ctx, tournament, 1, 0); again[0].MatchID != matchID {
+		t.Fatal("a linked fixture must not be relinked")
 	}
 	pending, err := repo.PendingEvents(ctx, 10)
 	if err != nil || len(pending) != 1 || pending[0].EventID != eventID {

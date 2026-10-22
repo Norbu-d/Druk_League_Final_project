@@ -38,6 +38,16 @@ $awayTeam = Call POST '/teams' $admin @{ name = "Haa United $run"; short_code = 
 Check 'create teams (one-letter code widened)' ($homeTeam.short_code -eq 'PAR' -and $awayTeam.short_code -eq 'HU')
 $fixtures = Call POST "/tournaments/$($cup.id)/fixtures" $admin $null
 Check 'generate fixtures through Fixture service' ($fixtures.fixtures_created -eq 1) $fixtures
+# A second tournament in the same dzongkhag on the same day: Fixture must move around the first one's booking.
+$rival = Call POST '/tournaments' $admin @{ name = "BFF Rival Cup $run"; sport = 'football'; season = '2026'; venue = ''; starts_at = $startDate; dzongkhag = 'Thimphu' }
+Call POST '/teams' $admin @{ name = "Punakha Rival $run"; short_code = 'PR'; dzongkhag = 'Punakha'; tournament_id = $rival.id } | Out-Null
+Call POST '/teams' $admin @{ name = "Wangdue Rival $run"; short_code = 'WR'; dzongkhag = 'Wangdue Phodrang'; tournament_id = $rival.id } | Out-Null
+$rivalFixtures = Call POST "/tournaments/$($rival.id)/fixtures" $admin $null
+$first = @(List "/matches?tournament_id=$($cup.id)" $admin)[0]
+$second = @(List "/matches?tournament_id=$($rival.id)" $admin)[0]
+$moved = ($first.venue -ne $second.venue) -or ([math]::Abs(([datetime]$first.kickoff - [datetime]$second.kickoff).TotalHours) -ge 2)
+Check 'same-day tournament in the same dzongkhag is rescheduled, not refused' ($rivalFixtures.fixtures_created -eq 1 -and $moved) "$($first.venue) $($first.kickoff) / $($second.venue) $($second.kickoff)"
+
 $matches = @(List "/matches?tournament_id=$($cup.id)" $admin)
 $match = $matches[0]
 Check 'match row has team names from Team service' ($matches.Count -eq 1 -and @($match.home, $match.away) -contains "Paro$run" -and $match.status -eq 'scheduled') ($matches | ConvertTo-Json -Compress)

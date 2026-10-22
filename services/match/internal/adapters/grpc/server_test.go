@@ -71,6 +71,10 @@ func TestCreateMatch(t *testing.T) {
 	if _, err := server(repo{err: domain.ErrConflict}).CreateMatch(admin(), &v1.CreateMatchRequest{TournamentId: tournament, HomeTeamId: home, AwayTeamId: away, Kickoff: timestamppb.Now()}); status.Code(err) != codes.AlreadyExists {
 		t.Fatalf("clash: %v", err)
 	}
+	clash := domain.Clash("venue Changlimithang", time.Date(2026, 11, 1, 4, 0, 0, 0, time.UTC))
+	if _, err := server(repo{err: clash}).CreateMatch(admin(), &v1.CreateMatchRequest{TournamentId: tournament, HomeTeamId: home, AwayTeamId: away, Kickoff: timestamppb.Now()}); status.Code(err) != codes.AlreadyExists || status.Convert(err).Message() != "venue Changlimithang already has a match at 2026-11-01 04:00 UTC" {
+		t.Fatalf("clash detail should reach the caller: %v", err)
+	}
 }
 
 func TestGetAndListMatches(t *testing.T) {

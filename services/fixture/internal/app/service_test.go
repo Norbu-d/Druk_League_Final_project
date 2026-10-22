@@ -35,14 +35,14 @@ func (f *fakeRepo) SaveSchedule(_ context.Context, _ string, fixtures []domain.F
 	f.stored, f.event = fixtures, event
 	return append([]domain.Fixture(nil), fixtures...), true, nil
 }
-func (f *fakeRepo) LinkMatch(_ context.Context, fixtureID, matchID string) error {
+func (f *fakeRepo) LinkMatch(_ context.Context, booked domain.Fixture) error {
 	if f.linkErr != nil {
 		return f.linkErr
 	}
-	f.linked[fixtureID] = matchID
+	f.linked[booked.ID] = booked.MatchID
 	for i := range f.stored {
-		if f.stored[i].ID == fixtureID {
-			f.stored[i].MatchID = matchID
+		if f.stored[i].ID == booked.ID {
+			f.stored[i] = booked
 		}
 	}
 	return nil
@@ -64,19 +64,32 @@ type fakeTeams struct {
 
 func (f fakeTeams) IDsInTournament(context.Context, string) ([]string, error) { return f.ids, f.err }
 
-type fakeVenues struct{ dzongkhag *string }
+type fakeVenues struct {
+	dzongkhag *string
+	list      []domain.Venue
+}
 
 func (f fakeVenues) InDzongkhag(_ context.Context, dzongkhag string) ([]domain.Venue, error) {
 	*f.dzongkhag = dzongkhag
+	if f.list != nil {
+		return f.list, nil
+	}
 	return []domain.Venue{{ID: "v1", Name: "Changlimithang"}}, nil
 }
 
+// fakeMatches books matches; busy reports slots another tournament already holds.
 type fakeMatches struct {
-	created int
-	failAt  int
+	created  int
+	failAt   int
+	attempts int
+	busy     func(domain.Fixture) bool
 }
 
-func (f *fakeMatches) Create(context.Context, domain.Fixture) (string, error) {
+func (f *fakeMatches) Create(_ context.Context, slot domain.Fixture) (string, error) {
+	f.attempts++
+	if f.busy != nil && f.busy(slot) {
+		return "", core.Conflict("venue " + slot.VenueName + " already has a match at " + slot.Kickoff.Format("2006-01-02 15:04") + " UTC")
+	}
 	f.created++
 	if f.failAt > 0 && f.created == f.failAt {
 		return "", core.Dependency("match service down")
@@ -111,6 +124,55 @@ func TestGenerateCreatesFixturesMatchesAndEvent(t *testing.T) {
 	}
 	if !fixtures[0].Kickoff.Equal(time.Date(2026, 10, 26, 4, 0, 0, 0, time.UTC)) {
 		t.Fatalf("default start not applied: %v", fixtures[0].Kickoff)
+	}
+}
+
+func TestGenerateMovesAroundAnotherTournamentsBookings(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}}, &fakeMatches{}
+	var district string
+	venues := []domain.Venue{{ID: "v1", Name: "Changlimithang"}, {ID: "v2", Name: "Lungtenphu"}}
+	s := New(repo, fakeTournaments{}, fakeTeams{ids: []string{"a", "b", "c", "d"}}, fakeVenues{dzongkhag: &district, list: venues}, matches)
+	s.now = func() time.Time { return time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC) }
+	s.newID = func() (string, error) { return "event-1", nil }
+	firstDay := time.Date(2026, 10, 26, 4, 0, 0, 0, time.UTC)
+	// Another tournament holds both grounds at 10:00 BTT on the first day, and Changlimithang at 13:00.
+	matches.busy = func(slot domain.Fixture) bool {
+		return slot.Kickoff.Equal(firstDay) || (slot.Kickoff.Equal(firstDay.Add(3*time.Hour)) && slot.VenueID == "v1")
+	}
+	fixtures, _, err := s.Generate(context.Background(), admin, tournament, "", time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first := fixtures[0]; first.VenueID != "v2" || !first.Kickoff.Equal(firstDay.Add(3*time.Hour)) || first.MatchID == "" {
+		t.Fatalf("first fixture should move to Lungtenphu at 13:00 BTT: %+v", first)
+	}
+	if repo.stored[0].VenueID != "v2" || !repo.stored[0].Kickoff.Equal(firstDay.Add(3*time.Hour)) {
+		t.Fatalf("the slot actually booked must be stored: %+v", repo.stored[0])
+	}
+	if second := fixtures[1]; !second.Kickoff.Equal(firstDay.AddDate(0, 0, 1)) {
+		t.Fatalf("unaffected fixtures keep their planned slot: %+v", second)
+	}
+	if matches.attempts != 6+3 {
+		t.Fatalf("expected three failed attempts before the free slot, got %d attempts", matches.attempts)
+	}
+}
+
+func TestGenerateGivesUpWhenTheWholeDayIsTaken(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}}, &fakeMatches{}
+	s, _ := newService(repo, []string{"a", "b", "c", "d"}, matches)
+	firstDay := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
+	matches.busy = func(slot domain.Fixture) bool { return slot.Kickoff.Truncate(24 * time.Hour).Equal(firstDay) }
+	_, _, err := s.Generate(context.Background(), admin, tournament, "", time.Time{})
+	want := "conflict: no free venue or kickoff on 2026-10-26 for round 1; last clash: venue Changlimithang already has a match at 2026-10-26 10:00 UTC"
+	if !errors.Is(err, core.ErrConflict) || err.Error() != want {
+		t.Fatalf("got %v", err)
+	}
+	if len(repo.linked) != 0 || matches.attempts != len(domain.SameDaySlots) {
+		t.Fatalf("nothing should be linked; attempts=%d", matches.attempts)
+	}
+	matches.busy = nil
+	if _, _, err := s.Generate(context.Background(), admin, tournament, "", time.Time{}); err != nil || len(repo.linked) != 6 {
+		t.Fatalf("generation should resume once the day is free: %v %d", err, len(repo.linked))
 	}
 }
 

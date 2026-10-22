@@ -11,7 +11,9 @@ type Repository interface {
 	// the stored fixtures are returned with created=false. The event is written to the
 	// outbox in the same transaction when the schedule is new.
 	SaveSchedule(ctx context.Context, tournamentID string, fixtures []domain.Fixture, event domain.OutboxEvent) (stored []domain.Fixture, created bool, err error)
-	LinkMatch(ctx context.Context, fixtureID, matchID string) error
+	// LinkMatch records the fixture's match and the venue and kickoff actually booked, which
+	// differ from the plan when the planned slot was taken.
+	LinkMatch(ctx context.Context, booked domain.Fixture) error
 	List(ctx context.Context, tournamentID string, limit, offset int) ([]domain.Fixture, bool, error)
 }
 
