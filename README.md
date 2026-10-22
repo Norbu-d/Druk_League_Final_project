@@ -7,7 +7,7 @@ The repository holds two things that are not yet connected:
 1. **An MVP monolith** (`services/api-gateway`) with a plain HTML/CSS/JS frontend. The browser talks only to this today.
 2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 13 have real logic; 7 are still health-only shells.
 
-For detailed status and the handoff notes, see [progress.md](progress.md). For the target architecture, see [servicedesign.md](servicedesign.md).
+For detailed status and the handoff notes, see [progress.md](progress.md); planned design changes from the 22 Oct review are in its section 11. For the target architecture, see [servicedesign.md](servicedesign.md).
 
 ## Run locally with Docker Compose
 
@@ -62,6 +62,18 @@ Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,
 - Team → Tournament reference check; Team ownership via `manager_id`.
 - The 7 shell services above.
 - CI (GitHub Actions), and tests for the 12 modules that have none.
+
+### Known design gaps and planned changes
+
+Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details and the proposed order of work are in [progress.md](progress.md) section 11.
+
+- **Auth:** shared HS256 secret (any verifying service can mint tokens); no distinct service identity; no explicit user → official mapping; no password change, admin reset or deactivate; lockout can be abused to lock out an account; `manager_id` ownership not enforced.
+- **Registration:** the tournament link should move from Team to Registration (with `pending`/`approved`/`rejected`/`withdrawn` status) and Fixture should read approved registrations; deadline, capacity and roster-lock rules are undefined.
+- **Matches and fixtures:** no correction path for a wrongly finalised result; finalise uses the last saved live score, not a submitted one; only `scheduled`/`completed` states; byes, withdrawals and late teams not handled; no official-overlap check; tie-breakers undefined; `starts_at` should be stored in UTC (Bhutan is UTC+6).
+- **Operations:** Standings cannot be rebuilt, the dead-letter stream cannot be inspected or replayed, no backup script, no outbox or stream retention, no idempotency on create calls, no readiness checks in Compose.
+- **Edge and frontend:** rate limiting, CORS and security headers at nginx; JWT storage in the frontend; the `web-preview/` duplicate copy.
+- **CI and evidence:** `buf breaking`, govulncheck, gosec, Trivy and a coverage gate in CI; a k6 performance test; requirement → test traceability.
+- **Deployment:** Compose stays. Proposed serverless runtime is faasd (OpenFaaS on one machine), not Kubernetes; confirm with the module tutor.
 
 ## Testing
 
