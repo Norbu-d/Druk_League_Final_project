@@ -77,7 +77,7 @@ Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details a
 
 ## Testing
 
-Unit and PostgreSQL integration tests exist for Auth, User, Match, Score, Standings, Fixture, Venue, Official and the shared packages. Integration tests are skipped unless `TEST_DATABASE_URL` is set:
+Unit and PostgreSQL integration tests exist for Auth, User, Team, Tournament, Player, Match, Score, Standings, Fixture, Venue, Official and the shared packages. Integration tests are skipped unless `TEST_DATABASE_URL` is set:
 
 ```powershell
 docker run -d --rm --name drukleague-testdb -e POSTGRES_PASSWORD=test -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql/data postgres:17-alpine
@@ -85,7 +85,7 @@ $env:TEST_DATABASE_URL = "postgres://postgres:test@127.0.0.1:55432/postgres?sslm
 cd services\match; go test -cover ./...
 ```
 
-End-to-end smoke test against the running Compose stack (29 checks across login, roles, fixtures, scoring, finalisation and event consumers):
+End-to-end smoke test against the running Compose stack (39 checks across login, roles, team ownership, player rosters, fixtures, scoring, finalisation and event consumers):
 
 ```powershell
 docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2e -e E2E_ADMIN_PASSWORD=<your BOOTSTRAP_ADMIN_PASSWORD> drukleague-service-builder:local go run .
