@@ -1,10 +1,10 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-22
 **Project root:** `D:\druk-league`
-**Run state:** Containers were last verified on 2026-10-14. On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and **tested locally with `go test`**, but **no Docker image has been rebuilt since**. The Dockerfile and Compose changes in section 10 must be made before building. Docker Desktop's disk image is now on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11 (planned changes; **nothing in it is implemented yet**). Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
-> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-10-19, **14 of those modules have domain logic and unit tests** (Match, Score, Standings, Fixture, Venue, Official, User, Auth, plus the shared packages), Dzongkhag/Team/Tournament/Player/Registration have untested handlers, and 7 are still health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists what changed on 2026-10-19. Do not present the MVP as the finished architecture.
+> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-10-19, **8 of those modules have domain logic and unit tests** (Match, Score, Standings, Fixture, Venue, Official, User, Auth; the shared packages are tested too), Dzongkhag/Team/Tournament/Player/Registration have untested handlers, and 7 are still health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists what changed on 2026-10-19; section 11 holds the 2026-10-22 design review. Do not present the MVP as the finished architecture.
 
 ---
 
@@ -34,7 +34,7 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag spor
 
 | Proposal / deck says | Code today |
 |---|---|
-| 20 independently deployable services | 20 modules run as containers (2026-10-14). Since then Fixture, Venue, Official, User and Auth have real hexagonal logic (code + tests, not yet rebuilt in Docker); 7 remain health shells |
+| 20 independently deployable services | 20 modules run as containers (2026-10-14). Since then Fixture, Venue, Official, User and Auth have real hexagonal logic (code + tests; rebuilt in Docker and e2e-checked 19 Oct); 7 remain health shells |
 | API Gateway + BFF | The monolith is still the "gateway"; no BFF yet (Part 5). Service port 50051 is not published outside Compose |
 | gRPC between services | All outbound calls now use `servicekit.Dial`: per-call deadline, retry on safe reads, circuit breaker, request-id and token propagation. Fixture calls Tournament/Team/Venue/Match; Official calls Match; Auth calls User; Venue calls Dzongkhag |
 | Each service owns its data | New services have their own databases; the monolith keeps its own shared one; the two are not connected |
@@ -51,8 +51,8 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 
 | Owner | Service | Status |
 |---|---|---|
-| Tandin | Auth | **Implemented 19 Oct (tested, not containerised):** Login, RefreshToken (rotating), RevokeSession, login lockout (5 failures / 15 min) |
-| Tandin | User | **Rewritten 19 Oct (tested, not containerised):** hexagonal, bcrypt, `VerifyCredentials`, bootstrap super admin from `BOOTSTRAP_ADMIN_*`, `team_manager` role, self/admin/service read rules |
+| Tandin | Auth | **Implemented 19 Oct (tested; containerised and e2e-checked 19 Oct):** Login, RefreshToken (rotating), RevokeSession, login lockout (5 failures / 15 min) |
+| Tandin | User | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** hexagonal, bcrypt, `VerifyCredentials`, bootstrap super admin from `BOOTSTRAP_ADMIN_*`, `team_manager` role, self/admin/service read rules |
 | Tandin | Team | Create/Get/List; `CreateTeam`, `GetTeam`, `ListTeams` verified. Does not validate `tournament_id` |
 | Tandin | Player | Create/Get/List/Update; `ListPlayers` verified (empty); others not exercised |
 | Tandin | Tournament | Create/Get/List; full Create → Get → List round trip verified |
@@ -60,14 +60,14 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Norbu | Match | Verified 14 Oct. 19 Oct: consumer moved to `eventkit` (dead-letter), resilient clients, UUID validation in the app layer, unit + DB tests |
 | Norbu | Score | Verified 14 Oct. 19 Oct: event now carries `finalized_by` and `reason`; scores capped 0–99; outbox relay unit-tested |
 | Norbu | Standings | Verified 14 Oct. 19 Oct: **fixed bug** where the service token expired 10 min after start (all Team lookups then failed); consumer on `eventkit` |
-| Norbu | Fixture | **Implemented 19 Oct (tested, not containerised):** round-robin / double round-robin, venue rotation, creates matches in Match, resumable, `FixturesGenerated` outbox |
-| Norbu | Venue | **Rewritten 19 Oct (tested, not containerised):** hexagonal, admin-only create, dzongkhag checked via Dzongkhag service (cached), unique name per dzongkhag |
+| Norbu | Fixture | **Implemented 19 Oct (tested; containerised and e2e-checked 19 Oct):** round-robin / double round-robin, venue rotation, creates matches in Match, resumable, `FixturesGenerated` outbox |
+| Norbu | Venue | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** hexagonal, admin-only create, dzongkhag checked via Dzongkhag service (cached), unique name per dzongkhag |
 | Sonam | Dzongkhag | Get/List; `ListDzongkhags` verified (all 20 districts) |
-| Sonam | Official | **Rewritten 19 Oct (tested, not containerised):** assigns through Match (source of truth), records tournament, filter by tournament now works |
+| Sonam | Official | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** assigns through Match (source of truth), records tournament, filter by tournament now works |
 | Sonam | Notification, Audit Log, Media | Shells |
 | Namgay | Report, Search, Analytics, Configuration | Shells |
 
-Part 3 (Fixture, Venue, Official) is written and unit-tested; it still needs the Docker build and container checks in section 10.
+Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
 
 ---
 
@@ -156,13 +156,16 @@ Not yet exercised: `UpdatePlayer`, `RegisterTeam`, `ReviewRegistration`, `Create
 
 1. **Password hashing:** *resolved in code 19 Oct:* the services use bcrypt, matching the deck. The monolith still uses PBKDF2 until Part 5 retires it.
 2. **Team-user role:** *started 19 Oct:* role name `team_manager` in code. Align the proposal and deck wording, and finish Team ownership and Registration rules.
-3. **OpenFaaS vs faasd:** OpenFaaS normally needs Kubernetes; faasd runs on one machine. Pick one and spike it early.
+3. **OpenFaaS vs faasd:** OpenFaaS normally needs Kubernetes; faasd runs on one machine. Pick one and spike it early. **22 Oct recommendation:** faasd alongside Compose, no Kubernetes; confirm with Mr. Pema Namgay in writing (section 11.7).
 4. **Risk R1:** the deck rates "20 services in one semester" High/High; the proposal says Medium. Make them match.
-5. **Finalised-result correction:** admin correction with a reason + audit entry (user stories) vs append-only correction events (architecture note).
+5. **Finalised-result correction:** admin correction with a reason + audit entry (user stories) vs append-only correction events (architecture note). **22 Oct recommendation:** admin-only void-and-replace with an audit record (section 11.4).
 6. **Sprint 4/5 dependency:** fixture clash detection needs Venue, planned for Sprint 5. Reorder or stub Venue earlier.
 7. **NATS resilience:** bounded redelivery and dead-lettering are implemented in `eventkit` and pass against an embedded JetStream server. Still test NATS outage/reconnect in Docker, and write the Notification/Audit consumers.
 8. **Hexagonal and resilience wording:** the proposal cites hexagonal architecture but never says it will be applied. Add one methodology sentence and a resilience objective, then update the deck's architecture and testing slides, the risk table and the speaker notes.
-9. **Cross-service integrity:** Team stores any `tournament_id`. Choose a synchronous gRPC check against Tournament (with deadline, retry, circuit breaker) or eventual consistency with a cleanup event. Record the finding in the risk register either way.
+9. **Cross-service integrity:** Team stores any `tournament_id`. Choose a synchronous gRPC check against Tournament (with deadline, retry, circuit breaker) or eventual consistency with a cleanup event. Record the finding in the risk register either way. **22 Oct:** the cleaner fix is to move the tournament link from Team to Registration (item 10, section 11.3).
+10. **Registration model (proposed 22 Oct):** Registration links Team to Tournament with a status; Team becomes a persistent entity; Fixture reads approved registrations. Needs agreement with Tandin (section 11.3).
+11. **Service identity and user → official mapping (proposed 22 Oct):** a distinct service claim instead of a borrowed `super_admin`, and an explicit mapping from user ID to official ID. Needs agreement with Tandin and Sonam (section 11.2).
+12. **Scope cuts (proposed 22 Oct):** drop or document OpenTelemetry, five shell services and asymmetric JWT signing. Reverses part of the 7 Oct "all 20 services" decision, so it needs a group decision (section 11.1).
 
 Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped (7 Oct 2026).
 
@@ -170,12 +173,14 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 
 ## 7. Remaining work (priority order)
 
-0. **Next (before anything else):** do the section 10 "before building" steps, then rebuild and container-check User, Auth, Venue, Official, Fixture, Match, Score and Standings one at a time.
+> The 22 Oct design review proposes a revised order in section 11.1. Where it differs from the list below, section 11.1 wins until the group agrees otherwise.
+
+0. **Done (19 Oct):** the section 10 "before building" steps, the one-at-a-time rebuild of all 20 images, and the 29/29 e2e run. Next: section 11.1.
 1. **Docker disk:** done. The disk image is on D: (19 Oct).
 2. **Push to GitHub (before Part 2).** Remaining checks before the first commit: `git check-ignore -v deploy/.env` names a rule; list staged files over 1 MB across the whole repo; grep staged files for secret-looking assignments (file names only); set `git config user.name` and `user.email`. Then commit, create a **private** repository, push, add the three teammates and protect `main`.
 3. **Secrets before sharing:** rotate everything in `deploy/.env`. `JWT_SECRET` is safe to change on its own (recreate the API afterwards). `POSTGRES_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD` need a coordinated change (PostgreSQL reads its password only when the volume is created; the bootstrap admin exists once created), so choose `ALTER USER` plus an admin reset, or a clean dev reset. Fix the README's outdated default-login line. Bind DB/API ports to loopback for local runs.
 4. **Part 2:** Match, Score and Standings are extracted. Verified Match → Team/User, Score → Match, Score transactional outbox → JetStream, Match completion consumer, Standings consumer, GetScore/GetStandings and duplicate-event handling. Standings is eventually consistent with Score; no distributed transaction spans their databases.
-5. **Part 3:** code and tests done (19 Oct); container checks pending. **Part 4:** User + Auth code and tests done (19 Oct); container checks pending. **Part 5 (next to write):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
+5. **Part 3:** code, tests and container checks done (19 Oct). **Part 4:** User + Auth, same. **Part 5 (next to write; section 11.1 step 4 proposes a minimal version first):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
 6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream) and the Fixture outbox are done. Still to do: Notification and Audit Log consumers, and the OpenFaaS/faasd function.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
 8. **Part 8:** the remaining 7 shells: Notification, Audit Log, Media, Report, Search, Analytics, Configuration.
@@ -197,9 +202,9 @@ Give the new chat `progress.md`, `README.md` and `docs/service-design.md`. If it
 >
 > **How we work:** I use Windows, PowerShell and VS Code. You cannot run anything on my machine. Give me copy-paste-ready code (full file replacements, not diffs, with brief inline comments) and PowerShell commands. I paste the code into VS Code, run `go build`, the tests and the Docker commands myself, and send you the output. Before writing code that changes an existing file, ask me to paste that file; do not guess what is in it. Give me one next step at a time and wait for my output before moving on. When I paste terminal output, I paste only the output, not old prompts or errors.
 >
-> **Status:** see progress.md section 10 (19 Oct 2026). Parts 3 and 4 and the shared resilience/event code are written and unit-tested but not yet rebuilt in Docker; do the section 10 "before building" steps first. Follow the Docker rules in progress.md section 5: build one service at a time, keep 10 GB free on C:, and never run `docker volume prune` or `down -v`. Never print or share `deploy/.env`.
+> **Status:** see progress.md sections 10 and 11 (19 and 22 Oct 2026). Parts 3 and 4 and the shared resilience/event code are written, unit-tested, containerised and e2e-checked (29/29); section 11 holds planned design changes, none implemented yet. Follow the Docker rules in progress.md section 5: build one service at a time, keep 10 GB free on C:, and never run `docker volume prune` or `down -v`. Never print or share `deploy/.env`.
 >
-> **Task:** we are working through section 7 part by part. Start by telling me which step is next and what you need from me. Do not claim tests or features work unless I have shown you the output.
+> **Task:** we are working through section 11.1 (then section 7) step by step. Start by telling me which step is next and what you need from me. Do not claim tests or features work unless I have shown you the output.
 
 ---
 
@@ -415,3 +420,81 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 ```
 
 - Each run leaves uniquely named test rows (a tournament, 4 teams, a venue, an official and 6 matches), because there are no delete RPCs.
+
+---
+
+## 11. Design review — 22 Oct 2026
+
+**Status: planned. Nothing in this section is implemented or tested.** The findings come from reading `README.md` and `progress.md`, not from re-reading the code, so check each one against the code before acting; some may already be handled. Items marked *group decision* touch services owned by other members. Where this section conflicts with the ordering in section 7, this section wins until the group agrees otherwise.
+
+### 11.1 Proposed order of work
+
+1. **Tag the known-good state.** Commit and create a git tag on the 19 Oct state (29/29 e2e checks) so there is something to return to.
+2. **Write three short design notes (about half a page each) and agree them with the group:** the registration model (11.3), the result correction path (11.4), and service identity plus the user → official mapping (11.2). Tandin owns Team, Registration and Auth; Sonam owns Official.
+3. **Registration and match fixes** (11.3, 11.4): move the tournament link to Registration with a status; Fixture reads approved registrations; finalise carries the score or a version and rejects a mismatch; add an official-overlap check in Match. Start with Match, Score and Fixture (Norbu's services) and hand Tandin the Registration contract change.
+4. **Minimum gateway and frontend cutover.** Not the full BFF: a small Go gateway that validates the JWT and exposes REST for one flow end to end (login, list tournaments, scoring and finalisation). Switch the frontend over flow by flow and keep the monolith as a fallback. This is what makes the microservices visible in a demo.
+5. **CI and coverage gate** (11.5, 11.6): fix `scripts/coverage.sh` first, then one GitHub Actions workflow running `go test -cover` per module and failing under 80%.
+6. **Tests for Team, Tournament, Player and Registration**, after step 3 so they cover the new registration design.
+7. **If time remains:** Notification and Audit Log consuming `MatchFinalized`; one or two OpenFaaS/faasd functions (11.7).
+
+**Proposed to cut, or to document as a known limitation** (*group decision*, because 7 Oct 2026 decided to build all 20 services): OpenTelemetry, the other five shells (Media, Report, Search, Analytics, Configuration), and asymmetric JWT signing.
+
+### 11.2 Auth
+
+- **Shared HS256 secret.** Any service that can verify a token can also mint one, including an admin token. Preferred fix: asymmetric signing (Auth holds the private key, other services get the public key). If that is too large for the timeline, state it as a known limitation in the report.
+- **Service identity.** Standings' service token expired after 10 minutes (fixed 19 Oct). Define what claim a service token carries and who mints it. Use a distinct service claim, not a borrowed `super_admin`.
+- **User account → Official record.** The `match_official` role lives in User, assignment lives in Official and Match, and finalisation checks that the assigned official is the caller. An explicit mapping from user ID to official ID is needed; none is documented. *Group decision (Sonam).*
+- **Role changes are not immediate** if the role is carried in the JWT: a demoted user keeps access until the token expires. Keep the access TTL short and rely on refresh.
+- **Lockout can be abused.** Five failures per 15 minutes per username lets anyone lock the admin out. Key it on username plus IP, or use backoff instead of a hard lock.
+- **Two issuers.** Services accept monolith tokens. Fine during migration; retire it at cutover (monolith still uses hand-rolled JWT/PBKDF2 until Part 5).
+- **Account lifecycle.** No change-password, admin reset or deactivate RPC. Changing the bootstrap password in `.env` does not change an existing admin.
+- **Ownership.** `manager_id` is in the Team contract but unused, so any team manager can act on any team.
+
+### 11.3 Registration model
+
+- **The link is on the wrong side.** Team carries `tournament_id` and a separate Registration service exists. Proposed: Registration links a Team to a Tournament with a status (`pending`, `approved`, `rejected`, `withdrawn`); Team becomes a persistent entity (dzongkhag, sport, manager) reused across seasons instead of duplicated per tournament. This also resolves open decision 9 (Team stores any `tournament_id`).
+- **Fixture should read approved registrations**, after registration closes, instead of teams filtered by tournament. That gives a clear cutoff and a rule for late teams (11.4).
+- **Rules to define:** registration deadline, capacity, one team per dzongkhag per sport, roster lock once the tournament starts.
+- **Events:** `RegistrationApproved` and `RegistrationClosed`, so Fixture and Notification can react instead of polling.
+- Needs a contract and migration change in Team and Registration. *Group decision (Tandin).*
+
+### 11.4 Fixtures and matches
+
+- **No correction path for a wrong result.** Finalised results are immutable (a trigger blocks edits) and Standings only reacts to `MatchFinalized`. Proposed: an admin-only void-and-replace flow that emits `MatchResultCorrected` with an audit record; Standings reverses the old result and applies the new one. This is open decision 5; the trigger and the Score immutability rule need an explicit, audited exception.
+- **Finalise ignores the request body** and finalises the last saved live score, so an in-flight update can produce the wrong final score. Have finalise carry the score or a version number and reject a mismatch (also noted for the BFF in section 7, step 5).
+- **Too few match states.** Only `scheduled` and `completed` exist. Postponed, cancelled, forfeit and abandoned will occur and need standings rules.
+- **Fixture edge cases.** Odd team counts need byes. Define what happens when a team withdraws or joins after generation (re-running creates nothing, so it does not answer this).
+- **Official clashes.** Match checks team and venue clashes but no check for the same official on overlapping matches is documented. Confirm that matches have a duration, because the clash checks depend on it.
+- **Scoring and standings scope.** The 0–99 score and win/draw/loss points suit football, not set-based sports or knockout formats. State the sport scope and add tie-breakers (goal difference, head-to-head).
+- **Time zone.** Bhutan is UTC+6. Store `starts_at` in UTC and convert at the gateway or frontend.
+
+### 11.5 Operations and hardening
+
+- **`buf breaking` in CI** so a renamed or removed field fails the build (needs a baseline revision, section 7 step 13).
+- **Security scans in CI:** `govulncheck`, `gosec`, Trivy for images.
+- **Compose health.** Separate liveness from readiness (can it reach its DB and NATS?) and use `depends_on: condition: service_healthy` for PostgreSQL, NATS and `db-init`, to stop startup races.
+- **Backups.** A `pg_dump` script covering every service database, run before demos, instead of relying on "never run `down -v`".
+- **Standings rebuild.** A replay command that recomputes standings from finalised results in Score. Also makes the correction flow simpler.
+- **Dead-letter stream is write-only.** Add a way to list and replay `DRUKLEAGUE_DLQ` (admin tool or runbook).
+- **Retention.** Clean up published outbox rows and set retention limits on the JetStream streams.
+- **Double-submit protection.** Idempotency keys or natural-key unique constraints on create calls (register team, finalise).
+- **Test data.** The e2e run leaves rows behind. Prefix test data and add a cleanup path, or run e2e against a throwaway database.
+- **Migration risk.** User `002_roles.sql` fails if two usernames differ only by case. Add a pre-check or dedupe step.
+
+### 11.6 Frontend, edge and report evidence
+
+- **nginx:** rate limits on login and public viewer reads, CORS, basic security headers.
+- **Token storage.** Check where the plain-JS frontend keeps the JWT. Prefer the access token in memory and the refresh token in an httpOnly cookie if the gateway can set it; otherwise document it as a limitation.
+- **`web-preview/`** is a copy that must not be edited. Delete it or generate it by script so it cannot drift.
+- **List endpoints.** Make sure every List RPC (tournaments, teams, matches, standings) uses `Page` and supports filters.
+- **SWE302:** a performance test (k6 or `hey`) against the gateway for login and the public standings read; traceability from each requirement to a test and a sprint.
+- **Audit Log** is the first shell worth building for real: admin actions, role changes and result corrections.
+
+### 11.7 Deployment: Kubernetes vs OpenFaaS
+
+These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFaaS runs functions and can run without Kubernetes as faasd on one machine.
+
+- **Recommendation:** keep Docker Compose for the 20 services and do not adopt Kubernetes. The machine is already tight on RAM and disk, production cloud and scaling are out of scope, and a cluster would cost a large share of the remaining time without a visible gain in the demo.
+- Add faasd and deploy one or two small functions (for example one triggered by `MatchFinalized` that formats a notification, or one that generates a standings report), so the serverless claim is true.
+- In the report, list Kubernetes as future work. Each service already has its own Dockerfile and env-var config, so the move would mostly be manifests.
+- **Before committing:** ask Mr. Pema Namgay in writing whether faasd on Docker is acceptable for the serverless component. If the module spec requires Kubernetes, this recommendation changes. Tracks open decision 3.
