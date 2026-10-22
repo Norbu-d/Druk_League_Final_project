@@ -2,13 +2,15 @@ package grpcadapter
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	"github.com/drukleague/platform/services/match/internal/app"
+	"github.com/drukleague/platform/services/match/internal/domain"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -16,140 +18,96 @@ import (
 
 type Server struct {
 	v1.UnimplementedMatchServiceServer
-	db *sql.DB
+	service *app.Service
 }
 
-func New(db *sql.DB) *Server { return &Server{db: db} }
+func New(service *app.Service) *Server { return &Server{service: service} }
+
 func (s *Server) CreateMatch(ctx context.Context, req *v1.CreateMatchRequest) (*v1.CreateMatchResponse, error) {
-	tournament, home, away := strings.TrimSpace(req.GetTournamentId()), strings.TrimSpace(req.GetHomeTeamId()), strings.TrimSpace(req.GetAwayTeamId())
-	venue := strings.TrimSpace(req.GetVenue())
-	if tournament == "" || home == "" || away == "" || req.GetKickoff() == nil {
-		return nil, status.Error(codes.InvalidArgument, "tournament, teams, and kickoff are required")
+	if req.GetKickoff() == nil || req.GetKickoff().CheckValid() != nil {
+		return nil, status.Error(codes.InvalidArgument, "kickoff is required and must be valid")
 	}
-	if home == away {
-		return nil, status.Error(codes.InvalidArgument, "a team cannot play itself")
-	}
-	if err := req.GetKickoff().CheckValid(); err != nil {
-		return nil, status.Error(codes.InvalidArgument, "kickoff is invalid")
-	}
-	kickoff := req.GetKickoff().AsTime()
-	tx, err := s.db.BeginTx(ctx, nil)
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	match, err := s.service.Create(ctx, identity.Role, domain.Match{
+		TournamentID: req.GetTournamentId(), HomeTeamID: req.GetHomeTeamId(),
+		AwayTeamID: req.GetAwayTeamId(), Venue: req.GetVenue(), Kickoff: req.GetKickoff().AsTime(),
+	})
 	if err != nil {
-		return nil, status.Error(codes.Internal, "could not schedule match")
+		return nil, translate(err)
 	}
-	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, kickoff.UTC().Format(time.RFC3339Nano)); err != nil {
-		return nil, status.Error(codes.Internal, "could not lock kickoff slot")
-	}
-	var clash bool
-	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM matches WHERE kickoff=$1 AND (home_team_id IN ($2,$3) OR away_team_id IN ($2,$3) OR ($4<>'' AND venue=$4)))`, kickoff, home, away, venue).Scan(&clash)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "could not check scheduling conflicts")
-	}
-	if clash {
-		return nil, status.Error(codes.AlreadyExists, "team or venue already has a match at this kickoff")
-	}
-	m := new(v1.Match)
-	var start time.Time
-	err = tx.QueryRowContext(ctx, `INSERT INTO matches(tournament_id,home_team_id,away_team_id,venue,kickoff) VALUES($1,$2,$3,$4,$5) RETURNING id::text,tournament_id::text,home_team_id::text,away_team_id::text,venue,kickoff,status,COALESCE(official_id::text,'')`, tournament, home, away, venue, kickoff).Scan(&m.Id, &m.TournamentId, &m.HomeTeamId, &m.AwayTeamId, &m.Venue, &start, &m.Status, &m.OfficialId)
-	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "ids must be UUIDs")
-		}
-		return nil, status.Error(codes.Internal, "could not create match")
-	}
-	if err = tx.Commit(); err != nil {
-		return nil, status.Error(codes.Internal, "could not commit match")
-	}
-	m.Kickoff = timestamppb.New(start)
-	return &v1.CreateMatchResponse{Match: m}, nil
+	return &v1.CreateMatchResponse{Match: toProto(match)}, nil
 }
+
 func (s *Server) GetMatch(ctx context.Context, req *v1.GetMatchRequest) (*v1.GetMatchResponse, error) {
-	id := strings.TrimSpace(req.GetId())
-	if id == "" {
+	if strings.TrimSpace(req.GetId()) == "" {
 		return nil, status.Error(codes.InvalidArgument, "match id is required")
 	}
-	m, err := scanMatch(s.db.QueryRowContext(ctx, `SELECT id::text,tournament_id::text,home_team_id::text,away_team_id::text,venue,kickoff,status,COALESCE(official_id::text,'') FROM matches WHERE id=$1`, id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, status.Error(codes.NotFound, "match not found")
-	}
+	match, err := s.service.Get(ctx, req.GetId())
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "match id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not read match")
+		return nil, translate(err)
 	}
-	return &v1.GetMatchResponse{Match: m}, nil
+	return &v1.GetMatchResponse{Match: toProto(match)}, nil
 }
+
 func (s *Server) ListMatches(ctx context.Context, req *v1.ListMatchesRequest) (*v1.ListMatchesResponse, error) {
 	size, offset, err := page(req.GetPageSize(), req.GetPageToken())
 	if err != nil {
 		return nil, err
 	}
-	var after any
+	var after *time.Time
 	if req.GetAfter() != nil {
-		if err := req.GetAfter().CheckValid(); err != nil {
+		if req.GetAfter().CheckValid() != nil {
 			return nil, status.Error(codes.InvalidArgument, "after timestamp is invalid")
 		}
-		after = req.GetAfter().AsTime()
+		t := req.GetAfter().AsTime()
+		after = &t
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,tournament_id::text,home_team_id::text,away_team_id::text,venue,kickoff,status,COALESCE(official_id::text,'') FROM matches WHERE ($1='' OR tournament_id::text=$1) AND ($2::timestamptz IS NULL OR kickoff >= $2) ORDER BY kickoff,id LIMIT $3 OFFSET $4`, strings.TrimSpace(req.GetTournamentId()), after, size+1, offset)
+	items, more, err := s.service.List(ctx, req.GetTournamentId(), after, int(size), offset)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "tournament id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not list matches")
+		return nil, translate(err)
 	}
-	defer rows.Close()
-	result := &v1.ListMatchesResponse{Matches: make([]*v1.Match, 0, size)}
-	for rows.Next() {
-		m, e := scanMatch(rows)
-		if e != nil {
-			return nil, status.Error(codes.Internal, "could not read matches")
-		}
-		if int32(len(result.Matches)) == size {
-			result.NextPageToken = strconv.Itoa(offset + int(size))
-			break
-		}
-		result.Matches = append(result.Matches, m)
+	response := &v1.ListMatchesResponse{Matches: make([]*v1.Match, 0, len(items))}
+	for _, match := range items {
+		response.Matches = append(response.Matches, toProto(match))
 	}
-	if err := rows.Err(); err != nil {
-		return nil, status.Error(codes.Internal, "could not read matches")
+	if more {
+		response.NextPageToken = strconv.Itoa(offset + len(items))
 	}
-	return result, nil
+	return response, nil
 }
+
 func (s *Server) AssignOfficial(ctx context.Context, req *v1.AssignOfficialRequest) (*v1.AssignOfficialResponse, error) {
-	matchID, officialID := strings.TrimSpace(req.GetMatchId()), strings.TrimSpace(req.GetOfficialId())
-	if matchID == "" || officialID == "" {
-		return nil, status.Error(codes.InvalidArgument, "match and official ids are required")
-	}
-	m, err := scanMatch(s.db.QueryRowContext(ctx, `UPDATE matches SET official_id=$2 WHERE id=$1 RETURNING id::text,tournament_id::text,home_team_id::text,away_team_id::text,venue,kickoff,status,COALESCE(official_id::text,'')`, matchID, officialID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, status.Error(codes.NotFound, "match not found")
-	}
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	match, err := s.service.AssignOfficial(ctx, identity.Role, req.GetMatchId(), req.GetOfficialId())
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "ids must be UUIDs")
-		}
-		return nil, status.Error(codes.Internal, "could not assign official")
+		return nil, translate(err)
 	}
-	return &v1.AssignOfficialResponse{Match: m}, nil
+	return &v1.AssignOfficialResponse{Match: toProto(match)}, nil
 }
 
-type scanner interface{ Scan(...any) error }
-
-func scanMatch(row scanner) (*v1.Match, error) {
-	m := new(v1.Match)
-	var kickoff sql.NullTime
-	err := row.Scan(&m.Id, &m.TournamentId, &m.HomeTeamId, &m.AwayTeamId, &m.Venue, &kickoff, &m.Status, &m.OfficialId)
-	if err != nil {
-		return nil, err
-	}
-	if kickoff.Valid {
-		m.Kickoff = timestamppb.New(kickoff.Time)
-	}
-	return m, nil
+func toProto(m domain.Match) *v1.Match {
+	return &v1.Match{Id: m.ID, TournamentId: m.TournamentID, HomeTeamId: m.HomeTeamID, AwayTeamId: m.AwayTeamID, Venue: m.Venue, Kickoff: timestamppb.New(m.Kickoff), Status: m.Status, OfficialId: m.OfficialID}
 }
+
+func translate(err error) error {
+	switch {
+	case errors.Is(err, domain.ErrInvalid):
+		return status.Error(codes.InvalidArgument, "match request is invalid")
+	case errors.Is(err, domain.ErrNotFound):
+		return status.Error(codes.NotFound, "match not found")
+	case errors.Is(err, domain.ErrConflict):
+		return status.Error(codes.AlreadyExists, "match scheduling conflict or match is finalised")
+	case errors.Is(err, domain.ErrForbidden):
+		return status.Error(codes.PermissionDenied, "super admin role required")
+	case errors.Is(err, domain.ErrDependency):
+		return status.Error(codes.Unavailable, "could not verify team or official")
+	case strings.Contains(err.Error(), "invalid input syntax for type uuid"):
+		return status.Error(codes.InvalidArgument, "ids must be UUIDs")
+	default:
+		return status.Error(codes.Internal, "match operation failed")
+	}
+}
+
 func page(size int32, token string) (int32, int, error) {
 	if size <= 0 {
 		size = 50

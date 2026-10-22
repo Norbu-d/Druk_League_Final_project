@@ -11,4 +11,6 @@ message MatchFinalized {
   int32 home_score=6;
   int32 away_score=7;
   google.protobuf.Timestamp finalized_at=8;
+  string finalized_by=9;
+  string reason=10;
 }

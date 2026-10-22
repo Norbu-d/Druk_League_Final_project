@@ -2,6 +2,8 @@
 !packages/
 !packages/servicekit/
 !packages/servicekit/**
+!packages/eventkit/
+!packages/eventkit/**
 !services/
 !services/*/
 !services/*/migrations/

@@ -298,6 +298,94 @@ func (x *FinalizeMatchResponse) GetScore() *Score {
 	return nil
 }
 
+type GetScoreRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MatchId       string                 `protobuf:"bytes,1,opt,name=match_id,json=matchId,proto3" json:"match_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetScoreRequest) Reset() {
+	*x = GetScoreRequest{}
+	mi := &file_drukleague_v1_score_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetScoreRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetScoreRequest) ProtoMessage() {}
+
+func (x *GetScoreRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_drukleague_v1_score_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetScoreRequest.ProtoReflect.Descriptor instead.
+func (*GetScoreRequest) Descriptor() ([]byte, []int) {
+	return file_drukleague_v1_score_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetScoreRequest) GetMatchId() string {
+	if x != nil {
+		return x.MatchId
+	}
+	return ""
+}
+
+type GetScoreResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Score         *Score                 `protobuf:"bytes,1,opt,name=score,proto3" json:"score,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetScoreResponse) Reset() {
+	*x = GetScoreResponse{}
+	mi := &file_drukleague_v1_score_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetScoreResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetScoreResponse) ProtoMessage() {}
+
+func (x *GetScoreResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_drukleague_v1_score_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetScoreResponse.ProtoReflect.Descriptor instead.
+func (*GetScoreResponse) Descriptor() ([]byte, []int) {
+	return file_drukleague_v1_score_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetScoreResponse) GetScore() *Score {
+	if x != nil {
+		return x.Score
+	}
+	return nil
+}
+
 var File_drukleague_v1_score_proto protoreflect.FileDescriptor
 
 const file_drukleague_v1_score_proto_rawDesc = "" +
@@ -324,10 +412,15 @@ const file_drukleague_v1_score_proto_rawDesc = "" +
 	"\bmatch_id\x18\x01 \x01(\tR\amatchId\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"C\n" +
 	"\x15FinalizeMatchResponse\x12*\n" +
-	"\x05score\x18\x01 \x01(\v2\x14.drukleague.v1.ScoreR\x05score2\xcc\x01\n" +
+	"\x05score\x18\x01 \x01(\v2\x14.drukleague.v1.ScoreR\x05score\",\n" +
+	"\x0fGetScoreRequest\x12\x19\n" +
+	"\bmatch_id\x18\x01 \x01(\tR\amatchId\">\n" +
+	"\x10GetScoreResponse\x12*\n" +
+	"\x05score\x18\x01 \x01(\v2\x14.drukleague.v1.ScoreR\x05score2\x99\x02\n" +
 	"\fScoreService\x12`\n" +
 	"\x0fUpdateLiveScore\x12%.drukleague.v1.UpdateLiveScoreRequest\x1a&.drukleague.v1.UpdateLiveScoreResponse\x12Z\n" +
-	"\rFinalizeMatch\x12#.drukleague.v1.FinalizeMatchRequest\x1a$.drukleague.v1.FinalizeMatchResponseBRZPgithub.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1b\x06proto3"
+	"\rFinalizeMatch\x12#.drukleague.v1.FinalizeMatchRequest\x1a$.drukleague.v1.FinalizeMatchResponse\x12K\n" +
+	"\bGetScore\x12\x1e.drukleague.v1.GetScoreRequest\x1a\x1f.drukleague.v1.GetScoreResponseBRZPgithub.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1b\x06proto3"
 
 var (
 	file_drukleague_v1_score_proto_rawDescOnce sync.Once
@@ -341,28 +434,33 @@ func file_drukleague_v1_score_proto_rawDescGZIP() []byte {
 	return file_drukleague_v1_score_proto_rawDescData
 }
 
-var file_drukleague_v1_score_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_drukleague_v1_score_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_drukleague_v1_score_proto_goTypes = []any{
 	(*Score)(nil),                   // 0: drukleague.v1.Score
 	(*UpdateLiveScoreRequest)(nil),  // 1: drukleague.v1.UpdateLiveScoreRequest
 	(*UpdateLiveScoreResponse)(nil), // 2: drukleague.v1.UpdateLiveScoreResponse
 	(*FinalizeMatchRequest)(nil),    // 3: drukleague.v1.FinalizeMatchRequest
 	(*FinalizeMatchResponse)(nil),   // 4: drukleague.v1.FinalizeMatchResponse
-	(*timestamppb.Timestamp)(nil),   // 5: google.protobuf.Timestamp
+	(*GetScoreRequest)(nil),         // 5: drukleague.v1.GetScoreRequest
+	(*GetScoreResponse)(nil),        // 6: drukleague.v1.GetScoreResponse
+	(*timestamppb.Timestamp)(nil),   // 7: google.protobuf.Timestamp
 }
 var file_drukleague_v1_score_proto_depIdxs = []int32{
-	5, // 0: drukleague.v1.Score.updated_at:type_name -> google.protobuf.Timestamp
+	7, // 0: drukleague.v1.Score.updated_at:type_name -> google.protobuf.Timestamp
 	0, // 1: drukleague.v1.UpdateLiveScoreResponse.score:type_name -> drukleague.v1.Score
 	0, // 2: drukleague.v1.FinalizeMatchResponse.score:type_name -> drukleague.v1.Score
-	1, // 3: drukleague.v1.ScoreService.UpdateLiveScore:input_type -> drukleague.v1.UpdateLiveScoreRequest
-	3, // 4: drukleague.v1.ScoreService.FinalizeMatch:input_type -> drukleague.v1.FinalizeMatchRequest
-	2, // 5: drukleague.v1.ScoreService.UpdateLiveScore:output_type -> drukleague.v1.UpdateLiveScoreResponse
-	4, // 6: drukleague.v1.ScoreService.FinalizeMatch:output_type -> drukleague.v1.FinalizeMatchResponse
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	0, // 3: drukleague.v1.GetScoreResponse.score:type_name -> drukleague.v1.Score
+	1, // 4: drukleague.v1.ScoreService.UpdateLiveScore:input_type -> drukleague.v1.UpdateLiveScoreRequest
+	3, // 5: drukleague.v1.ScoreService.FinalizeMatch:input_type -> drukleague.v1.FinalizeMatchRequest
+	5, // 6: drukleague.v1.ScoreService.GetScore:input_type -> drukleague.v1.GetScoreRequest
+	2, // 7: drukleague.v1.ScoreService.UpdateLiveScore:output_type -> drukleague.v1.UpdateLiveScoreResponse
+	4, // 8: drukleague.v1.ScoreService.FinalizeMatch:output_type -> drukleague.v1.FinalizeMatchResponse
+	6, // 9: drukleague.v1.ScoreService.GetScore:output_type -> drukleague.v1.GetScoreResponse
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_drukleague_v1_score_proto_init() }
@@ -376,7 +474,7 @@ func file_drukleague_v1_score_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_drukleague_v1_score_proto_rawDesc), len(file_drukleague_v1_score_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

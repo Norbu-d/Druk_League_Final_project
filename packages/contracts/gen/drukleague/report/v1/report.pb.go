@@ -29,6 +29,8 @@ type ReportJob struct {
 	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
 	DownloadUrl   string                 `protobuf:"bytes,4,opt,name=download_url,json=downloadUrl,proto3" json:"download_url,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	TournamentId  string                 `protobuf:"bytes,6,opt,name=tournament_id,json=tournamentId,proto3" json:"tournament_id,omitempty"`
+	Format        string                 `protobuf:"bytes,7,opt,name=format,proto3" json:"format,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -96,6 +98,20 @@ func (x *ReportJob) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *ReportJob) GetTournamentId() string {
+	if x != nil {
+		return x.TournamentId
+	}
+	return ""
+}
+
+func (x *ReportJob) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
 }
 
 type CreateReportRequest struct {
@@ -294,7 +310,7 @@ var File_drukleague_report_v1_report_proto protoreflect.FileDescriptor
 
 const file_drukleague_report_v1_report_proto_rawDesc = "" +
 	"\n" +
-	"!drukleague/report/v1/report.proto\x12\x14drukleague.report.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb2\x01\n" +
+	"!drukleague/report/v1/report.proto\x12\x14drukleague.report.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xef\x01\n" +
 	"\tReportJob\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vreport_type\x18\x02 \x01(\tR\n" +
@@ -302,7 +318,9 @@ const file_drukleague_report_v1_report_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12!\n" +
 	"\fdownload_url\x18\x04 \x01(\tR\vdownloadUrl\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"s\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12#\n" +
+	"\rtournament_id\x18\x06 \x01(\tR\ftournamentId\x12\x16\n" +
+	"\x06format\x18\a \x01(\tR\x06format\"s\n" +
 	"\x13CreateReportRequest\x12\x1f\n" +
 	"\vreport_type\x18\x01 \x01(\tR\n" +
 	"reportType\x12#\n" +
