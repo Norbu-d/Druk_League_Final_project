@@ -416,7 +416,7 @@ $env:TEST_DATABASE_URL = "postgres://postgres:test@127.0.0.1:55432/postgres?sslm
 cd services\match; go test -cover ./...
 ```
 
-### Before building (not done yet — Docker builds of these services will fail until it is)
+### Before building (done 19 Oct; kept for the record)
 1. `.dockerignore`: allow `packages/eventkit/` and `packages/eventkit/**`, the same way `packages/servicekit` is allowed.
 2. Dockerfiles for match, score, standings and fixture: add `COPY packages/eventkit/ /src/packages/eventkit/`.
 3. Rebuild the shared builder image, because `servicekit` now depends on `contracts` and `golang-jwt`: `docker build --tag drukleague-service-builder:local --file services/service-builder/Dockerfile .`
