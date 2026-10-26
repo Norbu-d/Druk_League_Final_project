@@ -25,7 +25,7 @@ func (repo) SaveSchedule(_ context.Context, _ string, f []domain.Fixture, _ doma
 	}
 	return f, true, nil
 }
-func (repo) LinkMatch(context.Context, string, string) error { return nil }
+func (repo) LinkMatch(context.Context, domain.Fixture) error { return nil }
 func (repo) List(context.Context, string, int, int) ([]domain.Fixture, bool, error) {
 	return []domain.Fixture{{ID: "f1", Round: 1}, {ID: "f2", Round: 1}}, true, nil
 }

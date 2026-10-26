@@ -1,10 +1,12 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-10-22
+**Last updated:** 2026-10-23
 **Project root:** `D:\druk-league`
-**Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11 (planned changes; **nothing in it is implemented yet**). Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state (23 Oct 2026):** all 20 services, the new **bff** (web API) and the monolith fallback run in Docker Compose. The web app at http://localhost:4173 now talks to the **microservices** through the bff (port 8080); the monolith moved to port 8079 as a fallback. `tools/e2e` passes **39 of 39** checks and `scripts/bff-smoke.ps1` passes **17 of 17** (section 12). Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
-> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-10-19, **8 of those modules have domain logic and unit tests** (Match, Score, Standings, Fixture, Venue, Official, User, Auth; the shared packages are tested too), Dzongkhag/Team/Tournament/Player/Registration have untested handlers, and 7 are still health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists what changed on 2026-10-19; section 11 holds the 2026-10-22 design review. Do not present the MVP as the finished architecture.
+> **Read this first.** **11 of the 20 services have domain logic and tests** and run in Docker (Auth, User, Team, Tournament, Player, Match, Score, Standings, Fixture, Venue, Official). Registration and Dzongkhag are done in Sonam's **PR #1**, not merged yet. The other **7 are still health shells** (Notification, Audit Log, Media, Report, Search, Analytics, Configuration). The proposal and deck also promise serverless functions, OpenTelemetry and CI, none of which exist yet. Section 2 compares the code with the proposal, section 7 lists remaining work, and section 12 records what changed on 22–23 Oct. Sections 10 and 11 are kept as history.
+>
+> **How the team works (from 22 Oct):** feature branches merge into **`development`** through PRs; `development` is merged into `main` only when a set of work is finished and tested. Norbu now also owns Tandin's services (Auth, User, Team, Tournament, Player; Registration was done by Sonam). Sonam and Namgay build their own services. Deployment means **local Docker Compose only**, with no Kubernetes or cloud. Work not finished by submission continues afterwards, so it goes on a post-submission list rather than being cut.
 
 ---
 
@@ -34,65 +36,67 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag spor
 
 | Proposal / deck says | Code today |
 |---|---|
-| 20 independently deployable services | 20 modules run as containers (2026-10-14). Since then Fixture, Venue, Official, User and Auth have real hexagonal logic (code + tests; rebuilt in Docker and e2e-checked 19 Oct); 7 remain health shells |
-| API Gateway + BFF | The monolith is still the "gateway"; no BFF yet (Part 5). Service port 50051 is not published outside Compose |
-| gRPC between services | All outbound calls now use `servicekit.Dial`: per-call deadline, retry on safe reads, circuit breaker, request-id and token propagation. Fixture calls Tournament/Team/Venue/Match; Official calls Match; Auth calls User; Venue calls Dzongkhag |
-| Each service owns its data | New services have their own databases; the monolith keeps its own shared one; the two are not connected |
+| 20 independently deployable services | All 20 run as containers. 11 have hexagonal logic and tests (23 Oct); Registration and Dzongkhag are in PR #1; 7 remain health shells |
+| API Gateway + BFF | **Done 22–23 Oct:** `services/bff` serves the web app's REST API by calling the services over gRPC. It validates the JWT once and forwards the caller's token, so every service still applies its own role checks. Published on host port 8080 and behind nginx `/api/`. There is no separate gateway: nginx and the bff fill that role. Rate limits are not done yet (11.6). Service port 50051 is not published outside Compose |
+| gRPC between services | All outbound calls use `servicekit.Dial`: per-call deadline, retry on safe reads, circuit breaker, request-id and token propagation. Fixture calls Tournament/Team/Venue/Match; Official calls Match; Auth calls User; Venue, Team and Tournament call Dzongkhag; Team calls Tournament; Player calls Team; the bff calls nine services |
+| Each service owns its data | Each service has its own database, and the web app now reads and writes them through the bff. The monolith keeps its own separate database, so data created through it does not appear in the web app |
 | NATS JetStream event flows | Shared `packages/eventkit`: durable consumers with bounded redelivery (5) and a **dead-letter stream `DRUKLEAGUE_DLQ`**, tested against an embedded JetStream server. Match and Standings consumers use it. Fixture publishes `FixturesGenerated` from its own outbox. Notification/Audit consumers not written yet |
 | OpenFaaS functions | None |
-| OpenTelemetry, circuit breaker, fault isolation | Circuit breaker, deadlines, retries, request-id logging and panic recovery are in `servicekit` (unit-tested). OpenTelemetry not started. Team → Tournament reference check still **open** |
-| 80% unit-test coverage, CI gates | Unit + PostgreSQL integration tests for 8 services and the shared packages (section 10). 12 modules still have no tests; no CI workflow yet |
-| Hexagonal architecture (cited in the literature review) | Used in Dzongkhag, Match, Score, Standings, Fixture, Venue, Official, User, Auth. Team, Tournament, Player, Registration and the monolith still need extraction |
-| JWT + **bcrypt** (deck) | **Services now use bcrypt (cost 12) and `golang-jwt/v5`.** Old PBKDF2 hashes still verify and are upgraded to bcrypt at next login. The monolith still uses its own code until Part 5 replaces it |
-| Team users register and track teams | `team_manager` role added in User (Auth/User contracts + DB constraint). Team ownership (`manager_id` on Team) is in the contract but Team does not use it yet |
+| OpenTelemetry, circuit breaker, fault isolation | Circuit breaker, deadlines, retries, request-id logging and panic recovery are in `servicekit` (unit-tested). The bff degrades a match row instead of failing the list when Team or Score is down. Team → Tournament reference check **done 22 Oct**. OpenTelemetry not started; fault-isolation scenarios not run in Docker |
+| 80% unit-test coverage, CI gates | Unit + PostgreSQL integration tests for 11 services, the bff and the shared packages (sections 10 and 12). Registration and Dzongkhag tests are in PR #1. The 7 shells and the monolith have none. No CI workflow yet |
+| Hexagonal architecture (cited in the literature review) | Used in every service with logic: Auth, User, Team, Tournament, Player, Match, Score, Standings, Fixture, Venue, Official, Dzongkhag, plus Registration in PR #1. Only the monolith is not |
+| JWT + **bcrypt** (deck) | Services use bcrypt (cost 12) and `golang-jwt/v5`. Old PBKDF2 hashes still verify and are upgraded to bcrypt at next login. Only the monolith fallback still uses its hand-rolled code |
+| Team users register and track teams | `team_manager` role in User. **22 Oct:** a team manager who creates a team becomes its `manager_id`; only that manager (or the admin) can add or edit its players. Registration checks the same `manager_id` (PR #1). No web screens for team managers yet |
 
 ### The 20 services
-Verified = checked in a running container on 12 Oct 2026 with an authenticated gRPC call. All modules have their own contract and Dockerfile.
+All modules have their own contract and Dockerfile. "e2e" means covered by `tools/e2e` against the running stack; "smoke" means covered by `scripts/bff-smoke.ps1` through the bff. Owners changed on 22 Oct: Norbu took over Tandin's services.
 
-| Owner | Service | Status |
+| Owner | Service | Status (23 Oct) |
 |---|---|---|
-| Tandin | Auth | **Implemented 19 Oct (tested; containerised and e2e-checked 19 Oct):** Login, RefreshToken (rotating), RevokeSession, login lockout (5 failures / 15 min) |
-| Tandin | User | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** hexagonal, bcrypt, `VerifyCredentials`, bootstrap super admin from `BOOTSTRAP_ADMIN_*`, `team_manager` role, self/admin/service read rules |
-| Tandin | Team | Create/Get/List; `CreateTeam`, `GetTeam`, `ListTeams` verified. Does not validate `tournament_id` |
-| Tandin | Player | Create/Get/List/Update; `ListPlayers` verified (empty); others not exercised |
-| Tandin | Tournament | Create/Get/List; full Create → Get → List round trip verified |
-| Tandin | Registration | Register/Review/List; `ListRegistrations` verified (empty); others not exercised |
-| Norbu | Match | Verified 14 Oct. 19 Oct: consumer moved to `eventkit` (dead-letter), resilient clients, UUID validation in the app layer, unit + DB tests |
-| Norbu | Score | Verified 14 Oct. 19 Oct: event now carries `finalized_by` and `reason`; scores capped 0–99; outbox relay unit-tested |
-| Norbu | Standings | Verified 14 Oct. 19 Oct: **fixed bug** where the service token expired 10 min after start (all Team lookups then failed); consumer on `eventkit` |
-| Norbu | Fixture | **Implemented 19 Oct (tested; containerised and e2e-checked 19 Oct):** round-robin / double round-robin, venue rotation, creates matches in Match, resumable, `FixturesGenerated` outbox |
-| Norbu | Venue | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** hexagonal, admin-only create, dzongkhag checked via Dzongkhag service (cached), unique name per dzongkhag |
-| Sonam | Dzongkhag | Get/List; `ListDzongkhags` verified (all 20 districts) |
-| Sonam | Official | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** assigns through Match (source of truth), records tournament, filter by tournament now works |
+| Norbu (was Tandin) | Auth | Done 19 Oct, tested, e2e + smoke: Login, RefreshToken (rotating), RevokeSession, lockout (5 failures / 15 min) |
+| Norbu (was Tandin) | User | Done 19 Oct, tested, e2e + smoke: hexagonal, bcrypt, `VerifyCredentials`, bootstrap super admin, `team_manager` role |
+| Norbu (was Tandin) | Team | **Rewritten 22 Oct, tested, e2e + smoke:** hexagonal; the tournament must exist (no more "Ghost FC") and a team manager can only join a `registration_open` one; the creating manager becomes `manager_id`; dzongkhag canonicalised; short code 2–8 letters/digits, unique per tournament |
+| Norbu (was Tandin) | Tournament | **Rewritten 22 Oct, tested, e2e + smoke:** hexagonal; admin only; validated fields; dzongkhag canonicalised; `starts_at` in UTC; always starts as `registration_open`; name unique per season |
+| Norbu (was Tandin) | Player | **Rewritten 22 Oct, tested, e2e:** hexagonal; the team must exist; only the admin or that team's manager can add or edit players; shirt number optional, 1–99, unique per team; family name optional |
+| Sonam (was Tandin) | Registration | **Rewritten by Sonam in PR #1 (not merged):** hexagonal; `pending` / `approved` / `rejected`; checks the tournament is open and the caller manages the team; tests |
+| Norbu | Match | Done 19 Oct, tested, e2e + smoke. **23 Oct:** a match books its teams, venue and official for 2 hours; overlapping bookings and double-booked officials are refused, and the error names what clashed |
+| Norbu | Score | Done 19 Oct, tested, e2e + smoke: event carries `finalized_by` and `reason`; scores 0–99; outbox relay |
+| Norbu | Standings | Done 19 Oct, tested, e2e + smoke: consumes `MatchFinalized` (deduplicated), team names from Team |
+| Norbu | Fixture | Done 19 Oct, tested, e2e + smoke. **23 Oct:** when another tournament holds the planned slot, it tries the district's other venues, then 3 and 6 hours later the same day, and stores the slot it actually booked |
+| Norbu | Venue | Done 19 Oct, tested, e2e: admin-only create, dzongkhag checked via Dzongkhag service (cached), unique name per dzongkhag |
+| Sonam | Dzongkhag | Get/List, all 20 districts; tests in PR #1 |
+| Sonam | Official | Done 19 Oct, tested, e2e + smoke: assigns through Match, records tournament, filter by tournament |
 | Sonam | Notification, Audit Log, Media | Shells |
 | Namgay | Report, Search, Analytics, Configuration | Shells |
 
-Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
+Not one of the 20: **bff** (Norbu, 22–23 Oct, tested, smoke) is the web app's API (section 12).
 
 ---
 
 ## 3. Stack
 
 - **Frontend:** plain HTML/CSS/JS, no build step.
-- **Backend:** Go. Monolith in `services/api-gateway`; 20 service modules under `services/`.
-- **Data:** PostgreSQL 17 via `pgx/v5`; monolith has one startup migration; new services have their own databases.
-- **Auth:** services sign/verify HS256 JWTs with `golang-jwt/v5` (same claims as the monolith, so monolith tokens still work) and hash passwords with bcrypt. The monolith still uses its hand-rolled JWT/PBKDF2 code.
+- **Backend:** Go. 20 service modules under `services/`; `services/bff` (REST → gRPC for the web app); monolith fallback in `services/api-gateway`.
+- **Data:** PostgreSQL 17 via `pgx/v5`; each service has its own database and runs its own migrations on start; the monolith has its own separate database.
+- **Auth:** Auth issues HS256 JWTs (30-minute access token, 7-day rotating refresh token) with `golang-jwt/v5`; passwords use bcrypt. The bff and every service verify the token. The web app renews the access token through `/api/auth/refresh` when it gets a 401. The monolith fallback still uses its hand-rolled JWT/PBKDF2 code.
 - **Contracts:** Protobuf + gRPC for 20 services plus `MatchFinalized`; Buf 1.73.0 lint/build/generate pass.
 - **Events:** Score owns the result/outbox transaction and publishes to JetStream. Match and Standings consume the event; duplicate delivery was verified. The monolith's own outbox remains separate until gateway/API integration is changed.
-- **Deployment:** Docker Compose (PostgreSQL, NATS, Nginx, API, `db-init` job, 20 services); `deploy/build-services.ps1` builds images.
+- **Deployment:** Docker Compose only (PostgreSQL, NATS, nginx `web` on 4173, `bff` on 8080, monolith `api` on 8079, `db-init` job, 20 services); `deploy/build-services.ps1` builds images. No Kubernetes or cloud (decided 22 Oct).
 
 ---
 
 ## 4. File guide
 
-- **Frontend:** root `index.html`, `styles.css`, `app.js`, `api.js` are the source of truth; `web-preview/` is a copy, do not edit it.
-- **Monolith:** `services/api-gateway/cmd/api/main.go` (HTTP, auth, tournaments, teams, matches, fixtures, scoring, finalisation), `admin_matches.go` (accounts, official assignment, match creation), `events.go` (outbox → JetStream), `migrations/001_init.sql` (schema + trigger blocking edits to finalised results).
+- **Frontend:** root `index.html`, `styles.css`, `app.js`, `api.js` are the source of truth; `web-preview/` is a copy, do not edit it. `api.js` calls `http://<host>:8080/api` (the bff) and renews tokens on a 401.
+- **bff:** `services/bff/internal/httpapi/server.go` (routes, JWT check, CORS, request ids, error mapping) and `handlers.go` (one handler per route); `cmd/bff/main.go` dials the nine services.
+- **Tests and checks:** `tools/e2e` (Go, gRPC, 39 checks, runs inside the Compose network) and `scripts/bff-smoke.ps1` (PowerShell, HTTP, 17 checks, run from the host). Both leave uniquely named test rows behind.
+- **Monolith (fallback):** `services/api-gateway/cmd/api/main.go` (HTTP, auth, tournaments, teams, matches, fixtures, scoring, finalisation), `admin_matches.go` (accounts, official assignment, match creation), `events.go` (outbox → JetStream), `migrations/001_init.sql` (schema + trigger blocking edits to finalised results).
 - **Contracts and shared code:** `proto/` (layout: `proto/drukleague/v1/` holds events, match, score, team, tournament, user; every other service has `proto/drukleague/<name>/v1/<name>.proto`), `packages/contracts/` (generated Go), `packages/servicekit/` (migration, bearer-token check, gRPC runtime), `services/_template/` (hexagonal example), `services/<service>/` (one per service).
 - **Deploy:** `deploy/docker-compose.yml`, `build-services.ps1`, `init-databases.sh`, `nginx.conf`, `.env.example` (variables: `POSTGRES_PASSWORD`, `JWT_SECRET`, `BOOTSTRAP_ADMIN_USER`, `BOOTSTRAP_ADMIN_PASSWORD`). `deploy/.env` is private: never print, copy or commit it. `.gitignore` and `.gitattributes` exist (secrets ignored; shell scripts, Go, SQL, proto, YAML, Dockerfile and nginx config forced to LF).
 - **Docs (`docs/`):** `architecture-decision-mvp.md`, `service-design.md` (hexagonal layout and resilience plan), `stakeholder-analysis.md`, `wbs.md`, `risk-register.md`, `change-control.md`, `swe302-test-plan.md` (planned, not executed), `defect-log.md`, `traceability-matrix.md` (user stories and acceptance criteria).
 - **Presentation:** `DrukLeague_Redesigned_v2.pptx` (19 slides, speaker notes; Tandin 1–4, Norbu 5–9, Sonam 10–13, Namgay 14–19).
 
-### Monolith behaviour
+### Monolith behaviour (fallback only since 22 Oct)
 - Bearer-token auth; the Super Admin creates match officials and viewers; team and tournament writes are admin-only.
 - Match creation rejects same-kickoff team/venue clashes; round-robin generation uses a per-tournament advisory lock and does not duplicate.
 - Only the assigned official can update or finalise a score. In the **monolith**, finalisation writes the result, both standings rows and the outbox event in one transaction; a trigger rejects later edits.
@@ -102,13 +106,16 @@ Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and cov
 
 The monolith's single transaction cannot span the Score and Standings databases. In the split architecture, Score commits the final result and its outbox event atomically. Standings updates by consuming `MatchFinalized`, so standings are eventually consistent with the final result. The consumer deduplicates by `event_id`, which Score includes in the event payload. Match retains `scheduled`/`completed` status and marks a match completed when it consumes `MatchFinalized`. These flows and duplicate handling were verified on 14 Oct 2026.
 
+Web API routes. The bff serves them with the same JSON shapes the monolith used, so the frontend did not change; the README lists request bodies and error codes.
+
 | Route | Purpose |
 |---|---|
-| `POST /api/auth/login` | log in |
+| `POST /api/auth/login` | log in; returns `token`, `refresh_token`, `user` |
+| `POST /api/auth/refresh`, `POST /api/auth/logout` | renew the access token; revoke the session (bff only) |
 | `/api/users` | list/create accounts (Super Admin) |
 | `/api/tournaments`, `/api/teams` | create/list |
-| `/api/matches` | create/list; `/{id}/official`, `/{id}/live`, `/{id}/finalize` |
-| `/api/tournaments/{id}/fixtures` | generate round-robin fixtures |
+| `/api/matches` | create/list; `/{id}/official`, `/{id}/live`, `/{id}/finalize` (the bff saves the submitted score, then finalises it) |
+| `/api/tournaments/{id}/fixtures` | generate round-robin fixtures (the bff starts them on the tournament's own start date) |
 | `/api/standings?tournament_id=...` | read standings |
 | `/healthz` | health |
 
@@ -142,6 +149,12 @@ Not yet exercised: `UpdatePlayer`, `RegisterTeam`, `ReviewRegistration`, `Create
 - Republished the same event payload with a different NATS message ID but the same `event_id`. `GetStandings` still showed each team with `played: 1`, confirming duplicate delivery did not double-count.
 - Score `GetScore`, Standings `GetStandings`, Match `GetMatch`, and authenticated `ListMatches` returned successfully. NATS outage/reconnect and dead-letter behavior were not tested.
 
+### Verified 22–23 Oct 2026 (automated)
+- `tools/e2e`: **39 of 39** checks pass (the 29 from 19 Oct plus 10 for Tournament, Team ownership and Player rules).
+- `scripts/bff-smoke.ps1`: **17 of 17** HTTP checks pass, run twice back to back: login, refresh, logout, tournaments, teams, fixture generation (including a second same-day tournament in the same dzongkhag that must be rescheduled), official assignment, live score, finalise with the submitted score, standings, and nginx proxying.
+- The new unique-index migrations (team short code, tournament name, shirt number) applied cleanly to the existing service databases, so there were no duplicates.
+- Still not exercised: NATS outage/reconnect, dead-letter replay, fault-isolation scenarios.
+
 ### Docker rules
 - **Docker Desktop's disk image was moved to D: on 2026-10-19** (Settings > Resources > Advanced). On 19 Oct, D: had about 122 GB free and C: about 23 GB. Keep at least 10 GB free on both drives. Earlier, a full C: drive (Docker's `docker_data.vhdx` was 25.8 GB) caused the hangs and HTTP 500s.
 - Start with `docker compose up -d --no-build`. Build one service at a time: `$env:COMPOSE_PARALLEL_LIMIT = 1`, then `docker compose build <service>` (repeat the `$env:` line in each new PowerShell window).
@@ -149,46 +162,59 @@ Not yet exercised: `UpdatePlayer`, `RegisterTeam`, `ReviewRegistration`, `Create
 - Pruning frees space inside Docker's disk file; the file itself only shrinks after compacting (`diskpart`, `compact vdisk`, with Docker and WSL stopped).
 - **Never run** `docker volume prune`, `docker system prune --volumes` or `docker compose down -v`. Keep the volumes `drukleague-postgres-data` (PostgreSQL 16, preserved), `drukleague-postgres17-data` (used by Compose) and `deploy_nats-data`.
 - Minimum machine for teammates: about 10 GB free disk and 8 GB RAM.
+- **After pulling the 22–23 Oct changes**, build the new bff image once (`docker compose build bff`), rebuild team, tournament, player, match and fixture, then `docker compose up -d --no-build`. If port 8080 is busy, the old `api` container is still holding it; `docker compose up -d --no-build api` moves it to 8079.
+- From Git Bash, prefix `docker` commands that contain Linux paths with `MSYS_NO_PATHCONV=1`, or use PowerShell; Git Bash rewrites `/var/lib/...` into a Windows path.
 
 ---
 
 ## 6. Open decisions
 
 1. **Password hashing:** *resolved in code 19 Oct:* the services use bcrypt, matching the deck. The monolith still uses PBKDF2 until Part 5 retires it.
-2. **Team-user role:** *started 19 Oct:* role name `team_manager` in code. Align the proposal and deck wording, and finish Team ownership and Registration rules.
-3. **OpenFaaS vs faasd:** OpenFaaS normally needs Kubernetes; faasd runs on one machine. Pick one and spike it early. **22 Oct recommendation:** faasd alongside Compose, no Kubernetes; confirm with Mr. Pema Namgay in writing (section 11.7).
+2. **Team-user role:** role name `team_manager` in code. Team and Player ownership done 22 Oct; Registration ownership in PR #1. Still align the proposal and deck wording.
+3. **Serverless functions:** *deployment decided 22 Oct:* Docker Compose only, no Kubernetes or cloud. No function exists yet. If one is not built by submission (faasd, or a function-style container in Compose), list it as post-submission work in the report.
 4. **Risk R1:** the deck rates "20 services in one semester" High/High; the proposal says Medium. Make them match.
 5. **Finalised-result correction:** admin correction with a reason + audit entry (user stories) vs append-only correction events (architecture note). **22 Oct recommendation:** admin-only void-and-replace with an audit record (section 11.4).
-6. **Sprint 4/5 dependency:** fixture clash detection needs Venue, planned for Sprint 5. Reorder or stub Venue earlier.
+6. **Sprint 4/5 dependency:** *no longer blocking:* Venue exists and Fixture's clash handling is done (23 Oct). Record the reorder in the sprint evidence.
 7. **NATS resilience:** bounded redelivery and dead-lettering are implemented in `eventkit` and pass against an embedded JetStream server. Still test NATS outage/reconnect in Docker, and write the Notification/Audit consumers.
 8. **Hexagonal and resilience wording:** the proposal cites hexagonal architecture but never says it will be applied. Add one methodology sentence and a resilience objective, then update the deck's architecture and testing slides, the risk table and the speaker notes.
-9. **Cross-service integrity:** Team stores any `tournament_id`. Choose a synchronous gRPC check against Tournament (with deadline, retry, circuit breaker) or eventual consistency with a cleanup event. Record the finding in the risk register either way. **22 Oct:** the cleaner fix is to move the tournament link from Team to Registration (item 10, section 11.3).
+9. **Cross-service integrity:** *resolved 22 Oct:* Team checks the tournament synchronously through Tournament (resilient client), so a nonexistent `tournament_id` is refused. Record the finding and the fix in the risk register. Moving the link to Registration (item 10) is still the cleaner long-term model.
 10. **Registration model (proposed 22 Oct):** Registration links Team to Tournament with a status; Team becomes a persistent entity; Fixture reads approved registrations. Needs agreement with Tandin (section 11.3).
 11. **Service identity and user → official mapping (proposed 22 Oct):** a distinct service claim instead of a borrowed `super_admin`, and an explicit mapping from user ID to official ID. Needs agreement with Tandin and Sonam (section 11.2).
-12. **Scope cuts (proposed 22 Oct):** drop or document OpenTelemetry, five shell services and asymmetric JWT signing. Reverses part of the 7 Oct "all 20 services" decision, so it needs a group decision (section 11.1).
+12. **Scope after submission:** *changed 22 Oct:* instead of cutting OpenTelemetry, the five shells and asymmetric JWT signing, anything unfinished at submission goes on a post-submission list (work continues in the vacation). The group should confirm, and the report should say which items are post-submission.
 
-Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped (7 Oct 2026).
+Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped (7 Oct 2026); integrate on `development` through PRs, and Norbu takes over Tandin's services (22 Oct 2026); Docker Compose is the only deployment target (22 Oct 2026).
 
 ---
 
 ## 7. Remaining work (priority order)
 
-> The 22 Oct design review proposes a revised order in section 11.1. Where it differs from the list below, section 11.1 wins until the group agrees otherwise.
+Updated 23 Oct. Owners in brackets.
 
-0. **Done (19 Oct):** the section 10 "before building" steps, the one-at-a-time rebuild of all 20 images, and the 29/29 e2e run. Next: section 11.1.
-1. **Docker disk:** done. The disk image is on D: (19 Oct).
-2. **Push to GitHub (before Part 2).** Remaining checks before the first commit: `git check-ignore -v deploy/.env` names a rule; list staged files over 1 MB across the whole repo; grep staged files for secret-looking assignments (file names only); set `git config user.name` and `user.email`. Then commit, create a **private** repository, push, add the three teammates and protect `main`.
-3. **Secrets before sharing:** rotate everything in `deploy/.env`. `JWT_SECRET` is safe to change on its own (recreate the API afterwards). `POSTGRES_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD` need a coordinated change (PostgreSQL reads its password only when the volume is created; the bootstrap admin exists once created), so choose `ALTER USER` plus an admin reset, or a clean dev reset. Fix the README's outdated default-login line. Bind DB/API ports to loopback for local runs.
-4. **Part 2:** Match, Score and Standings are extracted. Verified Match → Team/User, Score → Match, Score transactional outbox → JetStream, Match completion consumer, Standings consumer, GetScore/GetStandings and duplicate-event handling. Standings is eventually consistent with Score; no distributed transaction spans their databases.
-5. **Part 3:** code, tests and container checks done (19 Oct). **Part 4:** User + Auth, same. **Part 5 (next to write; section 11.1 step 4 proposes a minimal version first):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
-6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream) and the Fixture outbox are done. Still to do: Notification and Audit Log consumers, and the OpenFaaS/faasd function.
-7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
-8. **Part 8:** the remaining 7 shells: Notification, Audit Log, Media, Report, Search, Analytics, Configuration.
-9. **Part 9 (SWE302):** unit tests with port fakes and PostgreSQL integration tests exist for 8 services plus the shared packages (section 10). Still to do: tests for the 12 remaining modules and the monolith; fix `scripts/coverage.sh` on Windows; GitHub Actions with lint, tests and a coverage gate; gosec, govulncheck, Trivy, ZAP; k6; Playwright; fault-isolation tests.
-10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
-11. **Observability:** OpenTelemetry traces across gateway and services.
-12. **SWE303 evidence:** sprint plans, reviews, retrospectives; update the defect log, risk register (add the cross-service finding) and traceability matrix with executed results; RACI/estimation/communication plan; final report and demo script.
-13. **Housekeeping:** README quickstart for teammates (clone, copy `.env.example`, set secrets, `docker compose up -d --no-build`, one-at-a-time builds); Buf breaking check needs a baseline revision; optionally publish images to GitHub Container Registry later.
+**Now (integration)**
+1. **Merge into `development`** (Norbu): push `feature/norbu-match-engine` and open a PR into `development`. It changes shared files (`deploy/docker-compose.yml`, `deploy/nginx.conf`, `deploy/build-services.ps1`, `api.js`, `README.md`), so tell the group before merging.
+2. **Sonam's PR #1** (Sonam, review by Norbu): change its base to `development` and merge. It works with the new Team: Registration's ownership check reads the `manager_id` that Team now saves.
+3. **Teammates' branches** (Namgay, Sonam): `feature/namgay-insights-testing` and `development` were 2 commits behind `main` on 22 Oct; merge `origin/development` before starting. `feature/tandin-core-services` is no longer used.
+
+**Services**
+4. **The 7 shells** (Sonam: Notification, Audit Log, Media; Namgay: Report, Search, Analytics, Configuration). Copy the hexagonal pattern from Venue or Team; Notification and Audit Log should consume `MatchFinalized` through `eventkit`. Audit Log is the most useful first (11.6).
+5. **Result correction** (group decision first, open decision 5): admin-only void-and-replace with an audit record. A Standings rebuild (replay final results from Score) would make it simpler than reversing standings rows.
+6. **Registration model** (open decision 10): move the tournament link from Team to Registration and have Fixture read approved registrations. Only after PR #1 is merged.
+
+**Testing and CI (SWE302)**
+7. **Coverage:** every tested package except Fixture's PostgreSQL adapter (78.9%) is at or above 80% (section 12). Add tests for the shells and Registration/Dzongkhag as they land. `scripts/coverage.sh` still prints FAIL on Windows Git Bash; fix it before using it as a gate.
+8. **CI:** one GitHub Actions workflow with `go vet`, `go test -cover` per module (fail under 80%), `govulncheck`, `gosec`; later Trivy, `buf breaking` (needs a baseline), k6 against the bff, Playwright.
+9. **Fault isolation in Docker:** stop Team or Score and show the bff still lists matches (degraded rows); stop NATS and show Score's outbox catches up afterwards.
+
+**Frontend**
+10. **Screens missing:** players, registrations, venues, officials and team-manager views have APIs but no pages; the dashboard still mixes sample data with API data; loading, error and empty states.
+11. **Demo data:** the web app shows every tournament in the service databases, including leftover e2e and smoke-test rows. Before a demo, use a fresh database or create clean data through the web app.
+
+**Other**
+12. **Serverless function** and **OpenTelemetry:** not started; post-submission if not done (open decisions 3 and 12).
+13. **Secrets:** rotate `deploy/.env` values before the repository is shared more widely. `JWT_SECRET` can change on its own (then recreate the services); `POSTGRES_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD` need a coordinated change. Bind DB/API ports to loopback. Confirm the GitHub repository is private and `main` is protected.
+14. **SWE303 evidence:** sprint plans, reviews and retrospectives; add the 22–23 Oct defects (section 12) to `docs/defect-log.md`; map e2e and smoke checks to user stories in `docs/traceability-matrix.md`; update the risk register (cross-service integrity, R1 rating).
+
+**Done (kept for the record):** Docker disk moved to D: (19 Oct); GitHub repository created and pushed; Parts 2–4 extracted and containerised (14 and 19 Oct); Part 5 bff and frontend cutover (22–23 Oct); Part 7 Team → Tournament check (22 Oct); finalise uses the submitted score (22 Oct); Match overlap and official clash checks, Fixture rescheduling (23 Oct).
 
 **Sprint mapping (proposal's 8 sprints):** S1 foundation/CI/contracts · S2 identity + gateway + BFF · S3 teams/tournaments/registration · S4 competition (match → standings) · S5 venues/officials/notifications · S6 supporting services · S7 integration, events, serverless, observability, security/performance tests · S8 QA, coverage, defects, demo.
 
@@ -196,21 +222,21 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 
 ## 8. Continue in a new Claude chat
 
-Give the new chat `progress.md`, `README.md` and `docs/service-design.md`. If it cannot see the project folder, also paste the files for the part you are on (for Part 2: `services/api-gateway/cmd/api/main.go`, `admin_matches.go`, `events.go`, `migrations/001_init.sql`, and the `services/dzongkhag` folder as the reference structure). Then send:
+**In Claude Code (VS Code extension), the way this was built since 22 Oct:** Claude can read the project, write code, and run `go test`, Docker builds, `tools/e2e` and `scripts/bff-smoke.ps1` itself. Open the project folder and send:
 
-> DrukLeague is a Go microservices project targeting all 20 services. Read progress.md, README.md and docs/service-design.md first. Never ask me to paste, and never print, deploy/.env.
+> DrukLeague is a Go microservices project. Read progress.md (start with "Read this first", sections 2, 7 and 12) and README.md. Never print, copy or commit deploy/.env; scripts may read the admin password from it without printing it.
 >
-> **How we work:** I use Windows, PowerShell and VS Code. You cannot run anything on my machine. Give me copy-paste-ready code (full file replacements, not diffs, with brief inline comments) and PowerShell commands. I paste the code into VS Code, run `go build`, the tests and the Docker commands myself, and send you the output. Before writing code that changes an existing file, ask me to paste that file; do not guess what is in it. Give me one next step at a time and wait for my output before moving on. When I paste terminal output, I paste only the output, not old prompts or errors.
+> **Rules:** follow the Docker rules in progress.md section 5 (one build at a time, never `docker volume prune` or `down -v`). Work on my feature branch and open PRs into `development`. Copy the hexagonal pattern of an existing service (Venue or Team). Run the unit and PostgreSQL tests, rebuild the changed services, and run `tools/e2e` and `scripts/bff-smoke.ps1` before saying something works.
 >
-> **Status:** see progress.md sections 10 and 11 (19 and 22 Oct 2026). Parts 3 and 4 and the shared resilience/event code are written, unit-tested, containerised and e2e-checked (29/29); section 11 holds planned design changes, none implemented yet. Follow the Docker rules in progress.md section 5: build one service at a time, keep 10 GB free on C:, and never run `docker volume prune` or `down -v`. Never print or share `deploy/.env`.
->
-> **Task:** we are working through section 11.1 (then section 7) step by step. Start by telling me which step is next and what you need from me. Do not claim tests or features work unless I have shown you the output.
+> **Task:** <the item from progress.md section 7>.
+
+**In a web chat that cannot see the project:** give it `progress.md` and `README.md`, paste the files for the service you are working on (and one finished service such as `services/venue` as the pattern), and ask for full-file code plus PowerShell commands. Run them yourself and paste back only the output. Tell it not to claim anything works until you have shown it the output.
 
 ---
 
 ## 9. Folder structure
 
-As of 12 Oct 2026, taken from the files Git is tracking. `deploy/.env` exists locally but is private and not committed.
+As of 12 Oct 2026, taken from the files Git is tracking. `deploy/.env` exists locally but is private and not committed. **Added since:** `packages/eventkit/` and `packages/servicekit/{core,dzongkhags,testdb}/` (19 Oct), `tools/e2e/` (19 Oct), `services/bff/` and `scripts/bff-smoke.ps1` (22–23 Oct). Every service with logic now has the full `internal/{domain,app,ports,adapters}` layout and `*_test.go` files.
 
 ```text
 D:\druk-league\
@@ -306,15 +332,15 @@ The 20 services are: auth, user, team, player, tournament, registration, match, 
 
 Root also holds the proposal and deck files: `DrukLeague_Project_Proposal_v2.docx`, `DrukLeague_Project_Proposal.docx`, `DrukLeague_SWE303_Project_ProposalV1.docx`, `Proposal Template.docx` and `DrukLeague_Redesigned_v2.pptx`.
 
-**Target layout after the split (proposed):**
+**Target layout (bff exists since 22 Oct; the rest is still to do):**
 
 ```text
 services/
-├── api-gateway/          # real gateway (auth, routing, rate limits)
-├── bff/
+├── bff/                  # done: web API over the services
+├── api-gateway/          # monolith fallback; could be retired once the web app no longer needs it
 └── <service>/            # hexagonal: cmd/, internal/{domain,app,ports,adapters}/, migrations/, Dockerfile, tests
-functions/                # OpenFaaS/faasd functions (e.g. notify-on-match-finalized)
-.github/workflows/        # CI: lint, test, coverage gate, scans
+functions/                # serverless function(s), e.g. notify-on-match-finalized (not started)
+.github/workflows/        # CI: lint, test, coverage gate, scans (not started)
 ```
 
 ---
@@ -390,7 +416,7 @@ $env:TEST_DATABASE_URL = "postgres://postgres:test@127.0.0.1:55432/postgres?sslm
 cd services\match; go test -cover ./...
 ```
 
-### Before building (not done yet — Docker builds of these services will fail until it is)
+### Before building (done 19 Oct; kept for the record)
 1. `.dockerignore`: allow `packages/eventkit/` and `packages/eventkit/**`, the same way `packages/servicekit` is allowed.
 2. Dockerfiles for match, score, standings and fixture: add `COPY packages/eventkit/ /src/packages/eventkit/`.
 3. Rebuild the shared builder image, because `servicekit` now depends on `contracts` and `golang-jwt`: `docker build --tag drukleague-service-builder:local --file services/service-builder/Dockerfile .`
@@ -425,7 +451,9 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 
 ## 11. Design review — 22 Oct 2026
 
-**Status: planned. Nothing in this section is implemented or tested.** The findings come from reading `README.md` and `progress.md`, not from re-reading the code, so check each one against the code before acting; some may already be handled. Items marked *group decision* touch services owned by other members. Where this section conflicts with the ordering in section 7, this section wins until the group agrees otherwise.
+**Status (23 Oct): partly implemented; kept as written for the record.** Section 7 is now the current work list. Done since the review: 11.1 steps 4 (bff and frontend cutover, fuller than the minimum) and 6 (Team, Tournament and Player tests), and from step 3 the finalise fix and the official-overlap check. In 11.2, Team ownership. In 11.4, finalise uses the submitted score (through the bff), matches have a 2-hour duration with official clash checks, and byes and UTC storage were already handled in Fixture and Match. In 11.6, the token check: the web app keeps both tokens in `sessionStorage` (a known limitation). In 11.7, the decision is Docker Compose only, and the tutor will not be asked. Not done: step 1 (tag), the registration model, result correction, CI, the rest of 11.2, 11.5 and 11.6.
+
+The findings came from reading `README.md` and `progress.md`, not from re-reading the code, so check each one against the code before acting. Items marked *group decision* touch services owned by other members.
 
 ### 11.1 Proposed order of work
 
@@ -498,3 +526,59 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Add faasd and deploy one or two small functions (for example one triggered by `MatchFinalized` that formats a notification, or one that generates a standings report), so the serverless claim is true.
 - In the report, list Kubernetes as future work. Each service already has its own Dockerfile and env-var config, so the move would mostly be manifests.
 - **Before committing:** ask Mr. Pema Namgay in writing whether faasd on Docker is acceptable for the serverless component. If the module spec requires Kubernetes, this recommendation changes. Tracks open decision 3.
+---
+
+## 12. Session log — 22–23 Oct 2026 (Norbu, with Claude Code)
+
+All work is on `feature/norbu-match-engine` (commits `56aa481`, `bb49acf`, `f90d524`, `837a4eb`), to be merged into `development` through a PR.
+
+### What changed
+
+**Team, Tournament, Player (taken over from Tandin, 22 Oct).** Rewritten in the hexagonal layout with domain rules, ownership and reference checks; see the table in section 2. New migrations, each with a unique index that is skipped with a notice (instead of failing the service) if old rows already clash: `team/002_manager_and_unique_code.sql`, `tournament/002_unique_name.sql`, `player/002_unique_shirt.sql`. No contract changes.
+
+**bff (new, 22–23 Oct).** `services/bff` serves the monolith's REST routes and JSON shapes by calling Auth, User, Tournament, Team, Match, Score, Standings, Fixture and Official.
+- It validates the JWT once, forwards the caller's token, and gives every request an id that reaches the service logs.
+- `GET /api/matches` joins Match, Team names and Score. A Team or Score outage degrades that row instead of failing the list.
+- Finalise saves the submitted score, then finalises it. Fixture generation starts on the tournament's own start date. One-letter short codes from the web form are widened (e.g. "Paro" becomes PAR).
+- New `/api/auth/refresh` and `/api/auth/logout`. `api.js` renews the token on a 401 and revokes the session on sign-out.
+- Compose: `bff` on host port 8080 and behind nginx `/api/`; the monolith `api` moved to 8079 as a fallback. To switch back, swap the two ports and point nginx at `api:8080`.
+
+**Match (23 Oct).** A match occupies its teams, venue and official for two hours (`domain.SlotLength`). Creating a match within two hours of another booking of the same team or venue (venue names compared case-insensitively) is refused, as is assigning an official who has another unfinished match within two hours. Errors name what clashed and when. All booking changes are serialised by one advisory lock. Migration `003_schedule_indexes.sql`.
+
+**Fixture (23 Oct).** When Match reports a clash, Fixture tries the district's other venues at the planned time, then 3 and 6 hours later the same day, and stores the slot actually booked (`LinkMatch` now saves venue and kickoff). A tournament plays at most once a day, so these moves cannot hit its own schedule. If the whole day is taken, it reports the date, round and last clash, and generation can be re-run later.
+
+**Tests and tooling.** `tools/e2e` grew from 29 to 39 checks, and two checks that only passed on a clean database were fixed. New `scripts/bff-smoke.ps1` (17 HTTP checks).
+
+### Test coverage (23 Oct 2026, `go test -cover`, PostgreSQL integration tests enabled)
+
+| Module | domain | app | gRPC server | gRPC clients | NATS | PostgreSQL |
+|---|---|---|---|---|---|---|
+| Team | 100% | 100% | 96.3% | 100% | — | 92.0% |
+| Tournament | 100% | 100% | 96.7% | — | — | 93.9% |
+| Player | 100% | 100% | 97.2% | 100% | — | 93.3% |
+| Match | 100% | 100% | 98.3% | 100% | 100% | 83.5% |
+| Fixture | 100% | 94.9% | 100% | 100% | 100% | **78.9%** (below 80%) |
+| bff | `httpapi` 90.4% | | | | | |
+
+Score, Standings, Venue, Official, User and Auth are unchanged since section 10.
+
+### Defects found and fixed (for `docs/defect-log.md`)
+
+| # | Defect | Fix |
+|---|---|---|
+| 1 | Team accepted a nonexistent `tournament_id` ("Ghost FC") | Team checks Tournament before saving |
+| 2 | Registration's ownership check (PR #1) could never pass: Team never stored `manager_id` | Team records the creating team manager |
+| 3 | Finalise ignored the submitted score and finalised the last live score | The bff saves the submitted score first |
+| 4 | Match only refused an identical kickoff; matches 30 minutes apart at one venue were accepted; no official overlap check | Two-hour slots for teams, venues and officials |
+| 5 | Fixture generation failed outright when another tournament held the planned venue and time | Fixture tries other venues and later slots the same day |
+| 6 | The web app session broke after 30 minutes (Auth's access token TTL) because the frontend never renewed it | Refresh route in the bff, renewal in `api.js` |
+| 7 | The tournament start date from the web form was ignored when generating fixtures | The bff passes it to Fixture |
+| 8 | e2e: the venue check failed on every run after the first, and runs within the same hour clashed | Check the venue's district; minute-precision start |
+
+### Known limitations (state them in the report if not fixed)
+
+- Both tokens are in `sessionStorage`, readable by page scripts. An httpOnly refresh cookie would be safer.
+- `GET /api/matches` makes one Score call and up to two Team calls per match. Fine at demo scale; it needs a batch read before it is used with hundreds of matches.
+- One advisory lock serialises all match bookings. Correct, but it would become a bottleneck under heavy load.
+- Fixture only reschedules within the same day.
+- The monolith fallback has its own database, so the two never show the same data.

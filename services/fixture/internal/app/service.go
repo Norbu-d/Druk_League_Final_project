@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -81,16 +83,36 @@ func (s *Service) Generate(ctx context.Context, caller Caller, tournamentID, for
 		if stored[i].MatchID != "" {
 			continue
 		}
-		matchID, err := s.matches.Create(ctx, stored[i])
+		booked, err := s.book(ctx, stored[i], venues)
 		if err != nil {
 			return stored, createdCount, err
 		}
-		if err := s.repo.LinkMatch(ctx, stored[i].ID, matchID); err != nil {
+		if err := s.repo.LinkMatch(ctx, booked); err != nil {
 			return stored, createdCount, err
 		}
-		stored[i].MatchID = matchID
+		stored[i] = booked
 	}
 	return stored, createdCount, nil
+}
+
+// book creates the fixture's match in the first free slot. When Match reports that a venue
+// or team is already booked (by another tournament), it tries the other venues and later
+// kickoffs on the same day before giving up.
+func (s *Service) book(ctx context.Context, f domain.Fixture, venues []domain.Venue) (domain.Fixture, error) {
+	var clash error
+	for _, slot := range domain.Alternatives(f, venues) {
+		matchID, err := s.matches.Create(ctx, slot)
+		if err == nil {
+			slot.MatchID = matchID
+			return slot, nil
+		}
+		if !errors.Is(err, core.ErrConflict) {
+			return f, err
+		}
+		clash = err
+	}
+	return f, core.Conflict(fmt.Sprintf("no free venue or kickoff on %s for round %d; last clash: %s",
+		f.Kickoff.UTC().Format("2006-01-02"), f.Round, strings.TrimPrefix(clash.Error(), core.ErrConflict.Error()+": ")))
 }
 
 func (s *Service) List(ctx context.Context, tournamentID string, limit, offset int) ([]domain.Fixture, bool, error) {

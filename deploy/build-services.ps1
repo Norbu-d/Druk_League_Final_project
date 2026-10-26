@@ -8,7 +8,7 @@ try {
     Push-Location (Join-Path $projectRoot "deploy")
     try {
         $services = @(
-            "api", "auth", "user", "team", "player", "tournament", "registration",
+            "api", "bff", "auth", "user", "team", "player", "tournament", "registration",
             "match", "score", "fixture", "standings", "venue", "official",
             "dzongkhag", "notification", "media", "report", "search", "analytics",
             "audit-log", "configuration"

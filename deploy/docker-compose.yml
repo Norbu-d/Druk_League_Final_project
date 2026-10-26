@@ -51,6 +51,28 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+    # The monolith is kept as a fallback on 8079. To switch the web app back to it, swap
+    # this port with the bff's and point nginx's /api at api:8080.
+    ports:
+      - "8079:8080"
+
+  # Backend-for-frontend: the web app's REST API, served by calling the microservices.
+  bff:
+    build:
+      context: ..
+      dockerfile: services/bff/Dockerfile
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
+    depends_on:
+      - auth
+      - user
+      - tournament
+      - team
+      - match
+      - score
+      - standings
+      - fixture
+      - official
     ports:
       - "8080:8080"
 
@@ -330,7 +352,7 @@ services:
       - ../assets:/usr/share/nginx/html/assets:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - api
+      - bff
     ports:
       - "4173:80"
 

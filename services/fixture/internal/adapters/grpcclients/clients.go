@@ -90,7 +90,9 @@ func (m *Matches) Create(ctx context.Context, f domain.Fixture) (string, error) 
 	response, err := m.client.CreateMatch(ctx, &v1.CreateMatchRequest{TournamentId: f.TournamentID, HomeTeamId: f.HomeTeamID, AwayTeamId: f.AwayTeamID, Venue: f.VenueName, Kickoff: timestamppb.New(f.Kickoff)})
 	if err != nil {
 		if status.Code(err) == codes.AlreadyExists {
-			return "", core.Conflict("a team or venue already has a match at " + f.Kickoff.Format("2006-01-02 15:04") + " UTC")
+			// Match names what is busy ("venue X already has a match at ..."); keep it so the
+			// app can try another slot and report the last clash if none is free.
+			return "", core.Conflict(status.Convert(err).Message())
 		}
 		return "", servicekit.FromStatus(err, "match")
 	}
