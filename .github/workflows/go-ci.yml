@@ -18,7 +18,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.x'
+          go-version: '1.26.x'
+          cache-dependency-path: |
+            **/go.sum
 
       - name: Check Go formatting
         shell: bash
@@ -45,7 +47,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install Buf
-        uses: bufbuild/buf-setup-action@v1.50.0
+        uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
         with:
           version: 1.73.0
 
@@ -71,12 +73,14 @@ jobs:
       - name: Set up Go for security analyzers
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.26.x'
+          cache-dependency-path: |
+            **/go.sum
 
       - name: Install govulncheck and gosec
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+          go install github.com/securego/gosec/v2/cmd/gosec@v2.30.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Scan every Go module
@@ -101,7 +105,7 @@ jobs:
             venue official dzongkhag notification media report search analytics audit-log configuration
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@v0.3.1
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
 
       - name: Scan every built image for critical vulnerabilities
         shell: bash
@@ -146,7 +150,7 @@ jobs:
           exit 1
 
       - name: Set up k6
-        uses: grafana/setup-k6-action@v1
+        uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1
         with:
           k6-version: '1.8.2'
 
