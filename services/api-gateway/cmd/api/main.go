@@ -78,6 +78,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("POST /api/auth/login", s.login)
+	// Standings are public so viewers can read published results without signing in.
+	mux.HandleFunc("GET /api/standings", s.listStandings)
 	mux.Handle("/api/", s.authenticate(http.HandlerFunc(s.api)))
 	wrapped := cors(logging(mux))
 	log.Printf("DrukLeague API listening on %s", addr)

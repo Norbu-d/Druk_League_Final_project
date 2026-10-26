@@ -1,4 +1,4 @@
-name: Go CI
+name: CI
 
 on:
   push:
@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  test-and-coverage:
-    name: Test and coverage
+  go-quality:
+    name: Go lint, vet, build, test, and coverage
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -20,5 +20,139 @@ jobs:
         with:
           go-version: '1.24.x'
 
-      - name: Test Go modules and enforce 80% coverage where tests exist
-        run: sh scripts/coverage.sh 80
+      - name: Check Go formatting
+        shell: bash
+        run: |
+          unformatted=$(find packages services tools -type f -name '*.go' -print0 | xargs -0 gofmt -l)
+          if [[ -n "$unformatted" ]]; then
+            printf 'Go files need gofmt:\n%s\n' "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet and build every Go module
+        run: bash scripts/ci-go.sh
+
+      - name: Test every Go module and enforce 80% coverage where tests exist
+        run: bash scripts/coverage.sh 80
+
+  protobuf:
+    name: Protobuf lint, build, and breaking-change check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Buf
+        uses: bufbuild/buf-setup-action@v1.50.0
+        with:
+          version: 1.73.0
+
+      - name: Lint and build protobuf contracts
+        run: |
+          buf lint
+          buf build
+
+      - name: Check compatibility against the target branch
+        env:
+          BUF_BASE_BRANCH: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+        run: buf breaking --against ".git#branch=${BUF_BASE_BRANCH}"
+
+  go-security:
+    name: Go vulnerability and security scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go for security analyzers
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Install govulncheck and gosec
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.1.0
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Scan every Go module
+        run: bash scripts/security-go.sh
+
+  container-security:
+    name: Build and scan service images
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: drukleague-ci
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build shared service builder image
+        run: docker build --tag drukleague-service-builder:local --file services/service-builder/Dockerfile .
+
+      - name: Build application and microservice images
+        run: |
+          docker compose --file deploy/docker-compose.yml build --parallel 1 \
+            api auth user team player tournament registration match score fixture standings \
+            venue official dzongkhag notification media report search analytics audit-log configuration
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.3.1
+
+      - name: Scan every built image for critical vulnerabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep '^drukleague-ci-' | sort -u)
+          if [[ ${#images[@]} -eq 0 ]]; then
+            echo 'No service images were built.' >&2
+            exit 1
+          fi
+          for image in "${images[@]}"; do
+            echo "Scanning $image"
+            trivy image --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$image"
+          done
+
+  performance:
+    name: k6 login and public standings performance
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: drukleague-performance
+      POSTGRES_PASSWORD: ci-only-postgres-password
+      JWT_SECRET: ci-only-jwt-secret-for-performance-tests
+      BOOTSTRAP_ADMIN_USER: ci-admin
+      BOOTSTRAP_ADMIN_PASSWORD: ci-only-admin-password
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Start the API and its dependencies
+        run: docker compose --file deploy/docker-compose.yml up -d postgres nats api
+
+      - name: Wait for the API health endpoint
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8080/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --file deploy/docker-compose.yml logs api postgres nats
+          exit 1
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: '1.8.2'
+
+      - name: Load test login and public standings
+        env:
+          API_BASE_URL: http://127.0.0.1:8080
+        run: k6 run tests/performance/api-login-standings.js
+
+      - name: Stop the test stack
+        if: always()
+        run: docker compose --file deploy/docker-compose.yml down --volumes --remove-orphans
