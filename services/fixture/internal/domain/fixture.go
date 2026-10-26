@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"math"
 	"sort"
 	"time"
 
@@ -100,7 +101,11 @@ func Schedule(tournamentID string, teamIDs []string, venues []Venue, start time.
 					home, away = away, home
 				}
 				absolute := leg*rounds + round
-				f := Fixture{TournamentID: tournamentID, HomeTeamID: home, AwayTeamID: away, Round: int32(absolute + 1),
+				round := absolute + 1
+				if round > math.MaxInt32 {
+					return nil, core.Invalid("schedule exceeds supported round range")
+				}
+				f := Fixture{TournamentID: tournamentID, HomeTeamID: home, AwayTeamID: away, Round: int32(round),
 					Kickoff: start.AddDate(0, 0, absolute*spacing+slot)}
 				if len(venues) > 0 {
 					venue := venues[len(fixtures)%len(venues)]
