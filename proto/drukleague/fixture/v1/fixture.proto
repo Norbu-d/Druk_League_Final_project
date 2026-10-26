@@ -6,8 +6,8 @@ service FixtureService {
   rpc GenerateFixtures(GenerateFixturesRequest) returns (GenerateFixturesResponse);
   rpc ListFixtures(ListFixturesRequest) returns (ListFixturesResponse);
 }
-message Fixture { string id=1; string tournament_id=2; string home_team_id=3; string away_team_id=4; string venue_id=5; google.protobuf.Timestamp kickoff=6; }
-message GenerateFixturesRequest { string tournament_id=1; string format=2; }
+message Fixture { string id=1; string tournament_id=2; string home_team_id=3; string away_team_id=4; string venue_id=5; google.protobuf.Timestamp kickoff=6; string match_id=7; int32 round=8; }
+message GenerateFixturesRequest { string tournament_id=1; string format=2; google.protobuf.Timestamp starts_at=3; }
 message GenerateFixturesResponse { repeated Fixture fixtures=1; int32 created_count=2; }
 message ListFixturesRequest { string tournament_id=1; int32 page_size=2; string page_token=3; }
 message ListFixturesResponse { repeated Fixture fixtures=1; string next_page_token=2; }

@@ -2,6 +2,7 @@ FROM drukleague-service-builder:local AS build
 WORKDIR /src
 COPY packages/servicekit/ /src/packages/servicekit/
 COPY packages/contracts/ /src/packages/contracts/
+COPY packages/eventkit/ /src/packages/eventkit/
 COPY services/analytics/ /src/services/analytics/
 WORKDIR /src/services/analytics
 RUN mkdir -p /out && CGO_ENABLED=0 go build -trimpath -o /out/service ./cmd/service

@@ -6,7 +6,7 @@ service ReportService {
   rpc CreateReport(CreateReportRequest) returns (CreateReportResponse);
   rpc GetReport(GetReportRequest) returns (GetReportResponse);
 }
-message ReportJob { string id=1; string report_type=2; string status=3; string download_url=4; google.protobuf.Timestamp created_at=5; }
+message ReportJob { string id=1; string report_type=2; string status=3; string download_url=4; google.protobuf.Timestamp created_at=5; string tournament_id=6; string format=7; }
 message CreateReportRequest { string report_type=1; string tournament_id=2; string format=3; }
 message CreateReportResponse { ReportJob report=1; }
 message GetReportRequest { string id=1; }

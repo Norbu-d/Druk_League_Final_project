@@ -32,6 +32,8 @@ type MatchFinalized struct {
 	HomeScore     int32                  `protobuf:"varint,6,opt,name=home_score,json=homeScore,proto3" json:"home_score,omitempty"`
 	AwayScore     int32                  `protobuf:"varint,7,opt,name=away_score,json=awayScore,proto3" json:"away_score,omitempty"`
 	FinalizedAt   *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=finalized_at,json=finalizedAt,proto3" json:"finalized_at,omitempty"`
+	FinalizedBy   string                 `protobuf:"bytes,9,opt,name=finalized_by,json=finalizedBy,proto3" json:"finalized_by,omitempty"`
+	Reason        string                 `protobuf:"bytes,10,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -122,11 +124,25 @@ func (x *MatchFinalized) GetFinalizedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *MatchFinalized) GetFinalizedBy() string {
+	if x != nil {
+		return x.FinalizedBy
+	}
+	return ""
+}
+
+func (x *MatchFinalized) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 var File_drukleague_v1_events_proto protoreflect.FileDescriptor
 
 const file_drukleague_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x1adrukleague/v1/events.proto\x12\rdrukleague.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xac\x02\n" +
+	"\x1adrukleague/v1/events.proto\x12\rdrukleague.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe7\x02\n" +
 	"\x0eMatchFinalized\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x19\n" +
 	"\bmatch_id\x18\x02 \x01(\tR\amatchId\x12#\n" +
@@ -139,7 +155,10 @@ const file_drukleague_v1_events_proto_rawDesc = "" +
 	"home_score\x18\x06 \x01(\x05R\thomeScore\x12\x1d\n" +
 	"\n" +
 	"away_score\x18\a \x01(\x05R\tawayScore\x12=\n" +
-	"\ffinalized_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\vfinalizedAtBRZPgithub.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1b\x06proto3"
+	"\ffinalized_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\vfinalizedAt\x12!\n" +
+	"\ffinalized_by\x18\t \x01(\tR\vfinalizedBy\x12\x16\n" +
+	"\x06reason\x18\n" +
+	" \x01(\tR\x06reasonBRZPgithub.com/drukleague/platform/packages/contracts/gen/drukleague/v1;drukleaguev1b\x06proto3"
 
 var (
 	file_drukleague_v1_events_proto_rawDescOnce sync.Once

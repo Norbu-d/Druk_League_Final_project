@@ -417,7 +417,16 @@ func (s *server) finalize(w http.ResponseWriter, r *http.Request, p principal, i
 			return
 		}
 	}
-	payload, _ := json.Marshal(map[string]any{"match_id": id, "tournament_id": tid, "home_team_id": homeID, "away_team_id": awayID, "home_score": h, "away_score": a, "finalized_at": time.Now().UTC()})
+	var eventID string
+	if e = tx.QueryRowContext(r.Context(), `SELECT gen_random_uuid()::text`).Scan(&eventID); e != nil {
+		serverError(w, e)
+		return
+	}
+	payload, e := json.Marshal(map[string]any{"event_id": eventID, "match_id": id, "tournament_id": tid, "home_team_id": homeID, "away_team_id": awayID, "home_score": h, "away_score": a, "finalized_at": time.Now().UTC()})
+	if e != nil {
+		serverError(w, e)
+		return
+	}
 	if _, e = tx.ExecContext(r.Context(), `INSERT INTO event_outbox(subject,payload) VALUES('MatchFinalized',$1::jsonb)`, string(payload)); e != nil {
 		serverError(w, e)
 		return

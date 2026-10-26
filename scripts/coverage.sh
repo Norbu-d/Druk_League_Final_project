@@ -13,7 +13,7 @@ for dir in "$root"/packages/* "$root"/services/*/ "$root"/tools/*/; do
   [ -f "$dir/go.mod" ] || continue
   name=${dir#"$root"/}
   name=${name%/}
-  case "$name" in services/service-*) continue ;; esac
+  case "$name" in services/_template|services/api-gateway|services/service-*) continue ;; esac
 
   if [ -d "$dir/internal" ]; then
     packages=./internal/...

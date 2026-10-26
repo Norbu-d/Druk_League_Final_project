@@ -2,64 +2,46 @@ package grpcadapter
 
 import (
 	"context"
-	"database/sql"
-	"strings"
-	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	"github.com/drukleague/platform/services/official/internal/app"
+	"github.com/drukleague/platform/services/official/internal/domain"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Server struct {
 	v1.UnimplementedOfficialServiceServer
-	db *sql.DB
+	service *app.Service
 }
 
-func New(db *sql.DB) *Server { return &Server{db: db} }
-func (s *Server) AssignOfficial(ctx context.Context, req *v1.AssignOfficialRequest) (*v1.AssignOfficialResponse, error) {
-	matchID, userID := strings.TrimSpace(req.GetMatchId()), strings.TrimSpace(req.GetOfficialUserId())
-	if matchID == "" || userID == "" {
-		return nil, status.Error(codes.InvalidArgument, "match id and official user id are required")
-	}
-	a := new(v1.OfficialAssignment)
-	var assigned time.Time
-	err := s.db.QueryRowContext(ctx, `INSERT INTO official_assignments(match_id,official_user_id) VALUES($1,$2) ON CONFLICT(match_id) DO UPDATE SET official_user_id=EXCLUDED.official_user_id,assigned_at=now() RETURNING id::text,match_id::text,official_user_id::text,assigned_at`, matchID, userID).Scan(&a.Id, &a.MatchId, &a.OfficialUserId, &assigned)
-	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "match and user ids must be UUIDs")
-		}
-		return nil, status.Error(codes.Internal, "could not assign official")
-	}
-	a.AssignedAt = timestamppb.New(assigned)
-	return &v1.AssignOfficialResponse{Assignment: a}, nil
+func New(service *app.Service) *Server { return &Server{service: service} }
+
+func caller(ctx context.Context) app.Caller {
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	return app.Caller{ID: identity.ID, Role: identity.Role}
 }
-func (s *Server) ListAssignments(ctx context.Context, req *v1.ListAssignmentsRequest) (*v1.ListAssignmentsResponse, error) {
-	if strings.TrimSpace(req.GetTournamentId()) != "" {
-		return nil, status.Error(codes.FailedPrecondition, "tournament filtering requires Match service integration")
-	}
-	userID := strings.TrimSpace(req.GetOfficialUserId())
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,match_id::text,official_user_id::text,assigned_at FROM official_assignments WHERE ($1='' OR official_user_id::text=$1) ORDER BY assigned_at DESC,id`, userID)
+
+func (s *Server) AssignOfficial(ctx context.Context, req *v1.AssignOfficialRequest) (*v1.AssignOfficialResponse, error) {
+	a, err := s.service.Assign(ctx, caller(ctx), req.GetMatchId(), req.GetOfficialUserId())
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "official user id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not list assignments")
+		return nil, servicekit.ToStatus(err)
 	}
-	defer rows.Close()
-	result := &v1.ListAssignmentsResponse{Assignments: make([]*v1.OfficialAssignment, 0)}
-	for rows.Next() {
-		a := new(v1.OfficialAssignment)
-		var assigned time.Time
-		if err := rows.Scan(&a.Id, &a.MatchId, &a.OfficialUserId, &assigned); err != nil {
-			return nil, status.Error(codes.Internal, "could not read assignments")
-		}
-		a.AssignedAt = timestamppb.New(assigned)
-		result.Assignments = append(result.Assignments, a)
+	return &v1.AssignOfficialResponse{Assignment: toProto(a)}, nil
+}
+
+func (s *Server) ListAssignments(ctx context.Context, req *v1.ListAssignmentsRequest) (*v1.ListAssignmentsResponse, error) {
+	items, err := s.service.List(ctx, caller(ctx), req.GetOfficialUserId(), req.GetTournamentId())
+	if err != nil {
+		return nil, servicekit.ToStatus(err)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, status.Error(codes.Internal, "could not read assignments")
+	response := &v1.ListAssignmentsResponse{Assignments: make([]*v1.OfficialAssignment, 0, len(items))}
+	for _, a := range items {
+		response.Assignments = append(response.Assignments, toProto(a))
 	}
-	return result, nil
+	return response, nil
+}
+
+func toProto(a domain.Assignment) *v1.OfficialAssignment {
+	return &v1.OfficialAssignment{Id: a.ID, MatchId: a.MatchID, OfficialUserId: a.OfficialUserID, AssignedAt: timestamppb.New(a.AssignedAt)}
 }

@@ -9,8 +9,8 @@ service AuthService {
   rpc RevokeSession(RevokeSessionRequest) returns (RevokeSessionResponse);
 }
 message LoginRequest { string username=1; string password=2; }
-message LoginResponse { string access_token=1; google.protobuf.Timestamp expires_at=2; drukleague.v1.User user=3; }
+message LoginResponse { string access_token=1; google.protobuf.Timestamp expires_at=2; drukleague.v1.User user=3; string refresh_token=4; string session_id=5; }
 message RefreshTokenRequest { string refresh_token=1; }
-message RefreshTokenResponse { string access_token=1; google.protobuf.Timestamp expires_at=2; }
+message RefreshTokenResponse { string access_token=1; google.protobuf.Timestamp expires_at=2; string refresh_token=3; }
 message RevokeSessionRequest { string token_id=1; }
 message RevokeSessionResponse { bool revoked=1; }

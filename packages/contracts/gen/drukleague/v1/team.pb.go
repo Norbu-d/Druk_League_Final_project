@@ -30,6 +30,7 @@ type Team struct {
 	Dzongkhag     string                 `protobuf:"bytes,4,opt,name=dzongkhag,proto3" json:"dzongkhag,omitempty"`
 	TournamentId  string                 `protobuf:"bytes,5,opt,name=tournament_id,json=tournamentId,proto3" json:"tournament_id,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ManagerId     string                 `protobuf:"bytes,7,opt,name=manager_id,json=managerId,proto3" json:"manager_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -104,6 +105,13 @@ func (x *Team) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Team) GetManagerId() string {
+	if x != nil {
+		return x.ManagerId
+	}
+	return ""
 }
 
 type CreateTeamRequest struct {
@@ -224,6 +232,7 @@ type ListTeamsRequest struct {
 	Dzongkhag     string                 `protobuf:"bytes,2,opt,name=dzongkhag,proto3" json:"dzongkhag,omitempty"`
 	PageSize      int32                  `protobuf:"varint,3,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	PageToken     string                 `protobuf:"bytes,4,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	ManagerId     string                 `protobuf:"bytes,5,opt,name=manager_id,json=managerId,proto3" json:"manager_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -282,6 +291,13 @@ func (x *ListTeamsRequest) GetPageSize() int32 {
 func (x *ListTeamsRequest) GetPageToken() string {
 	if x != nil {
 		return x.PageToken
+	}
+	return ""
+}
+
+func (x *ListTeamsRequest) GetManagerId() string {
+	if x != nil {
+		return x.ManagerId
 	}
 	return ""
 }
@@ -430,7 +446,7 @@ var File_drukleague_v1_team_proto protoreflect.FileDescriptor
 
 const file_drukleague_v1_team_proto_rawDesc = "" +
 	"\n" +
-	"\x18drukleague/v1/team.proto\x12\rdrukleague.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc7\x01\n" +
+	"\x18drukleague/v1/team.proto\x12\rdrukleague.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xe6\x01\n" +
 	"\x04Team\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
@@ -439,7 +455,9 @@ const file_drukleague_v1_team_proto_rawDesc = "" +
 	"\tdzongkhag\x18\x04 \x01(\tR\tdzongkhag\x12#\n" +
 	"\rtournament_id\x18\x05 \x01(\tR\ftournamentId\x129\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x89\x01\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"manager_id\x18\a \x01(\tR\tmanagerId\"\x89\x01\n" +
 	"\x11CreateTeamRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
@@ -447,13 +465,15 @@ const file_drukleague_v1_team_proto_rawDesc = "" +
 	"\tdzongkhag\x18\x03 \x01(\tR\tdzongkhag\x12#\n" +
 	"\rtournament_id\x18\x04 \x01(\tR\ftournamentId\" \n" +
 	"\x0eGetTeamRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x91\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xb0\x01\n" +
 	"\x10ListTeamsRequest\x12#\n" +
 	"\rtournament_id\x18\x01 \x01(\tR\ftournamentId\x12\x1c\n" +
 	"\tdzongkhag\x18\x02 \x01(\tR\tdzongkhag\x12\x1b\n" +
 	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x04 \x01(\tR\tpageToken\"f\n" +
+	"page_token\x18\x04 \x01(\tR\tpageToken\x12\x1d\n" +
+	"\n" +
+	"manager_id\x18\x05 \x01(\tR\tmanagerId\"f\n" +
 	"\x11ListTeamsResponse\x12)\n" +
 	"\x05teams\x18\x01 \x03(\v2\x13.drukleague.v1.TeamR\x05teams\x12&\n" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"=\n" +
