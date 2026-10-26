@@ -3,7 +3,7 @@ module github.com/drukleague/platform
 go 1.26.0
 
 require (
-	github.com/jackc/pgx/v5 v5.9.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/nats-io/nats.go v1.39.1
 )
 
