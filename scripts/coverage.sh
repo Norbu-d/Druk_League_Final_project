@@ -31,9 +31,17 @@ for dir in "$root"/packages/* "$root"/services/* "$root"/tools/*; do
 
   # A module-local profile path works with native Windows Go from Git Bash.
   profile=.coverage-$$.out
-  # Let Go instrument each package that contains tests; including every
-  # untested wiring/adapter package in the denominator hides useful coverage.
-  if ! (cd "$dir" && go test -count=1 -coverprofile="$profile" ./...); then
+  if [[ "$name" == packages/servicekit ]]; then
+    coverage_packages=./core/...,./dzongkhags/...,./servicekit/...
+    test_packages=(./core/... ./dzongkhags/... ./servicekit/...)
+  elif [[ -d "$dir/internal" ]]; then
+    coverage_packages=./internal/...
+    test_packages=(./internal/...)
+  else
+    coverage_packages=./...
+    test_packages=(./...)
+  fi
+  if ! (cd "$dir" && go test -count=1 -coverpkg="$coverage_packages" -coverprofile="$profile" "${test_packages[@]}"); then
     printf '%-32s %12s\n' "$name" TEST-FAIL
     rm -f "$dir/$profile"
     status=1
