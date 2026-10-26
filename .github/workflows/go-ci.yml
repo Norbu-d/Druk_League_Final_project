@@ -57,7 +57,9 @@ jobs:
       - name: Check compatibility against the target branch
         env:
           BUF_BASE_BRANCH: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
-        run: buf breaking --against ".git#branch=${BUF_BASE_BRANCH}"
+        run: |
+          git branch --force "$BUF_BASE_BRANCH" "origin/$BUF_BASE_BRANCH"
+          buf breaking --against ".git#branch=${BUF_BASE_BRANCH}"
 
   go-security:
     name: Go vulnerability and security scans
@@ -73,7 +75,7 @@ jobs:
 
       - name: Install govulncheck and gosec
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.0
+          go install golang.org/x/vuln/cmd/govulncheck@latest
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
@@ -94,7 +96,7 @@ jobs:
 
       - name: Build application and microservice images
         run: |
-          docker compose --file deploy/docker-compose.yml build --parallel 1 \
+          docker compose --file deploy/docker-compose.yml build \
             api auth user team player tournament registration match score fixture standings \
             venue official dzongkhag notification media report search analytics audit-log configuration
 
