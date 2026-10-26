@@ -18,7 +18,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.10'
           cache-dependency-path: |
             **/go.sum
 
@@ -30,6 +30,29 @@ jobs:
             printf 'Go files need gofmt:\n%s\n' "$unformatted"
             exit 1
           fi
+
+      - name: Refresh module checksums
+        shell: bash
+        run: |
+          while IFS= read -r modfile; do
+            module=${modfile%/go.mod}
+            [[ "$module" == "packages/eventkit" ]] && continue
+            (cd "$module" && go mod tidy)
+          done < <(find packages services tools -type f -name go.mod | sort)
+
+      - name: Export resolved module manifests
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: go-module-manifests
+          path: |
+            **/go.mod
+            **/go.sum
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - name: Ensure module manifests are committed
+        run: git diff --exit-code -- ':(glob)**/go.mod' ':(glob)**/go.sum'
 
       - name: Vet and build every Go module
         run: bash scripts/ci-go.sh
@@ -73,7 +96,7 @@ jobs:
       - name: Set up Go for security analyzers
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.10'
           cache-dependency-path: |
             **/go.sum
 

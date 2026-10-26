@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine
+FROM golang:1.26.10-alpine
 WORKDIR /src
 # Pre-download the shared modules' dependencies so service builds mostly hit the cache.
 COPY packages/servicekit/go.mod packages/servicekit/go.sum ./packages/servicekit/
