@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/drukleague/platform/packages/contracts v0.0.0
 	github.com/drukleague/platform/packages/servicekit v0.0.0
-	golang.org/x/crypto v0.32.0
+	golang.org/x/crypto v0.57.0
 	google.golang.org/grpc v1.83.1
 	google.golang.org/protobuf v1.36.11
 )
