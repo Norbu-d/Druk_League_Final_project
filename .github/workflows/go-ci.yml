@@ -39,6 +39,16 @@ jobs:
             [[ "$module" == "packages/eventkit" ]] && continue
             (cd "$module" && go mod tidy)
           done < <(find packages services tools -type f -name go.mod | sort)
+          (cd .github/security-tools && go mod tidy)
+
+      - name: Export locked security-tool manifests
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: security-tool-manifests
+          path: .github/security-tools/go.*
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Ensure module manifests are committed
         run: git diff --exit-code -- ':(glob)**/go.mod' ':(glob)**/go.sum'
@@ -90,9 +100,10 @@ jobs:
             **/go.sum
 
       - name: Install govulncheck and gosec
+        working-directory: .github/security-tools
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
-          go install github.com/securego/gosec/v2/cmd/gosec@v2.30.0
+          go install golang.org/x/vuln/cmd/govulncheck
+          go install github.com/securego/gosec/v2/cmd/gosec
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Scan every Go module
