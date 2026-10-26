@@ -7,7 +7,10 @@ mapfile -d '' modules < <(find "$root/packages" "$root/services" "$root/tools" -
 for modfile in "${modules[@]}"; do
   module=${modfile%/go.mod}
   relative=${module#"$root"/}
-  case "$relative" in services/service-builder|services/service-runtime) continue ;; esac
+  case "$relative" in
+    services/service-builder|services/service-runtime|services/_template) continue ;;
+    *) ;;
+  esac
 
   echo "Vetting and building $relative"
   (
