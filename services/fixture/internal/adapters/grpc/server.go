@@ -2,6 +2,7 @@ package grpcadapter
 
 import (
 	"context"
+	"math"
 	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
@@ -32,7 +33,10 @@ func (s *Server) GenerateFixtures(ctx context.Context, req *v1.GenerateFixturesR
 	if err != nil {
 		return nil, servicekit.ToStatus(err)
 	}
-	response := &v1.GenerateFixturesResponse{Fixtures: make([]*v1.Fixture, 0, len(fixtures)), CreatedCount: int32(created)}
+	if created < 0 || created > math.MaxInt32 {
+		return nil, servicekit.ToStatus(core.Invalid("fixture count exceeds supported response range"))
+	}
+	response := &v1.GenerateFixturesResponse{Fixtures: make([]*v1.Fixture, 0, len(fixtures)), CreatedCount: int32(created)} // #nosec G115 -- created is range-checked above.
 	for _, f := range fixtures {
 		response.Fixtures = append(response.Fixtures, toProto(f))
 	}

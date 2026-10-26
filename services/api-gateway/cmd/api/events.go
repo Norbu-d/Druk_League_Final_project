@@ -46,14 +46,24 @@ func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
 				payload string
 			}
 			batch := []entry{}
+			var scanErr error
 			for rows.Next() {
 				var item entry
-				if err = rows.Scan(&item.id, &item.payload); err != nil {
+				if scanErr = rows.Scan(&item.id, &item.payload); scanErr != nil {
 					break
 				}
 				batch = append(batch, item)
 			}
-			rows.Close()
+			if scanErr == nil {
+				scanErr = rows.Err()
+			}
+			if closeErr := rows.Close(); closeErr != nil && scanErr == nil {
+				scanErr = closeErr
+			}
+			if scanErr != nil {
+				log.Printf("event outbox scan: %v", scanErr)
+				continue
+			}
 			for _, item := range batch {
 				_, err = js.Publish("drukleague.match.finalized", []byte(item.payload), nats.MsgId("event-outbox-"+decimal(item.id)))
 				if err != nil {

@@ -70,7 +70,7 @@ func (s *Server) ListTournaments(ctx context.Context, req *v1.ListTournamentsReq
 		if e != nil {
 			return nil, status.Error(codes.Internal, "could not read tournaments")
 		}
-		if int32(len(result.Tournaments)) == size {
+		if len(result.Tournaments) == int(size) {
 			result.NextPageToken = strconv.Itoa(offset + int(size))
 			break
 		}

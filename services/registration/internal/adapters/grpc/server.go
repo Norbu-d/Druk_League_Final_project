@@ -94,7 +94,7 @@ func (s *Server) ListRegistrations(ctx context.Context, req *v1.ListRegistration
 		if e != nil {
 			return nil, status.Error(codes.Internal, "could not read registrations")
 		}
-		if int32(len(result.Registrations)) == size {
+		if len(result.Registrations) == int(size) {
 			result.NextPageToken = strconv.Itoa(offset + int(size))
 			break
 		}
