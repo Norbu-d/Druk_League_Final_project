@@ -33,10 +33,10 @@ func (s *Server) GenerateFixtures(ctx context.Context, req *v1.GenerateFixturesR
 	if err != nil {
 		return nil, servicekit.ToStatus(err)
 	}
-	if created > math.MaxInt32 {
+	if created < 0 || created > math.MaxInt32 {
 		return nil, servicekit.ToStatus(core.Invalid("fixture count exceeds supported response range"))
 	}
-	response := &v1.GenerateFixturesResponse{Fixtures: make([]*v1.Fixture, 0, len(fixtures)), CreatedCount: int32(created)}
+	response := &v1.GenerateFixturesResponse{Fixtures: make([]*v1.Fixture, 0, len(fixtures)), CreatedCount: int32(created)} // #nosec G115 -- created is range-checked above.
 	for _, f := range fixtures {
 		response.Fixtures = append(response.Fixtures, toProto(f))
 	}

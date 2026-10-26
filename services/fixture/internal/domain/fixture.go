@@ -105,7 +105,7 @@ func Schedule(tournamentID string, teamIDs []string, venues []Venue, start time.
 				if round > math.MaxInt32 {
 					return nil, core.Invalid("schedule exceeds supported round range")
 				}
-				f := Fixture{TournamentID: tournamentID, HomeTeamID: home, AwayTeamID: away, Round: int32(round),
+				f := Fixture{TournamentID: tournamentID, HomeTeamID: home, AwayTeamID: away, Round: int32(round), // #nosec G115 -- round is checked against math.MaxInt32 immediately above.
 					Kickoff: start.AddDate(0, 0, absolute*spacing+slot)}
 				if len(venues) > 0 {
 					venue := venues[len(fixtures)%len(venues)]
