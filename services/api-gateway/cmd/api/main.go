@@ -711,6 +711,6 @@ func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
-		log.Printf("%q %q %s", r.Method, r.URL.Path, time.Since(start))
+		log.Printf("%q %q %s", r.Method, r.URL.Path, time.Since(start)) // #nosec G706 -- %q escapes control characters from request values.
 	})
 }
