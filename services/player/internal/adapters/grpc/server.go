@@ -73,7 +73,7 @@ func (s *Server) ListPlayers(ctx context.Context, req *v1.ListPlayersRequest) (*
 		if err := rows.Scan(&p.Id, &p.TeamId, &p.GivenName, &p.FamilyName, &p.ShirtNumber, &created); err != nil {
 			return nil, status.Error(codes.Internal, "could not read players")
 		}
-		if int32(len(result.Players)) == size {
+		if len(result.Players) == size {
 			result.NextPageToken = strconv.Itoa(offset + int(size))
 			break
 		}
