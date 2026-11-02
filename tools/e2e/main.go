@@ -18,6 +18,7 @@ import (
 
 	authv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/auth/v1"
 	fixturev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
+	notificationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/notification/v1"
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
@@ -81,6 +82,7 @@ func main() {
 	matches := v1.NewMatchServiceClient(dial("match"))
 	scores := v1.NewScoreServiceClient(dial("score"))
 	standings := standingsv1.NewStandingsServiceClient(dial("standings"))
+	notifications := notificationv1.NewNotificationServiceClient(dial("notification"))
 
 	// --- Auth (Part 4)
 	_, err := auth.Login(bg, &authv1.LoginRequest{Username: adminUser, Password: "definitely-wrong"})
@@ -122,9 +124,16 @@ func main() {
 	// --- Tournament + teams
 	tournament := must(tournaments.CreateTournament(as(admin), &v1.CreateTournamentRequest{Name: "E2E Cup " + run, Sport: "football", Season: "2026", Dzongkhag: "Thimphu"})).GetTournament()
 	teamIDs := []string{}
+	teamManagers := make([]*v1.User, 0, 4)
+	managerTokens := make([]string, 0, 4)
 	for i, name := range []string{"Thimphu", "Paro", "Punakha", "Haa"} {
-		team := must(teams.CreateTeam(as(admin), &v1.CreateTeamRequest{Name: name + " E2E " + run, ShortCode: fmt.Sprintf("E%d%s", i, run[len(run)-3:]), Dzongkhag: name, TournamentId: tournament.GetId()})).GetTeam()
+		managerName := fmt.Sprintf("manager-%d-%s", i, run)
+		manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: "manager-password-1", Role: "team_manager"})).GetUser()
+		managerLogin := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: "manager-password-1"}))
+		team := must(teams.CreateTeam(as(managerLogin.GetAccessToken()), &v1.CreateTeamRequest{Name: name + " E2E " + run, ShortCode: fmt.Sprintf("E%d%s", i, run[len(run)-3:]), Dzongkhag: name, TournamentId: tournament.GetId()})).GetTeam()
 		teamIDs = append(teamIDs, team.GetId())
+		teamManagers = append(teamManagers, manager)
+		managerTokens = append(managerTokens, managerLogin.GetAccessToken())
 	}
 
 	// --- Fixture generation creates matches (Part 3)
@@ -161,7 +170,8 @@ func main() {
 
 	var table []*standingsv1.Standing
 	completed := false
-	for i := 0; i < 30 && (len(table) < 2 || !completed); i++ {
+	noticeCount := make([]int, len(teamManagers))
+	for i := 0; i < 30 && (len(table) < 2 || !completed || noticeCount[0] == 0 || noticeCount[1] == 0); i++ {
 		time.Sleep(time.Second)
 		if response, err := standings.GetStandings(as(admin), &standingsv1.GetStandingsRequest{TournamentId: tournament.GetId()}); err == nil {
 			table = response.GetStandings()
@@ -169,11 +179,24 @@ func main() {
 		if m, err := matches.GetMatch(as(admin), &v1.GetMatchRequest{Id: matchID}); err == nil {
 			completed = m.GetMatch().GetStatus() == "completed"
 		}
+		for managerIndex := range teamManagers {
+			if response, err := notifications.ListNotifications(as(managerTokens[managerIndex]), &notificationv1.ListNotificationsRequest{UserId: teamManagers[managerIndex].GetId()}); err == nil {
+				noticeCount[managerIndex] = len(response.GetNotifications())
+			}
+		}
 	}
 	check("Match consumed MatchFinalized (status completed)", completed)
 	check("Standings consumed MatchFinalized (2 rows)", len(table) == 2, len(table))
 	if len(table) == 2 {
 		check("winner has 3 points, played 1, team name from Team service", table[0].GetPoints() == 3 && table[0].GetPlayed() == 1 && table[0].GetTeamName() != "" && table[1].GetLost() == 1, table[0])
+	}
+	check("only the participating team managers receive one result notice", noticeCount[0] == 1 && noticeCount[1] == 1 && noticeCount[2] == 0 && noticeCount[3] == 0, noticeCount)
+	for _, managerIndex := range []int{0, 1} {
+		response := must(notifications.ListNotifications(as(managerTokens[managerIndex]), &notificationv1.ListNotificationsRequest{UserId: teamManagers[managerIndex].GetId()}))
+		if len(response.GetNotifications()) == 1 {
+			body := response.GetNotifications()[0].GetBody()
+			check("result notice includes score, team names and dzongkhags", strings.Contains(body, "3–1") && strings.Contains(body, "Thimphu E2E "+run) && strings.Contains(body, "Paro E2E "+run) && strings.Contains(body, "Thimphu") && strings.Contains(body, "Paro"), body)
+		}
 	}
 	_, err = officials.AssignOfficial(as(admin), &officialv1.AssignOfficialRequest{MatchId: matchID, OfficialUserId: official.GetId()})
 	check("completed match cannot be reassigned", code(err) == codes.AlreadyExists, err)
