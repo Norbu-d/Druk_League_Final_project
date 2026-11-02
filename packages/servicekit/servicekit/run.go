@@ -90,13 +90,18 @@ func Run(serviceName string, register ...func(*grpc.Server, *sql.DB) error) erro
 // ApplyMigrations runs every *.sql file in dir in name order, each in its own transaction.
 // Migrations must be idempotent (CREATE ... IF NOT EXISTS) because they run on every start.
 func ApplyMigrations(ctx context.Context, db *sql.DB, dir string) error {
-	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+	root, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	files, err := filepath.Glob(filepath.Join(root, "*.sql"))
 	if err != nil {
 		return err
 	}
 	sort.Strings(files)
 	for _, name := range files {
-		contents, err := os.ReadFile(name)
+		// Glob restricts migration reads to SQL files directly inside the configured directory.
+		contents, err := os.ReadFile(name) // #nosec G304,G703 -- name is returned by the constrained *.sql glob above.
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
@@ -104,7 +109,8 @@ func ApplyMigrations(ctx context.Context, db *sql.DB, dir string) error {
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, string(contents)); err != nil {
+		// Migration files contain executable schema SQL by design and are deployment-controlled.
+		if _, err = tx.ExecContext(ctx, string(contents)); err != nil { // #nosec G701 -- SQL comes from deployment-controlled migration files.
 			_ = tx.Rollback()
 			return fmt.Errorf("execute %s: %w", name, err)
 		}

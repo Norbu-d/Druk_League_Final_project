@@ -78,6 +78,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("POST /api/auth/login", s.login)
+	// Standings are public so viewers can read published results without signing in.
+	mux.HandleFunc("GET /api/standings", s.listStandings)
 	mux.Handle("/api/", s.authenticate(http.HandlerFunc(s.api)))
 	wrapped := cors(logging(mux))
 	log.Printf("DrukLeague API listening on %s", addr)
@@ -498,13 +500,25 @@ func (s *server) generateFixtures(w http.ResponseWriter, r *http.Request, p prin
 	for rows.Next() {
 		var team string
 		if e = rows.Scan(&team); e != nil {
-			rows.Close()
+			if closeErr := rows.Close(); closeErr != nil {
+				log.Printf("close team rows after scan error: %v", closeErr)
+			}
 			serverError(w, e)
 			return
 		}
 		ids = append(ids, team)
 	}
-	rows.Close()
+	if e = rows.Err(); e != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			log.Printf("close team rows after iteration error: %v", closeErr)
+		}
+		serverError(w, e)
+		return
+	}
+	if e = rows.Close(); e != nil {
+		serverError(w, e)
+		return
+	}
 	if len(ids) < 2 {
 		writeError(w, 400, "At least two registered teams are required")
 		return
@@ -631,7 +645,8 @@ func pbkdf2(password, salt []byte, iter, keyLen int) []byte {
 	return out[:keyLen]
 }
 func migrate(ctx context.Context, db *sql.DB, path string) error {
-	b, e := os.ReadFile(path)
+	// The migration filename is selected from deployment configuration at startup.
+	b, e := os.ReadFile(path) // #nosec G304 -- this path is operator-configured, not request-controlled.
 	if e != nil {
 		return e
 	}
@@ -696,6 +711,6 @@ func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
+		log.Printf("%q %q %s", r.Method, r.URL.Path, time.Since(start)) // #nosec G706 -- %q escapes control characters from request values.
 	})
 }

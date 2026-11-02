@@ -9,6 +9,8 @@ import (
 	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	"github.com/drukleague/platform/packages/servicekit/core"
+	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -22,13 +24,24 @@ type Server struct {
 func New(db *sql.DB) *Server { return &Server{db: db} }
 
 func (s *Server) CreateTeam(ctx context.Context, req *v1.CreateTeamRequest) (*v1.CreateTeamResponse, error) {
+	if err := servicekit.RequireRole(ctx, core.RoleSuperAdmin, core.RoleTeamManager); err != nil {
+		return nil, err
+	}
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	managerID := ""
+	if identity.Role == core.RoleTeamManager {
+		if !core.IsUUID(identity.ID) {
+			return nil, status.Error(codes.InvalidArgument, "team manager id must be a UUID")
+		}
+		managerID = identity.ID
+	}
 	name, code, district := strings.TrimSpace(req.GetName()), strings.ToUpper(strings.TrimSpace(req.GetShortCode())), strings.TrimSpace(req.GetDzongkhag())
 	if name == "" || code == "" || district == "" {
 		return nil, status.Error(codes.InvalidArgument, "name, short code, and dzongkhag are required")
 	}
 	var team v1.Team
 	var created time.Time
-	err := s.db.QueryRowContext(ctx, `INSERT INTO teams(name,short_code,dzongkhag,tournament_id) VALUES($1,$2,$3,NULLIF($4,'')::uuid) RETURNING id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),created_at`, name, code, district, strings.TrimSpace(req.GetTournamentId())).Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &created)
+	err := s.db.QueryRowContext(ctx, `INSERT INTO teams(name,short_code,dzongkhag,tournament_id,manager_id) VALUES($1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid) RETURNING id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),COALESCE(manager_id::text,''),created_at`, name, code, district, strings.TrimSpace(req.GetTournamentId()), managerID).Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &team.ManagerId, &created)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
 			return nil, status.Error(codes.InvalidArgument, "tournament id must be a UUID")
@@ -43,25 +56,43 @@ func (s *Server) CreateTeam(ctx context.Context, req *v1.CreateTeamRequest) (*v1
 }
 
 func (s *Server) GetTeam(ctx context.Context, req *v1.GetTeamRequest) (*v1.GetTeamResponse, error) {
+	if err := servicekit.RequireRole(ctx, core.RoleSuperAdmin, core.RoleTeamManager, core.RoleMatchOfficial, core.RoleViewer, core.RoleService); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(req.GetId()) == "" {
 		return nil, status.Error(codes.InvalidArgument, "team id is required")
 	}
-	team, err := readTeam(ctx, s.db, `SELECT id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),created_at FROM teams WHERE id=$1`, req.GetId())
+	team, err := readTeam(ctx, s.db, `SELECT id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),COALESCE(manager_id::text,''),created_at FROM teams WHERE id=$1`, req.GetId())
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, status.Error(codes.NotFound, "team not found")
 	}
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not read team")
 	}
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	if identity.Role == core.RoleTeamManager && identity.ID != team.ManagerId {
+		return nil, status.Error(codes.NotFound, "team not found")
+	}
+	if identity.Role != core.RoleSuperAdmin && identity.Role != core.RoleService && identity.ID != team.ManagerId {
+		team.ManagerId = ""
+	}
 	return &v1.GetTeamResponse{Team: team}, nil
 }
 
 func (s *Server) ListTeams(ctx context.Context, req *v1.ListTeamsRequest) (*v1.ListTeamsResponse, error) {
+	if err := servicekit.RequireRole(ctx, core.RoleSuperAdmin, core.RoleTeamManager, core.RoleMatchOfficial, core.RoleViewer, core.RoleService); err != nil {
+		return nil, err
+	}
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	managerID := strings.TrimSpace(req.GetManagerId())
+	if identity.Role == core.RoleTeamManager {
+		managerID = identity.ID
+	}
 	size, offset, err := page(req.GetPageSize(), req.GetPageToken())
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),created_at FROM teams WHERE ($1='' OR tournament_id::text=$1) AND ($2='' OR dzongkhag=$2) ORDER BY name,id LIMIT $3 OFFSET $4`, strings.TrimSpace(req.GetTournamentId()), strings.TrimSpace(req.GetDzongkhag()), size+1, offset)
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),COALESCE(manager_id::text,''),created_at FROM teams WHERE ($1='' OR tournament_id::text=$1) AND ($2='' OR dzongkhag=$2) AND ($3='' OR manager_id::text=$3) ORDER BY name,id LIMIT $4 OFFSET $5`, strings.TrimSpace(req.GetTournamentId()), strings.TrimSpace(req.GetDzongkhag()), managerID, size+1, offset)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not list teams")
 	}
@@ -70,10 +101,13 @@ func (s *Server) ListTeams(ctx context.Context, req *v1.ListTeamsRequest) (*v1.L
 	for rows.Next() {
 		team := new(v1.Team)
 		var created time.Time
-		if err := rows.Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &created); err != nil {
+		if err := rows.Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &team.ManagerId, &created); err != nil {
 			return nil, status.Error(codes.Internal, "could not read teams")
 		}
-		if int32(len(result.Teams)) == size {
+		if identity.Role != core.RoleSuperAdmin && identity.Role != core.RoleService && identity.ID != team.ManagerId {
+			team.ManagerId = ""
+		}
+		if len(result.Teams) == int(size) {
 			result.NextPageToken = strconv.Itoa(offset + int(size))
 			break
 		}
@@ -89,7 +123,7 @@ func (s *Server) ListTeams(ctx context.Context, req *v1.ListTeamsRequest) (*v1.L
 func readTeam(ctx context.Context, db *sql.DB, query string, args ...any) (*v1.Team, error) {
 	team := new(v1.Team)
 	var created time.Time
-	err := db.QueryRowContext(ctx, query, args...).Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &created)
+	err := db.QueryRowContext(ctx, query, args...).Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &team.ManagerId, &created)
 	if err != nil {
 		return nil, err
 	}

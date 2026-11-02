@@ -61,7 +61,7 @@ Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,
 - OpenTelemetry tracing.
 - Team → Tournament reference check; Team ownership via `manager_id`.
 - The 7 shell services above.
-- CI (GitHub Actions), and tests for the 12 modules that have none.
+- Automated tests for the 12 modules that currently have none.
 
 ### Known design gaps and planned changes
 
@@ -72,7 +72,7 @@ Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details a
 - **Matches and fixtures:** no correction path for a wrongly finalised result; finalise uses the last saved live score, not a submitted one; only `scheduled`/`completed` states; byes, withdrawals and late teams not handled; no official-overlap check; tie-breakers undefined; `starts_at` should be stored in UTC (Bhutan is UTC+6).
 - **Operations:** Standings cannot be rebuilt, the dead-letter stream cannot be inspected or replayed, no backup script, no outbox or stream retention, no idempotency on create calls, no readiness checks in Compose.
 - **Edge and frontend:** rate limiting, CORS and security headers at nginx; JWT storage in the frontend; the `web-preview/` duplicate copy.
-- **CI and evidence:** `buf breaking`, govulncheck, gosec, Trivy and a coverage gate in CI; a k6 performance test; requirement → test traceability.
+- **CI and evidence:** GitHub Actions now runs Go formatting, vet, build, tests and an 80% coverage gate for modules with tests, plus Buf compatibility checks, govulncheck, gosec, Trivy image scans, and a k6 login/public-standings performance test. Test coverage for modules without tests remains outstanding.
 - **Deployment:** Compose stays. Proposed serverless runtime is faasd (OpenFaaS on one machine), not Kubernetes; confirm with the module tutor.
 
 ## Testing
