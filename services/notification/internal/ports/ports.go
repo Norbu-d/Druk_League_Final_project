@@ -11,6 +11,6 @@ type Repository interface {
 	List(context.Context, string, int, int) ([]domain.Notification, bool, error)
 }
 
-type Teams interface {
+type TeamGetter interface {
 	Get(context.Context, string) (domain.Team, error)
 }
