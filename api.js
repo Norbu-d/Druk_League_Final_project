@@ -4,7 +4,7 @@
   const token = () => sessionStorage.getItem(tokenKey);
   function tokenRole(value) {
     try {
-      const payload = value.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const payload = value.split('.')[1].replaceAll('-', '+').replaceAll('_', '/');
       return JSON.parse(atob(payload)).role || 'viewer';
     } catch { return 'viewer'; }
   }
@@ -71,5 +71,15 @@
     }
   });
   document.querySelector('.top-avatar').classList.add('auth-button');
-  if(token()){if(!sessionStorage.getItem(roleKey))sessionStorage.setItem(roleKey,tokenRole(token()));document.getElementById('auth-button').textContent='✓';render(activePage);refresh();}else{sessionStorage.setItem(roleKey,'viewer');render(activePage);}
+  if (token()) {
+    if (!sessionStorage.getItem(roleKey)) {
+      sessionStorage.setItem(roleKey, tokenRole(token()));
+    }
+    document.getElementById('auth-button').textContent = '✓';
+    render(activePage);
+    void refresh();
+  } else {
+    sessionStorage.setItem(roleKey, 'viewer');
+    render(activePage);
+  }
 })();

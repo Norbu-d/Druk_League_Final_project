@@ -526,3 +526,4 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Added frontend page access rules for Super Admin, Match Official, Team Manager and Viewer; restricted direct routes redirect to an allowed page.
 - Role is applied after sign-in, restored from the session token on reload, and cleared on sign-out.
 - Manually verified: Viewer direct access to `#officials` redirects to Overview; Super Admin can open Officials.
+- Addressed the SonarCloud findings reported on PR #6 in `api.js` (base64url replacements, conditional braces and explicit ignored refresh promise); rerun the PR check after pushing.
