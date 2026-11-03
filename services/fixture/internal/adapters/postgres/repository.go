@@ -15,8 +15,6 @@ type Repository struct{ db *sql.DB }
 
 func New(db *sql.DB) *Repository { return &Repository{db: db} }
 
-const columns = `id::text,tournament_id::text,home_team_id::text,away_team_id::text,COALESCE(venue_id::text,''),venue_name,COALESCE(match_id::text,''),round,kickoff,format,COALESCE(bracket_match,0),COALESCE(home_seed,0),COALESCE(away_seed,0)`
-
 // SaveSchedule serialises generation per tournament with an advisory lock so two admins
 // pressing "Generate" at once cannot create two schedules.
 func (r *Repository) SaveSchedule(ctx context.Context, tournamentID string, fixtures []domain.Fixture, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
@@ -110,8 +108,7 @@ func (r *Repository) AdvanceKnockout(ctx context.Context, event domain.MatchFina
 	}
 	var current domain.Fixture
 	var kickoff sql.NullTime
-	query := `SELECT ` + columns + ` FROM fixtures WHERE match_id=$1 AND tournament_id=$2`
-	err = tx.QueryRowContext(ctx, query, event.MatchID, event.TournamentID).Scan(
+	err = tx.QueryRowContext(ctx, `SELECT id::text,tournament_id::text,home_team_id::text,away_team_id::text,COALESCE(venue_id::text,''),venue_name,COALESCE(match_id::text,''),round,kickoff,format,COALESCE(bracket_match,0),COALESCE(home_seed,0),COALESCE(away_seed,0) FROM fixtures WHERE match_id=$1 AND tournament_id=$2`, event.MatchID, event.TournamentID).Scan(
 		&current.ID, &current.TournamentID, &current.HomeTeamID, &current.AwayTeamID, &current.VenueID, &current.VenueName, &current.MatchID,
 		&current.Round, &kickoff, &current.Format, &current.BracketMatch, &current.HomeSeed, &current.AwaySeed)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -166,10 +163,9 @@ func (r *Repository) AdvanceKnockout(ctx context.Context, event domain.MatchFina
 		}
 		nextRound := current.Round + 1
 		nextMatch := (current.BracketMatch + 1) / 2
-		pendingQuery := `SELECT ` + columns + ` FROM fixtures WHERE tournament_id=$1 AND round=$2 AND bracket_match=$3 AND match_id IS NULL`
 		var pending domain.Fixture
 		var pendingKickoff sql.NullTime
-		err = tx.QueryRowContext(ctx, pendingQuery, event.TournamentID, nextRound, nextMatch).Scan(
+		err = tx.QueryRowContext(ctx, `SELECT id::text,tournament_id::text,home_team_id::text,away_team_id::text,COALESCE(venue_id::text,''),venue_name,COALESCE(match_id::text,''),round,kickoff,format,COALESCE(bracket_match,0),COALESCE(home_seed,0),COALESCE(away_seed,0) FROM fixtures WHERE tournament_id=$1 AND round=$2 AND bracket_match=$3 AND match_id IS NULL`, event.TournamentID, nextRound, nextMatch).Scan(
 			&pending.ID, &pending.TournamentID, &pending.HomeTeamID, &pending.AwayTeamID, &pending.VenueID, &pending.VenueName, &pending.MatchID,
 			&pending.Round, &pendingKickoff, &pending.Format, &pending.BracketMatch, &pending.HomeSeed, &pending.AwaySeed)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -257,7 +253,7 @@ func (r *Repository) List(ctx context.Context, tournamentID string, limit, offse
 }
 
 func (r *Repository) PendingFixtures(ctx context.Context, tournamentID string) ([]domain.Fixture, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT `+columns+` FROM fixtures WHERE tournament_id=$1 AND format=$2 AND match_id IS NULL ORDER BY round,bracket_match`, tournamentID, domain.FormatKnockout)
+	rows, err := r.db.QueryContext(ctx, `SELECT id::text,tournament_id::text,home_team_id::text,away_team_id::text,COALESCE(venue_id::text,''),venue_name,COALESCE(match_id::text,''),round,kickoff,format,COALESCE(bracket_match,0),COALESCE(home_seed,0),COALESCE(away_seed,0) FROM fixtures WHERE tournament_id=$1 AND format=$2 AND match_id IS NULL ORDER BY round,bracket_match`, tournamentID, domain.FormatKnockout)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +277,7 @@ type querier interface {
 }
 
 func list(ctx context.Context, q querier, tournamentID string, limit, offset int) ([]domain.Fixture, error) {
-	rows, err := q.QueryContext(ctx, `SELECT `+columns+` FROM fixtures WHERE tournament_id=$1 ORDER BY round,kickoff,id LIMIT $2 OFFSET $3`, tournamentID, limit, offset)
+	rows, err := q.QueryContext(ctx, `SELECT id::text,tournament_id::text,home_team_id::text,away_team_id::text,COALESCE(venue_id::text,''),venue_name,COALESCE(match_id::text,''),round,kickoff,format,COALESCE(bracket_match,0),COALESCE(home_seed,0),COALESCE(away_seed,0) FROM fixtures WHERE tournament_id=$1 ORDER BY round,kickoff,id LIMIT $2 OFFSET $3`, tournamentID, limit, offset)
 	if err != nil {
 		return nil, err
 	}

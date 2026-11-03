@@ -509,3 +509,4 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Added standings-seeded knockout brackets in Fixture, including byes for non-power-of-two team counts and automatic next-round fixtures after both feeder matches finalize.
 - `league_knockout` starts its knockout phase after every league fixture is finalized; Match permits only the trusted `fixture-service` identity to create generated matches.
 - Fixture and Match `go test ./...` passed. PostgreSQL integration tests were skipped because `TEST_DATABASE_URL` was not configured; Docker was unavailable in this workspace for the Compose check.
+- CI follow-up: scoped fixture pairing uniqueness by format so a league-stage pairing can recur in the knockout stage; replaced concatenated SQL column lists with fixed query strings after Sonar findings.
