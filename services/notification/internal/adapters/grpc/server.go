@@ -15,17 +15,11 @@ type Server struct {
 	service *app.Service
 }
 
-func New(service *app.Service) *Server {
-	return &Server{service: service}
-}
-
-func caller(ctx context.Context) app.Caller {
-	identity, _ := servicekit.IdentityFromContext(ctx)
-	return app.Caller{ID: identity.ID, Role: identity.Role}
-}
+func New(service *app.Service) *Server { return &Server{service: service} }
 
 func (s *Server) SendNotification(ctx context.Context, req *notificationv1.SendNotificationRequest) (*notificationv1.SendNotificationResponse, error) {
-	item, err := s.service.Send(ctx, caller(ctx), req.GetUserId(), req.GetChannel(), req.GetSubject(), req.GetBody())
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	item, err := s.service.Send(ctx, app.Caller{ID: identity.ID, Role: identity.Role}, req.GetUserId(), req.GetChannel(), req.GetSubject(), req.GetBody())
 	if err != nil {
 		return nil, servicekit.ToStatus(err)
 	}
@@ -33,17 +27,18 @@ func (s *Server) SendNotification(ctx context.Context, req *notificationv1.SendN
 }
 
 func (s *Server) ListNotifications(ctx context.Context, req *notificationv1.ListNotificationsRequest) (*notificationv1.ListNotificationsResponse, error) {
-	size, offset, err := servicekit.Page(req.GetPageSize(), req.GetPageToken())
+	limit, offset, err := servicekit.Page(req.GetPageSize(), req.GetPageToken())
 	if err != nil {
 		return nil, err
 	}
-	items, next, err := s.service.List(ctx, caller(ctx), req.GetUserId(), size, offset)
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	items, more, err := s.service.List(ctx, app.Caller{ID: identity.ID, Role: identity.Role}, req.GetUserId(), int(limit), offset)
 	if err != nil {
 		return nil, servicekit.ToStatus(err)
 	}
 	response := &notificationv1.ListNotificationsResponse{
 		Notifications: make([]*notificationv1.Notification, 0, len(items)),
-		NextPageToken: next,
+		NextPageToken: servicekit.NextPageToken(offset, len(items), more),
 	}
 	for _, item := range items {
 		response.Notifications = append(response.Notifications, toProto(item))
@@ -52,8 +47,5 @@ func (s *Server) ListNotifications(ctx context.Context, req *notificationv1.List
 }
 
 func toProto(item domain.Notification) *notificationv1.Notification {
-	return &notificationv1.Notification{
-		Id: item.ID, UserId: item.UserID, Channel: item.Channel, Subject: item.Subject,
-		Body: item.Body, CreatedAt: timestamppb.New(item.CreatedAt),
-	}
+	return &notificationv1.Notification{Id: item.ID, UserId: item.UserID, Channel: item.Channel, Subject: item.Subject, Body: item.Body, CreatedAt: timestamppb.New(item.CreatedAt)}
 }

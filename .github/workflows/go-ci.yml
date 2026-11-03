@@ -1,0 +1,194 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go-quality:
+    name: Go lint, vet, build, test, and coverage
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-test-password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:ci-test-password@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: |
+            **/go.sum
+
+      - name: Check Go formatting
+        shell: bash
+        run: |
+          unformatted=$(find packages services tools -type f -name '*.go' -print0 | xargs -0 gofmt -l)
+          if [[ -n "$unformatted" ]]; then
+            printf 'Go files need gofmt:\n%s\n' "$unformatted"
+            exit 1
+          fi
+
+      - name: Refresh module checksums
+        shell: bash
+        run: |
+          while IFS= read -r modfile; do
+            module=${modfile%/go.mod}
+            [[ "$module" == "packages/eventkit" ]] && continue
+            (cd "$module" && go mod tidy)
+          done < <(find packages services tools -type f -name go.mod | sort)
+          (cd .github/security-tools && go mod tidy)
+
+      - name: Ensure module manifests are committed
+        run: git diff --exit-code -- ':(glob)**/go.mod' ':(glob)**/go.sum'
+
+      - name: Vet and build every Go module
+        run: bash scripts/ci-go.sh
+
+      - name: Test every Go module and enforce 80% coverage where tests exist
+        run: bash scripts/coverage.sh 80
+
+  protobuf:
+    name: Protobuf lint, build, and breaking-change check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Buf
+        uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
+        with:
+          version: 1.73.0
+
+      - name: Lint and build protobuf contracts
+        run: |
+          buf lint
+          buf build
+
+      - name: Check compatibility against the target branch
+        env:
+          BUF_BASE_BRANCH: ${{ github.event.pull_request.base.ref || github.event.repository.default_branch }}
+        run: |
+          git branch --force "$BUF_BASE_BRANCH" "origin/$BUF_BASE_BRANCH"
+          buf breaking --against ".git#branch=${BUF_BASE_BRANCH}"
+
+  go-security:
+    name: Go vulnerability and security scans
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go for security analyzers
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.10'
+          cache-dependency-path: |
+            **/go.sum
+
+      - name: Install govulncheck and gosec
+        working-directory: .github/security-tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck
+          go install github.com/securego/gosec/v2/cmd/gosec
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Scan every Go module
+        run: bash scripts/security-go.sh
+
+  container-security:
+    name: Build and scan service images
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: drukleague-ci
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build shared service builder image
+        run: docker build --tag drukleague-service-builder:local --file services/service-builder/Dockerfile .
+
+      - name: Build application and microservice images
+        run: |
+          docker compose --file deploy/docker-compose.yml build \
+            api auth user team player tournament registration match score fixture standings \
+            venue official dzongkhag notification media report search analytics audit-log configuration
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+
+      - name: Scan every built image for critical vulnerabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep '^drukleague-ci-' | sort -u)
+          if [[ ${#images[@]} -eq 0 ]]; then
+            echo 'No service images were built.' >&2
+            exit 1
+          fi
+          for image in "${images[@]}"; do
+            echo "Scanning $image"
+            trivy image --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$image"
+          done
+
+  performance:
+    name: k6 login and public standings performance
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: drukleague-performance
+      POSTGRES_PASSWORD: ci-only-postgres-password
+      JWT_SECRET: ci-only-jwt-secret-for-performance-tests
+      BOOTSTRAP_ADMIN_USER: ci-admin
+      BOOTSTRAP_ADMIN_PASSWORD: ci-only-admin-password
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Start the API and its dependencies
+        run: docker compose --file deploy/docker-compose.yml up -d postgres nats api
+
+      - name: Wait for the API health endpoint
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8080/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose --file deploy/docker-compose.yml logs api postgres nats
+          exit 1
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1
+        with:
+          k6-version: '1.8.2'
+
+      - name: Load test login and public standings
+        env:
+          API_BASE_URL: http://127.0.0.1:8080
+        run: k6 run tests/performance/api-login-standings.js
+
+      - name: Stop the test stack
+        if: always()
+        run: docker compose --file deploy/docker-compose.yml down --volumes --remove-orphans

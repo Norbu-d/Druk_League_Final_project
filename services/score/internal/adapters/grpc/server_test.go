@@ -27,7 +27,9 @@ func (repo) UpdateLive(_ context.Context, id string, h, a int32) (domain.Score, 
 func (repo) Finalize(_ context.Context, m domain.Match, _, _, _ string) (domain.Score, error) {
 	return domain.Score{MatchID: m.ID, Finalized: true}, nil
 }
-func (repo) Get(context.Context, string) (domain.Score, error) { return domain.Score{}, domain.ErrNotFound }
+func (repo) Get(context.Context, string) (domain.Score, error) {
+	return domain.Score{}, domain.ErrNotFound
+}
 
 type matches struct{}
 

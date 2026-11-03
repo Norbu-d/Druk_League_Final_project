@@ -234,7 +234,8 @@ func Process(ctx context.Context, message Message, dlq Publisher, config Consume
 		return Acked
 	}
 	deliveries := message.Deliveries()
-	if !IsPermanent(err) && deliveries < uint64(config.MaxDeliver) {
+	maxDeliver := uint64(config.MaxDeliver) // #nosec G115 -- defaults normalizes this to a positive int, which safely fits uint64.
+	if !IsPermanent(err) && deliveries < maxDeliver {
 		log.Printf("%s retry %d/%d: %v", config.Durable, deliveries, config.MaxDeliver, err)
 		_ = message.NakWithDelay(config.Backoff * time.Duration(1<<min(deliveries-1, 6)))
 		return Retried

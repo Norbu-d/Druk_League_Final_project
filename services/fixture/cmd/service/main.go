@@ -50,6 +50,9 @@ func main() {
 				natsErr = eventkit.EnsureStreams(js)
 			}
 			if natsErr == nil {
+				natsErr = eventkit.StartConsumer(ctx, js, natsadapter.FinalizedMatchConsumer())
+			}
+			if natsErr == nil {
 				go natsadapter.RunRelay(ctx, repository, js, time.Second)
 			}
 		})

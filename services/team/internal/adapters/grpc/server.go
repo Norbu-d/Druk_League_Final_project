@@ -24,17 +24,23 @@ type Server struct {
 func New(db *sql.DB) *Server { return &Server{db: db} }
 
 func (s *Server) CreateTeam(ctx context.Context, req *v1.CreateTeamRequest) (*v1.CreateTeamResponse, error) {
+	if err := servicekit.RequireRole(ctx, core.RoleSuperAdmin, core.RoleTeamManager); err != nil {
+		return nil, err
+	}
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	managerID := ""
+	if identity.Role == core.RoleTeamManager {
+		if !core.IsUUID(identity.ID) {
+			return nil, status.Error(codes.InvalidArgument, "team manager id must be a UUID")
+		}
+		managerID = identity.ID
+	}
 	name, code, district := strings.TrimSpace(req.GetName()), strings.ToUpper(strings.TrimSpace(req.GetShortCode())), strings.TrimSpace(req.GetDzongkhag())
 	if name == "" || code == "" || district == "" {
 		return nil, status.Error(codes.InvalidArgument, "name, short code, and dzongkhag are required")
 	}
 	var team v1.Team
 	var created time.Time
-	identity, _ := servicekit.IdentityFromContext(ctx)
-	managerID := ""
-	if identity.Role == core.RoleTeamManager {
-		managerID = identity.ID
-	}
 	err := s.db.QueryRowContext(ctx, `INSERT INTO teams(name,short_code,dzongkhag,tournament_id,manager_id) VALUES($1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid) RETURNING id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),COALESCE(manager_id::text,''),created_at`, name, code, district, strings.TrimSpace(req.GetTournamentId()), managerID).Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &team.ManagerId, &created)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
@@ -50,6 +56,9 @@ func (s *Server) CreateTeam(ctx context.Context, req *v1.CreateTeamRequest) (*v1
 }
 
 func (s *Server) GetTeam(ctx context.Context, req *v1.GetTeamRequest) (*v1.GetTeamResponse, error) {
+	if err := servicekit.RequireRole(ctx, core.RoleSuperAdmin, core.RoleTeamManager, core.RoleMatchOfficial, core.RoleViewer, core.RoleService); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(req.GetId()) == "" {
 		return nil, status.Error(codes.InvalidArgument, "team id is required")
 	}
@@ -60,15 +69,30 @@ func (s *Server) GetTeam(ctx context.Context, req *v1.GetTeamRequest) (*v1.GetTe
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not read team")
 	}
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	if identity.Role == core.RoleTeamManager && identity.ID != team.ManagerId {
+		return nil, status.Error(codes.NotFound, "team not found")
+	}
+	if identity.Role != core.RoleSuperAdmin && identity.Role != core.RoleService && identity.ID != team.ManagerId {
+		team.ManagerId = ""
+	}
 	return &v1.GetTeamResponse{Team: team}, nil
 }
 
 func (s *Server) ListTeams(ctx context.Context, req *v1.ListTeamsRequest) (*v1.ListTeamsResponse, error) {
+	if err := servicekit.RequireRole(ctx, core.RoleSuperAdmin, core.RoleTeamManager, core.RoleMatchOfficial, core.RoleViewer, core.RoleService); err != nil {
+		return nil, err
+	}
+	identity, _ := servicekit.IdentityFromContext(ctx)
+	managerID := strings.TrimSpace(req.GetManagerId())
+	if identity.Role == core.RoleTeamManager {
+		managerID = identity.ID
+	}
 	size, offset, err := page(req.GetPageSize(), req.GetPageToken())
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),COALESCE(manager_id::text,''),created_at FROM teams WHERE ($1='' OR tournament_id::text=$1) AND ($2='' OR dzongkhag=$2) AND ($3='' OR manager_id::text=$3) ORDER BY name,id LIMIT $4 OFFSET $5`, strings.TrimSpace(req.GetTournamentId()), strings.TrimSpace(req.GetDzongkhag()), strings.TrimSpace(req.GetManagerId()), size+1, offset)
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text,name,short_code,dzongkhag,COALESCE(tournament_id::text,''),COALESCE(manager_id::text,''),created_at FROM teams WHERE ($1='' OR tournament_id::text=$1) AND ($2='' OR dzongkhag=$2) AND ($3='' OR manager_id::text=$3) ORDER BY name,id LIMIT $4 OFFSET $5`, strings.TrimSpace(req.GetTournamentId()), strings.TrimSpace(req.GetDzongkhag()), managerID, size+1, offset)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "could not list teams")
 	}
@@ -80,7 +104,10 @@ func (s *Server) ListTeams(ctx context.Context, req *v1.ListTeamsRequest) (*v1.L
 		if err := rows.Scan(&team.Id, &team.Name, &team.ShortCode, &team.Dzongkhag, &team.TournamentId, &team.ManagerId, &created); err != nil {
 			return nil, status.Error(codes.Internal, "could not read teams")
 		}
-		if int32(len(result.Teams)) == size {
+		if identity.Role != core.RoleSuperAdmin && identity.Role != core.RoleService && identity.ID != team.ManagerId {
+			team.ManagerId = ""
+		}
+		if len(result.Teams) == int(size) {
 			result.NextPageToken = strconv.Itoa(offset + int(size))
 			break
 		}

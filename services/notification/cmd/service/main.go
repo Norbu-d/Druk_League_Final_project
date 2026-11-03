@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"log"
-	"sync"
+	"time"
 
 	notificationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/notification/v1"
 	"github.com/drukleague/platform/packages/eventkit"
@@ -14,50 +14,45 @@ import (
 	natsadapter "github.com/drukleague/platform/services/notification/internal/adapters/nats"
 	"github.com/drukleague/platform/services/notification/internal/adapters/postgres"
 	"github.com/drukleague/platform/services/notification/internal/app"
+	"github.com/nats-io/nats.go"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	teamConn, err := servicekit.Dial(servicekit.Env("TEAM_SERVICE_ADDR", "team:50051"), servicekit.ClientOptions{Auth: servicekit.ForwardOrService, Tokens: servicekit.NewTokenSource("notification-service", servicekit.Secret(), 0)})
+	teamConn, err := servicekit.Dial(servicekit.Env("TEAM_SERVICE_ADDR", "team:50051"), servicekit.ClientOptions{
+		Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("notification-service", servicekit.Secret(), 0), Timeout: 5 * time.Second,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer teamConn.Close()
-	ctx, cancel := context.WithCancel(context.Background())
+	teams := grpcclients.NewTeamDirectory(teamConn)
+
+	consumerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	var once sync.Once
-	var closeNATS func()
-	var natsErr error
-
-	register := func(server *grpc.Server, db *sql.DB) error {
-		service := app.New(postgres.New(db), grpcclients.NewTeams(teamConn))
-		once.Do(func() {
-			conn, js, err := eventkit.Connect(
-				servicekit.Env("NATS_URL", "nats://nats:4222"),
-				"drukleague-notification",
-			)
-			natsErr = err
-			if err == nil {
-				closeNATS = conn.Close
-				natsErr = eventkit.EnsureStreams(js)
-			}
-			if natsErr == nil {
-				natsErr = eventkit.StartConsumer(ctx, js, natsadapter.Consumer(service))
-			}
-		})
-		if natsErr != nil {
-			return natsErr
+	var natsConn *nats.Conn
+	err = servicekit.Run("notification-service", func(server *grpc.Server, db *sql.DB) error {
+		repository := postgres.New(db)
+		service := app.New(repository, teams)
+		var js nats.JetStreamContext
+		natsConn, js, err = eventkit.Connect(servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-notification")
+		if err != nil {
+			return err
 		}
-
+		if err := eventkit.EnsureStreams(js); err != nil {
+			return err
+		}
+		if err := eventkit.StartConsumer(consumerCtx, js, natsadapter.MatchFinalizedConsumer(service)); err != nil {
+			return err
+		}
 		notificationv1.RegisterNotificationServiceServer(server, grpcadapter.New(service))
 		return nil
+	})
+	cancel()
+	if natsConn != nil {
+		natsConn.Close()
 	}
-
-	if err := servicekit.Run("notification-service", register); err != nil {
+	if err != nil {
 		log.Fatal(err)
-	}
-	if closeNATS != nil {
-		closeNATS()
 	}
 }

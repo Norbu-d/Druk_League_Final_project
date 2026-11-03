@@ -10,102 +10,89 @@ import (
 	"github.com/drukleague/platform/services/notification/internal/ports"
 )
 
-const ChannelInApp = "in_app"
+const inAppChannel = "in_app"
 
 type Caller struct{ ID, Role string }
 
 type Service struct {
 	repo  ports.Repository
-	teams ports.TeamDirectory
+	teams ports.TeamGetter
 }
 
-func New(repo ports.Repository, teams ports.TeamDirectory) *Service {
+func New(repo ports.Repository, teams ports.TeamGetter) *Service {
 	return &Service{repo: repo, teams: teams}
 }
 
-// Send creates an in-app notification for an administrator or internal service.
 func (s *Service) Send(ctx context.Context, caller Caller, userID, channel, subject, body string) (domain.Notification, error) {
 	if caller.Role != core.RoleSuperAdmin && caller.Role != core.RoleService {
-		return domain.Notification{}, core.Forbidden("only an administrator or service can send notifications")
+		return domain.Notification{}, core.Forbidden("only admins and internal services can send notifications")
 	}
-
-	item := domain.Notification{
-		UserID:  strings.TrimSpace(userID),
-		Channel: strings.TrimSpace(channel),
-		Subject: strings.TrimSpace(subject),
-		Body:    strings.TrimSpace(body),
-	}
-	if !core.IsUUID(item.UserID) {
+	userID = strings.TrimSpace(userID)
+	channel = strings.ToLower(strings.TrimSpace(channel))
+	subject = strings.TrimSpace(subject)
+	body = strings.TrimSpace(body)
+	if !core.IsUUID(userID) {
 		return domain.Notification{}, core.Invalid("user id must be a UUID")
 	}
-	if item.Channel != ChannelInApp {
-		return domain.Notification{}, core.Invalid("only the in_app channel is supported")
+	if channel != inAppChannel {
+		return domain.Notification{}, core.Invalid("channel must be in_app")
 	}
-	if item.Subject == "" || len(item.Subject) > 200 || item.Body == "" || len(item.Body) > 5000 {
-		return domain.Notification{}, core.Invalid("subject and body are required; maximum lengths are 200 and 5000")
+	if subject == "" || len(subject) > 200 || body == "" || len(body) > 4000 {
+		return domain.Notification{}, core.Invalid("subject and body are required and must fit their limits")
 	}
-	return s.repo.Create(ctx, item)
+	item, _, err := s.repo.Create(ctx, domain.Notification{UserID: userID, Channel: channel, Subject: subject, Body: body, Status: "pending"})
+	return item, err
 }
 
-// NotifyMatchFinalized stores one notice per distinct affected team manager.
-func (s *Service) NotifyMatchFinalized(ctx context.Context, event domain.FinalizedMatch) error {
-	event.EventID = strings.TrimSpace(event.EventID)
-	event.MatchID = strings.TrimSpace(event.MatchID)
-	event.HomeTeamID = strings.TrimSpace(event.HomeTeamID)
-	event.AwayTeamID = strings.TrimSpace(event.AwayTeamID)
-	if !core.IsUUID(event.EventID) || !core.IsUUID(event.MatchID) || !core.IsUUID(event.HomeTeamID) || !core.IsUUID(event.AwayTeamID) || event.HomeTeamID == event.AwayTeamID {
-		return core.Invalid("event, match, and distinct team ids must be UUIDs")
+func (s *Service) List(ctx context.Context, caller Caller, userID string, limit, offset int) ([]domain.Notification, bool, error) {
+	userID = strings.TrimSpace(userID)
+	if !core.IsUUID(userID) {
+		return nil, false, core.Invalid("user id must be a UUID")
 	}
-	if event.HomeScore < 0 || event.HomeScore > 99 || event.AwayScore < 0 || event.AwayScore > 99 {
-		return core.Invalid("final scores must be between 0 and 99")
+	if caller.Role != core.RoleSuperAdmin && caller.ID != userID {
+		return nil, false, core.Forbidden("cannot read another user's notifications")
 	}
-	home, err := s.teams.GetTeam(ctx, event.HomeTeamID)
+	return s.repo.List(ctx, userID, limit, offset)
+}
+
+// NotifyMatchFinalized creates one idempotent in-app notice for each distinct team manager.
+// Dzongkhag names are included in the message; Jira has no district-recipient identities defined.
+func (s *Service) NotifyMatchFinalized(ctx context.Context, event domain.MatchFinalized) error {
+	if err := event.Validate(); err != nil {
+		return err
+	}
+	home, err := s.teams.Get(ctx, event.HomeTeamID)
 	if err != nil {
 		return err
 	}
-	away, err := s.teams.GetTeam(ctx, event.AwayTeamID)
+	away, err := s.teams.Get(ctx, event.AwayTeamID)
 	if err != nil {
 		return err
+	}
+	if !validEventTeam(home, event.TournamentID, event.HomeTeamID) || !validEventTeam(away, event.TournamentID, event.AwayTeamID) {
+		return core.Invalid("event teams do not match the finalized tournament")
 	}
 	if !core.IsUUID(home.ManagerID) || !core.IsUUID(away.ManagerID) {
-		return fmt.Errorf("team manager assignment missing for match %s", event.MatchID)
+		return core.Precondition("both participating teams need an assigned manager before notifications can be delivered")
 	}
-	users := []string{home.ManagerID}
+	body := fmt.Sprintf("Final result: %s %d–%d %s. Tournament %s. Dzongkhags: %s and %s. Finalized at %s.",
+		home.Name, event.HomeScore, event.AwayScore, away.Name, event.TournamentID, home.Dzongkhag, away.Dzongkhag, event.FinalizedAt.UTC().Format("2006-01-02 15:04 UTC"))
+	recipients := []string{home.ManagerID}
 	if away.ManagerID != home.ManagerID {
-		users = append(users, away.ManagerID)
+		recipients = append(recipients, away.ManagerID)
 	}
-	for _, userID := range users {
-		item := domain.Notification{UserID: userID, Channel: ChannelInApp, Subject: "Match finalized", Body: fmt.Sprintf("%s (%s) vs %s (%s) finished %d-%d.", home.Name, home.Dzongkhag, away.Name, away.Dzongkhag, event.HomeScore, event.AwayScore), EventID: event.EventID}
-		if _, err := s.repo.Create(ctx, item); err != nil {
+	for _, userID := range recipients {
+		if _, _, err := s.repo.Create(ctx, domain.Notification{
+			EventID: event.EventID, UserID: userID, Channel: inAppChannel,
+			Subject: "Match result finalized", Body: body, Status: "pending",
+		}); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// List returns a user's notices; an administrator may list one user or all users.
-func (s *Service) List(ctx context.Context, caller Caller, userID string, size, offset int) ([]domain.Notification, string, error) {
-	userID = strings.TrimSpace(userID)
-	if !core.IsUUID(caller.ID) {
-		return nil, "", core.Forbidden("authenticated user id must be a UUID")
-	}
-	if caller.Role != core.RoleSuperAdmin {
-		if userID != "" && userID != caller.ID {
-			return nil, "", core.Forbidden("users can only list their own notifications")
-		}
-		userID = caller.ID
-	}
-	if userID != "" && !core.IsUUID(userID) {
-		return nil, "", core.Invalid("user id must be a UUID")
-	}
-
-	items, more, err := s.repo.List(ctx, userID, size, offset)
-	if err != nil {
-		return nil, "", err
-	}
-	next := ""
-	if more {
-		next = fmt.Sprintf("%d", offset+len(items))
-	}
-	return items, next, nil
+func validEventTeam(team domain.Team, tournamentID, teamID string) bool {
+	return team.ID == teamID && (team.TournamentID == "" || team.TournamentID == tournamentID) &&
+		strings.TrimSpace(team.Name) != "" && strings.TrimSpace(team.Dzongkhag) != ""
 }

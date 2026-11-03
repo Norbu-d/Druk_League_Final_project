@@ -203,7 +203,7 @@ func main() {
 		}
 		notificationsReady = len(expectedManagers) == 2
 		for i, managerID := range managerIDs {
-			response, err := notifications.ListNotifications(as(managerTokens[i]), &notificationv1.ListNotificationsRequest{PageSize: 50})
+			response, err := notifications.ListNotifications(as(managerTokens[i]), &notificationv1.ListNotificationsRequest{UserId: managerID, PageSize: 50})
 			if err != nil {
 				notificationsReady = false
 				continue
@@ -222,7 +222,7 @@ func main() {
 		if expectedManagers[managerID] {
 			found := false
 			for _, item := range items {
-				if item.GetSubject() == "Match finalized" && strings.Contains(item.GetBody(), "finished 3-1.") {
+				if item.GetSubject() == "Match result finalized" && strings.Contains(item.GetBody(), "3–1") {
 					found = true
 				}
 			}

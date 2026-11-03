@@ -5,9 +5,9 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag comp
 The repository holds two things that are not yet connected:
 
 1. **An MVP monolith** (`services/api-gateway`) with a plain HTML/CSS/JS frontend. The browser talks only to this today.
-2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 14 have service logic; 6 are still health-only shells. Notification was verified through the Docker Compose end-to-end run; unit tests remain to be added.
+2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 14 have service logic; 6 are still health-only shells. Notification unit tests passed after syncing `development`; its Compose E2E passed before the sync and needs a rerun on the merged code.
 
-For detailed status and the handoff notes, see [progress.md](progress.md). For the target architecture, see [servicedesign.md](servicedesign.md).
+For detailed status and the handoff notes, see [progress.md](progress.md); planned design changes from the 22 Oct review are in its section 11. For the target architecture, see [servicedesign.md](servicedesign.md).
 
 ## Run locally with Docker Compose
 
@@ -43,7 +43,7 @@ The microservices listen on gRPC port 50051 inside the Compose network only; it 
 | Official | Assigns through Match, filter by tournament |
 | Dzongkhag | Reference data for the 20 dzongkhags |
 | Team, Tournament, Player, Registration | Basic create/get/list (Player update, Registration review). Not yet hexagonal; Team does not check that `tournament_id` exists |
-| Notification | Stores in-app notifications, supports Send/List gRPC calls and consumes MatchFinalized; Docker Compose end-to-end verification passed 3 Nov 2026 |
+| Notification | Stores in-app notifications, supports Send/List gRPC calls and consumes MatchFinalized; unit tests passed after the merge; Compose E2E rerun pending |
 | Audit Log, Media, Report, Search, Analytics, Configuration | Shells (gRPC health only) |
 
 Shared packages:
@@ -57,12 +57,24 @@ Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,
 ### Not built yet
 
 - API gateway and BFF. nginx still routes `/api/` to the monolith, so the frontend does not use the microservices.
-- Audit Log event consumer. Notification's consumer is implemented and its Compose end-to-end flow is verified; unit tests remain.
+- Audit Log event consumer. Notification's consumer is implemented; rerun Compose E2E after the development merge and verify NATS outage/reconnect behavior.
 - OpenFaaS/faasd serverless functions.
 - OpenTelemetry tracing.
-- Team → Tournament reference check; Team ownership via `manager_id`.
+- Team → Tournament reference check. Team manager access is limited to their own teams.
 - The 7 shell services above.
-- CI (GitHub Actions), and tests for the 12 modules that have none.
+- Automated tests for the 12 modules that currently have none.
+
+### Known design gaps and planned changes
+
+Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details and the proposed order of work are in [progress.md](progress.md) section 11.
+
+- **Auth:** shared HS256 secret (any verifying service can mint tokens); no distinct service identity; no explicit user → official mapping; no password change, admin reset or deactivate; lockout can be abused to lock out an account. Team manager ownership is enforced by Team.
+- **Registration:** the tournament link should move from Team to Registration (with `pending`/`approved`/`rejected`/`withdrawn` status) and Fixture should read approved registrations; deadline, capacity and roster-lock rules are undefined.
+- **Matches and fixtures:** no correction path for a wrongly finalised result; finalise uses the last saved live score, not a submitted one; only `scheduled`/`completed` states; byes, withdrawals and late teams not handled; no official-overlap check; tie-breakers undefined; `starts_at` should be stored in UTC (Bhutan is UTC+6).
+- **Operations:** Standings cannot be rebuilt, the dead-letter stream cannot be inspected or replayed, no backup script, no outbox or stream retention, no idempotency on create calls, no readiness checks in Compose.
+- **Edge and frontend:** rate limiting, CORS and security headers at nginx; JWT storage in the frontend; the `web-preview/` duplicate copy.
+- **CI and evidence:** GitHub Actions now runs Go formatting, vet, build, tests and an 80% coverage gate for modules with tests, plus Buf compatibility checks, govulncheck, gosec, Trivy image scans, and a k6 login/public-standings performance test. Test coverage for modules without tests remains outstanding.
+- **Deployment:** Compose stays. Proposed serverless runtime is faasd (OpenFaaS on one machine), not Kubernetes; confirm with the module tutor.
 
 ## Testing
 
