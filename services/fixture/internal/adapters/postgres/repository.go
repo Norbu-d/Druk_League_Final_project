@@ -202,17 +202,23 @@ func (r *Repository) AdvanceKnockout(ctx context.Context, event domain.MatchFina
 		var teamID string
 		var teamSeed int32
 		if err = rows.Scan(&slotNo, &teamID, &teamSeed); err != nil {
-			rows.Close()
+			if closeErr := rows.Close(); closeErr != nil {
+				return domain.Fixture{}, false, errors.Join(err, closeErr)
+			}
 			return domain.Fixture{}, false, err
 		}
 		teams[slotNo-1], seeds[slotNo-1] = teamID, teamSeed
 		count++
 	}
 	if err = rows.Err(); err != nil {
-		rows.Close()
+		if closeErr := rows.Close(); closeErr != nil {
+			return domain.Fixture{}, false, errors.Join(err, closeErr)
+		}
 		return domain.Fixture{}, false, err
 	}
-	rows.Close()
+	if err = rows.Close(); err != nil {
+		return domain.Fixture{}, false, err
+	}
 	if count < 2 {
 		return domain.Fixture{}, false, tx.Commit()
 	}

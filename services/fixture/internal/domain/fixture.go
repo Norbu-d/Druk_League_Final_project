@@ -172,10 +172,23 @@ func KnockoutSchedule(tournamentID string, rankedTeamIDs []string, venues []Venu
 
 	bracketSize := 1
 	for bracketSize < len(rankedTeamIDs) {
+		// Keep all bracket indexes representable in the int32 fields persisted by
+		// the fixture service. The check also prevents bracketSize from wrapping.
+		if bracketSize > math.MaxInt32/2 {
+			return KnockoutPlan{}, core.Invalid("standings contain too many teams for a knockout bracket")
+		}
 		bracketSize *= 2
 	}
 	seedOrder := bracketSeedOrder(bracketSize)
-	plan := KnockoutPlan{BracketSize: int32(bracketSize), Rounds: int32(log2(bracketSize))}
+	bracketSize32, ok := int32Index(bracketSize)
+	if !ok {
+		return KnockoutPlan{}, core.Invalid("knockout bracket exceeds supported range")
+	}
+	rounds32, ok := int32Index(log2(bracketSize))
+	if !ok {
+		return KnockoutPlan{}, core.Invalid("knockout rounds exceed supported range")
+	}
+	plan := KnockoutPlan{BracketSize: bracketSize32, Rounds: rounds32}
 	matchCount := bracketSize / 2
 	for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
 		seedA, seedB := seedOrder[matchIndex*2], seedOrder[matchIndex*2+1]
@@ -186,16 +199,38 @@ func KnockoutSchedule(tournamentID string, rankedTeamIDs []string, venues []Venu
 				team, seed = teamB, seedB
 			}
 			if team != "" && plan.Rounds > 1 {
-				parentMatch := int32(matchIndex/2 + 1)
-				slot := int32(matchIndex%2 + 1)
-				plan.Byes = append(plan.Byes, BracketEntry{Round: 2, Match: parentMatch, Slot: slot, TeamID: team, Seed: int32(seed)})
+				parentMatch, ok := int32Index(matchIndex/2 + 1)
+				if !ok {
+					return KnockoutPlan{}, core.Invalid("knockout bracket index exceeds supported range")
+				}
+				slot, ok := int32Index(matchIndex%2 + 1)
+				if !ok {
+					return KnockoutPlan{}, core.Invalid("knockout bracket index exceeds supported range")
+				}
+				teamSeed, ok := int32Index(seed)
+				if !ok {
+					return KnockoutPlan{}, core.Invalid("knockout seed exceeds supported range")
+				}
+				plan.Byes = append(plan.Byes, BracketEntry{Round: 2, Match: parentMatch, Slot: slot, TeamID: team, Seed: teamSeed})
 			}
 			continue
 		}
 		kickoff := start.AddDate(0, 0, matchIndex)
+		bracketMatch, ok := int32Index(matchIndex + 1)
+		if !ok {
+			return KnockoutPlan{}, core.Invalid("knockout bracket index exceeds supported range")
+		}
+		homeSeed, ok := int32Index(seedA)
+		if !ok {
+			return KnockoutPlan{}, core.Invalid("knockout seed exceeds supported range")
+		}
+		awaySeed, ok := int32Index(seedB)
+		if !ok {
+			return KnockoutPlan{}, core.Invalid("knockout seed exceeds supported range")
+		}
 		fixture := Fixture{TournamentID: tournamentID, HomeTeamID: teamA, AwayTeamID: teamB,
-			Round: 1, Kickoff: kickoff, Format: FormatKnockout, BracketMatch: int32(matchIndex + 1),
-			HomeSeed: int32(seedA), AwaySeed: int32(seedB)}
+			Round: 1, Kickoff: kickoff, Format: FormatKnockout, BracketMatch: bracketMatch,
+			HomeSeed: homeSeed, AwaySeed: awaySeed}
 		if len(venues) > 0 {
 			venue := venues[matchIndex%len(venues)]
 			fixture.VenueID, fixture.VenueName = venue.ID, venue.Name
@@ -203,6 +238,13 @@ func KnockoutSchedule(tournamentID string, rankedTeamIDs []string, venues []Venu
 		plan.Fixtures = append(plan.Fixtures, fixture)
 	}
 	return plan, nil
+}
+
+func int32Index(value int) (int32, bool) {
+	if value < 0 || value > math.MaxInt32 {
+		return 0, false
+	}
+	return int32(value), true
 }
 
 func bracketSeedOrder(size int) []int {
