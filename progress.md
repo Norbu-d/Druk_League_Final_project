@@ -521,3 +521,9 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Passed the workflow's built-in `github.token` to Buf setup to avoid unauthenticated GitHub API rate limits.
 - `gofmt` and `git diff --check` are clean. Local test execution did not return in this workspace; CI must confirm coverage and the Buf job after push.
 - SonarCloud follow-up: removed the duplicate pagination-helper test across Player and Tournament; Tournament now covers default and capped page sizes through its CRUD/list test.
+
+## 12. Sonam — role-based route guards (SCRUM-48, 2026-11-03)
+- Added frontend page access rules for Super Admin, Match Official, Team Manager and Viewer; restricted direct routes redirect to an allowed page.
+- Role is applied after sign-in, restored from the session token on reload, and cleared on sign-out.
+- Manually verified: Viewer direct access to `#officials` redirects to Overview; Super Admin can open Officials.
+- Addressed the SonarCloud findings reported on PR #6 in `api.js` (base64url replacements, conditional braces and explicit ignored refresh promise); rerun the PR check after pushing.

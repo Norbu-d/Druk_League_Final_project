@@ -1,6 +1,13 @@
 (() => {
   const tokenKey = 'drukleague-session';
+  const roleKey = 'drukleague-role';
   const token = () => sessionStorage.getItem(tokenKey);
+  function tokenRole(value) {
+    try {
+      const payload = value.split('.')[1].replaceAll('-', '+').replaceAll('_', '/');
+      return JSON.parse(atob(payload)).role || 'viewer';
+    } catch { return 'viewer'; }
+  }
   const apiRoot = window.DRUKLEAGUE_API_BASE || `${location.protocol}//${location.hostname}:8080/api`;
   const headers = () => ({'Content-Type':'application/json', ...(token() ? {Authorization:`Bearer ${token()}`} : {})});
   async function request(path, options={}) {
@@ -24,7 +31,7 @@
   }
   function showLogin() {
     if (token()) {
-      sessionStorage.removeItem(tokenKey); document.getElementById('auth-button').textContent='PD';
+      sessionStorage.removeItem(tokenKey); sessionStorage.removeItem(roleKey); document.getElementById('auth-button').textContent='PD'; render('dashboard');
       toast('Signed out.'); return;
     }
     document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title"><header class="modal-head"><div><h2 id="login-title">Sign in to DrukLeague</h2><p>Connect to your saved tournaments and match data.</p></div><button class="modal-close" type="button" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="login-form"><div class="modal-body"><div class="form-grid"><div class="form-field full"><label for="login-user">Username</label><input id="login-user" name="username" autocomplete="username" required></div><div class="form-field full"><label for="login-password">Password</label><input id="login-password" name="password" type="password" autocomplete="current-password" required></div></div></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" class="button button-primary">Sign in</button></footer></form></section></div>`;
@@ -35,7 +42,7 @@
     const form=event.target;
     if (form.id==='login-form') {
       event.preventDefault();
-      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(tokenKey,result.token);document.getElementById('auth-button').textContent=initials(result.user.username);document.getElementById('modal-root').innerHTML='';toast(`Signed in as ${result.user.username}.`);await refresh(); }
+      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(tokenKey,result.token);sessionStorage.setItem(roleKey,result.user.role||tokenRole(result.token));document.getElementById('auth-button').textContent=initials(result.user.username);document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${result.user.username}.`);await refresh(); }
       catch(error){toast(error.message);}
       return;
     }
@@ -64,5 +71,15 @@
     }
   });
   document.querySelector('.top-avatar').classList.add('auth-button');
-  if(token()){document.getElementById('auth-button').textContent='✓';refresh();}
+  if (token()) {
+    if (!sessionStorage.getItem(roleKey)) {
+      sessionStorage.setItem(roleKey, tokenRole(token()));
+    }
+    document.getElementById('auth-button').textContent = '✓';
+    render(activePage);
+    void refresh();
+  } else {
+    sessionStorage.setItem(roleKey, 'viewer');
+    render(activePage);
+  }
 })();
