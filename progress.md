@@ -533,3 +533,7 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - `go test ./...` completed for the Search module; Docker image build succeeded and the Search container started successfully.
 - Automated behavior tests are still needed; indexing and data synchronization remain under SCRUM-87.
 - Replaced dynamic SQL placeholder construction with fixed parameterized queries after the PR security scan flagged Gosec G202; rerun CI after pushing this follow-up.
+
+## 14. Sonam — Configuration schema design (SCRUM-93, 2026-11-03)
+- Added an additive migration for typed configuration metadata, descriptions, creation timestamps, and checks for non-empty bounded keys and supported value types. The existing key/value gRPC contract remains compatible.
+- Built the Configuration image and started the container; verified `value_type`, `description`, and `created_at` plus both key/type constraints in PostgreSQL.
