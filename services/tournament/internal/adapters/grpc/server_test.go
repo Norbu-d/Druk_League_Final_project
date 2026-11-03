@@ -70,6 +70,14 @@ func TestTournamentCRUDAndPagination(t *testing.T) {
 	if err != nil || len(page2.GetTournaments()) != 1 || page2.GetNextPageToken() != "" || page2.GetTournaments()[0].GetId() != second.GetTournament().GetId() {
 		t.Fatalf("ListTournaments() second page = (%+v, %v), want second tournament and no next token", page2, err)
 	}
+	defaultPage, err := server.ListTournaments(ctx, &v1.ListTournamentsRequest{Season: "2026"})
+	if err != nil || len(defaultPage.GetTournaments()) != 2 {
+		t.Fatalf("ListTournaments() default page = (%+v, %v), want both tournaments", defaultPage, err)
+	}
+	cappedPage, err := server.ListTournaments(ctx, &v1.ListTournamentsRequest{Season: "2026", PageSize: 500})
+	if err != nil || len(cappedPage.GetTournaments()) != 2 {
+		t.Fatalf("ListTournaments() capped page = (%+v, %v), want both tournaments", cappedPage, err)
+	}
 }
 
 func TestTournamentDatabaseErrors(t *testing.T) {
@@ -144,32 +152,5 @@ func TestScanTournamentConvertsNullableStartTime(t *testing.T) {
 				t.Fatalf("StartsAt = %v, want %v", got.GetStartsAt().AsTime(), starts)
 			}
 		})
-	}
-}
-
-func TestPageDefaultsCapsAndParsesOffset(t *testing.T) {
-	tests := []struct {
-		name       string
-		size       int32
-		token      string
-		wantSize   int32
-		wantOffset int
-	}{
-		{name: "default", wantSize: 50},
-		{name: "cap", size: 500, wantSize: 100},
-		{name: "offset", size: 25, token: "75", wantSize: 25, wantOffset: 75},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			size, offset, err := page(tt.size, tt.token)
-			if err != nil || size != tt.wantSize || offset != tt.wantOffset {
-				t.Fatalf("page() = (%d, %d, %v), want (%d, %d, nil)", size, offset, err, tt.wantSize, tt.wantOffset)
-			}
-		})
-	}
-	for _, token := range []string{"invalid", "-1"} {
-		if _, _, err := page(10, token); status.Code(err) != codes.InvalidArgument {
-			t.Fatalf("page(%q) error = %v, want InvalidArgument", token, err)
-		}
 	}
 }

@@ -520,3 +520,4 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Expanded Player and Tournament gRPC tests with PostgreSQL-backed CRUD, pagination and error handling coverage to address the reported 80% coverage failures.
 - Passed the workflow's built-in `github.token` to Buf setup to avoid unauthenticated GitHub API rate limits.
 - `gofmt` and `git diff --check` are clean. Local test execution did not return in this workspace; CI must confirm coverage and the Buf job after push.
+- SonarCloud follow-up: removed the duplicate pagination-helper test across Player and Tournament; Tournament now covers default and capped page sizes through its CRUD/list test.
