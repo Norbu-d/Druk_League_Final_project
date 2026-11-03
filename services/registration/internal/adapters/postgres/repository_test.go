@@ -21,10 +21,14 @@ const (
 	unknownID   = "77777777-7777-4777-8777-777777777777"
 )
 
-func TestRepositoryAgainstPostgres(t *testing.T) {
-	repo := New(testdb.New(t, "../../../migrations"))
-	ctx := context.Background()
+func newTestRepository(t *testing.T) *Repository {
+	t.Helper()
+	return New(testdb.New(t, "../../../migrations"))
+}
 
+func TestRepositoryCreate(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
 	first, err := repo.Create(ctx, domain.Registration{TournamentID: tournamentA, TeamID: team1, RegisteredBy: managerA})
 	if err != nil || first.Status != domain.StatusPending || first.RegisteredBy != managerA || first.ID == "" {
 		t.Fatalf("create: %+v %v", first, err)
@@ -32,13 +36,15 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	if _, err := repo.Create(ctx, domain.Registration{TournamentID: tournamentA, TeamID: team1}); !errors.Is(err, core.ErrConflict) {
 		t.Fatalf("duplicate registration: got %v", err)
 	}
-	if _, err := repo.Create(ctx, domain.Registration{TournamentID: tournamentA, TeamID: team2}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.Create(ctx, domain.Registration{TournamentID: tournamentB, TeamID: team1, RegisteredBy: managerA}); err != nil {
-		t.Fatal(err)
-	}
+}
 
+func TestRepositoryReview(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	first, err := repo.Create(ctx, domain.Registration{TournamentID: tournamentA, TeamID: team1, RegisteredBy: managerA})
+	if err != nil {
+		t.Fatal(err)
+	}
 	approved, err := repo.Review(ctx, first.ID, domain.StatusApproved, "", adminID)
 	if err != nil || approved.Status != domain.StatusApproved || approved.ReviewedBy != adminID {
 		t.Fatalf("approve: %+v %v", approved, err)
@@ -51,6 +57,29 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	}
 	if _, err := repo.Review(ctx, unknownID, domain.StatusApproved, "", adminID); !errors.Is(err, core.ErrNotFound) {
 		t.Fatalf("unknown registration: got %v", err)
+	}
+
+}
+
+func TestRepositoryList(t *testing.T) {
+	repo := newTestRepository(t)
+	ctx := context.Background()
+	var firstID string
+	for _, registration := range []domain.Registration{
+		{TournamentID: tournamentA, TeamID: team1, RegisteredBy: managerA},
+		{TournamentID: tournamentA, TeamID: team2},
+		{TournamentID: tournamentB, TeamID: team1, RegisteredBy: managerA},
+	} {
+		created, err := repo.Create(ctx, registration)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if registration.TeamID == team1 && registration.TournamentID == tournamentA {
+			firstID = created.ID
+		}
+	}
+	if _, err := repo.Review(ctx, firstID, domain.StatusApproved, "", adminID); err != nil {
+		t.Fatal(err)
 	}
 
 	all, more, err := repo.List(ctx, ports.Filter{}, 10, 0)

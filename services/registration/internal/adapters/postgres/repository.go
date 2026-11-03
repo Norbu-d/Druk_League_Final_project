@@ -15,10 +15,25 @@ type Repository struct{ db *sql.DB }
 
 func New(db *sql.DB) *Repository { return &Repository{db: db} }
 
-const columns = `id::text,tournament_id::text,team_id::text,status,COALESCE(registered_by::text,''),COALESCE(reviewed_by::text,''),review_reason,submitted_at`
+const createQuery = `INSERT INTO registrations(tournament_id,team_id,registered_by)
+VALUES($1,$2,NULLIF($3,'')::uuid)
+RETURNING id::text,tournament_id::text,team_id::text,status,COALESCE(registered_by::text,''),COALESCE(reviewed_by::text,''),review_reason,submitted_at`
+
+const reviewQuery = `UPDATE registrations
+SET status=$2,review_reason=$3,reviewed_by=NULLIF($4,'')::uuid,reviewed_at=now()
+WHERE id=$1 AND status='pending'
+RETURNING id::text,tournament_id::text,team_id::text,status,COALESCE(registered_by::text,''),COALESCE(reviewed_by::text,''),review_reason,submitted_at`
+
+const findQuery = `SELECT id::text,tournament_id::text,team_id::text,status,COALESCE(registered_by::text,''),COALESCE(reviewed_by::text,''),review_reason,submitted_at
+FROM registrations WHERE id=$1`
+
+const listQuery = `SELECT id::text,tournament_id::text,team_id::text,status,COALESCE(registered_by::text,''),COALESCE(reviewed_by::text,''),review_reason,submitted_at
+FROM registrations
+WHERE ($1='' OR tournament_id::text=$1) AND ($2='' OR status=$2) AND ($3='' OR registered_by::text=$3)
+ORDER BY submitted_at DESC,id LIMIT $4 OFFSET $5`
 
 func (r *Repository) Create(ctx context.Context, reg domain.Registration) (domain.Registration, error) {
-	created, err := scan(r.db.QueryRowContext(ctx, `INSERT INTO registrations(tournament_id,team_id,registered_by) VALUES($1,$2,NULLIF($3,'')::uuid) RETURNING `+columns, reg.TournamentID, reg.TeamID, reg.RegisteredBy))
+	created, err := scan(r.db.QueryRowContext(ctx, createQuery, reg.TournamentID, reg.TeamID, reg.RegisteredBy))
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			return domain.Registration{}, core.Conflict("team is already registered for this tournament")
@@ -31,14 +46,14 @@ func (r *Repository) Create(ctx context.Context, reg domain.Registration) (domai
 // Review only changes a registration that is still pending. If nothing was updated, it
 // tells "already decided the same way" (fine, repeat is a no-op) from "decided differently".
 func (r *Repository) Review(ctx context.Context, id, decision, reason, reviewerID string) (domain.Registration, error) {
-	reg, err := scan(r.db.QueryRowContext(ctx, `UPDATE registrations SET status=$2,review_reason=$3,reviewed_by=NULLIF($4,'')::uuid,reviewed_at=now() WHERE id=$1 AND status='pending' RETURNING `+columns, id, decision, reason, reviewerID))
+	reg, err := scan(r.db.QueryRowContext(ctx, reviewQuery, id, decision, reason, reviewerID))
 	if err == nil {
 		return reg, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return domain.Registration{}, err
 	}
-	reg, err = scan(r.db.QueryRowContext(ctx, `SELECT `+columns+` FROM registrations WHERE id=$1`, id))
+	reg, err = scan(r.db.QueryRowContext(ctx, findQuery, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Registration{}, core.NotFound("registration not found")
 	}
@@ -52,7 +67,7 @@ func (r *Repository) Review(ctx context.Context, id, decision, reason, reviewerI
 }
 
 func (r *Repository) List(ctx context.Context, f ports.Filter, limit, offset int) ([]domain.Registration, bool, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT `+columns+` FROM registrations WHERE ($1='' OR tournament_id::text=$1) AND ($2='' OR status=$2) AND ($3='' OR registered_by::text=$3) ORDER BY submitted_at DESC,id LIMIT $4 OFFSET $5`, f.TournamentID, f.Status, f.RegisteredBy, limit+1, offset)
+	rows, err := r.db.QueryContext(ctx, listQuery, f.TournamentID, f.Status, f.RegisteredBy, limit+1, offset)
 	if err != nil {
 		return nil, false, err
 	}

@@ -19,12 +19,12 @@ type Repository interface {
 	List(ctx context.Context, filter Filter, limit, offset int) ([]domain.Registration, bool, error)
 }
 
-// Teams looks a team up in the Team service.
-type Teams interface {
+// TeamGetter looks a team up in the Team service.
+type TeamGetter interface {
 	Get(ctx context.Context, id string) (domain.TeamRef, error)
 }
 
-// Tournaments looks a tournament up in the Tournament service.
-type Tournaments interface {
+// TournamentGetter looks a tournament up in the Tournament service.
+type TournamentGetter interface {
 	Get(ctx context.Context, id string) (domain.TournamentRef, error)
 }
