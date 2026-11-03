@@ -11,6 +11,9 @@ type Repository interface {
 	// the stored fixtures are returned with created=false. The event is written to the
 	// outbox in the same transaction when the schedule is new.
 	SaveSchedule(ctx context.Context, tournamentID string, fixtures []domain.Fixture, event domain.OutboxEvent) (stored []domain.Fixture, created bool, err error)
+	SaveKnockoutSchedule(ctx context.Context, tournamentID string, plan domain.KnockoutPlan, event domain.OutboxEvent) (stored []domain.Fixture, created bool, err error)
+	AdvanceKnockout(ctx context.Context, event domain.MatchFinalized) (fixture domain.Fixture, created bool, err error)
+	PendingFixtures(ctx context.Context, tournamentID string) ([]domain.Fixture, error)
 	LinkMatch(ctx context.Context, fixtureID, matchID string) error
 	List(ctx context.Context, tournamentID string, limit, offset int) ([]domain.Fixture, bool, error)
 }
@@ -34,4 +37,8 @@ type Venues interface {
 
 type Matches interface {
 	Create(ctx context.Context, fixture domain.Fixture) (matchID string, err error)
+}
+
+type Standings interface {
+	TeamIDsByRank(ctx context.Context, tournamentID string) ([]string, error)
 }

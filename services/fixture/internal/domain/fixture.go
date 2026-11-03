@@ -3,6 +3,7 @@ package domain
 import (
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/drukleague/platform/packages/servicekit/core"
@@ -11,6 +12,8 @@ import (
 const (
 	FormatRoundRobin       = "round_robin"
 	FormatDoubleRoundRobin = "double_round_robin"
+	FormatLeagueKnockout   = "league_knockout"
+	FormatKnockout         = "knockout"
 )
 
 type Fixture struct {
@@ -18,6 +21,29 @@ type Fixture struct {
 	VenueID, VenueName, MatchID              string
 	Round                                    int32
 	Kickoff                                  time.Time
+	Format                                   string
+	BracketMatch                             int32
+	HomeSeed, AwaySeed                       int32
+}
+
+type BracketEntry struct {
+	Round, Match, Slot int32
+	TeamID             string
+	Seed               int32
+}
+
+type KnockoutPlan struct {
+	Fixtures    []Fixture
+	Byes        []BracketEntry
+	BracketSize int32
+	Rounds      int32
+}
+
+type MatchFinalized struct {
+	EventID, MatchID, TournamentID string
+	HomeTeamID, AwayTeamID         string
+	HomeScore, AwayScore           int32
+	FinalizedAt                    time.Time
 }
 
 type Tournament struct{ ID, Dzongkhag string }
@@ -41,11 +67,16 @@ type OutboxEvent struct {
 
 // NormalizeFormat maps the request's format to a supported one; empty means round robin.
 func NormalizeFormat(format string) (string, error) {
+	format = strings.ToLower(strings.TrimSpace(format))
 	switch format {
 	case "", FormatRoundRobin, "round robin", "league":
 		return FormatRoundRobin, nil
 	case FormatDoubleRoundRobin, "home_and_away":
 		return FormatDoubleRoundRobin, nil
+	case FormatKnockout:
+		return FormatKnockout, nil
+	case FormatLeagueKnockout, "league+knockout", "league + knockout":
+		return FormatLeagueKnockout, nil
 	}
 	return "", core.Invalid("format must be round_robin or double_round_robin")
 }
@@ -61,6 +92,9 @@ func DefaultStart(now time.Time) time.Time {
 // least a week and one fixture per day, so no team plays twice on the same day, and
 // venues are rotated so consecutive fixtures use different grounds when possible.
 func Schedule(tournamentID string, teamIDs []string, venues []Venue, start time.Time, format string) ([]Fixture, error) {
+	if format == FormatKnockout {
+		return nil, core.Precondition("knockout schedules must be seeded from standings")
+	}
 	if len(teamIDs) < 2 {
 		return nil, core.Precondition("at least two teams must belong to the tournament")
 	}
@@ -105,7 +139,7 @@ func Schedule(tournamentID string, teamIDs []string, venues []Venue, start time.
 				if round > math.MaxInt32 {
 					return nil, core.Invalid("schedule exceeds supported round range")
 				}
-				f := Fixture{TournamentID: tournamentID, HomeTeamID: home, AwayTeamID: away, Round: int32(round), // #nosec G115 -- round is checked against math.MaxInt32 immediately above.
+				f := Fixture{TournamentID: tournamentID, HomeTeamID: home, AwayTeamID: away, Round: int32(round), Format: format, // #nosec G115 -- round is checked against math.MaxInt32 immediately above.
 					Kickoff: start.AddDate(0, 0, absolute*spacing+slot)}
 				if len(venues) > 0 {
 					venue := venues[len(fixtures)%len(venues)]
@@ -120,4 +154,81 @@ func Schedule(tournamentID string, teamIDs []string, venues []Venue, start time.
 		}
 	}
 	return fixtures, nil
+}
+
+// KnockoutSchedule builds a seeded single-elimination bracket. The standings order is
+// best to worst; byes are awarded to the highest seeds when the field is not a power of two.
+func KnockoutSchedule(tournamentID string, rankedTeamIDs []string, venues []Venue, start time.Time) (KnockoutPlan, error) {
+	if len(rankedTeamIDs) < 2 {
+		return KnockoutPlan{}, core.Precondition("standings must contain at least two teams for a knockout bracket")
+	}
+	seen := make(map[string]bool, len(rankedTeamIDs))
+	for _, id := range rankedTeamIDs {
+		if !core.IsUUID(id) || seen[id] {
+			return KnockoutPlan{}, core.Invalid("standings contain an invalid or duplicate team")
+		}
+		seen[id] = true
+	}
+
+	bracketSize := 1
+	for bracketSize < len(rankedTeamIDs) {
+		bracketSize *= 2
+	}
+	seedOrder := bracketSeedOrder(bracketSize)
+	plan := KnockoutPlan{BracketSize: int32(bracketSize), Rounds: int32(log2(bracketSize))}
+	matchCount := bracketSize / 2
+	for matchIndex := 0; matchIndex < matchCount; matchIndex++ {
+		seedA, seedB := seedOrder[matchIndex*2], seedOrder[matchIndex*2+1]
+		teamA, teamB := seededTeam(rankedTeamIDs, seedA), seededTeam(rankedTeamIDs, seedB)
+		if teamA == "" || teamB == "" {
+			team, seed := teamA, seedA
+			if team == "" {
+				team, seed = teamB, seedB
+			}
+			if team != "" && plan.Rounds > 1 {
+				parentMatch := int32(matchIndex/2 + 1)
+				slot := int32(matchIndex%2 + 1)
+				plan.Byes = append(plan.Byes, BracketEntry{Round: 2, Match: parentMatch, Slot: slot, TeamID: team, Seed: int32(seed)})
+			}
+			continue
+		}
+		kickoff := start.AddDate(0, 0, matchIndex)
+		fixture := Fixture{TournamentID: tournamentID, HomeTeamID: teamA, AwayTeamID: teamB,
+			Round: 1, Kickoff: kickoff, Format: FormatKnockout, BracketMatch: int32(matchIndex + 1),
+			HomeSeed: int32(seedA), AwaySeed: int32(seedB)}
+		if len(venues) > 0 {
+			venue := venues[matchIndex%len(venues)]
+			fixture.VenueID, fixture.VenueName = venue.ID, venue.Name
+		}
+		plan.Fixtures = append(plan.Fixtures, fixture)
+	}
+	return plan, nil
+}
+
+func bracketSeedOrder(size int) []int {
+	order := []int{1, 2}
+	for current := 2; current < size; current *= 2 {
+		next := make([]int, 0, current*2)
+		for _, seed := range order {
+			next = append(next, seed, 2*current+1-seed)
+		}
+		order = next
+	}
+	return order
+}
+
+func seededTeam(ranked []string, seed int) string {
+	if seed < 1 || seed > len(ranked) {
+		return ""
+	}
+	return ranked[seed-1]
+}
+
+func log2(value int) int {
+	result := 0
+	for value > 1 {
+		value /= 2
+		result++
+	}
+	return result
 }

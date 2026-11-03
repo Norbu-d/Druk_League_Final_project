@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	venuev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
 	"github.com/drukleague/platform/packages/servicekit/core"
@@ -16,6 +17,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type tournamentServer struct {
@@ -61,6 +63,26 @@ type matchServer struct {
 	v1.UnimplementedMatchServiceServer
 }
 
+type existingMatchServer struct {
+	v1.UnimplementedMatchServiceServer
+}
+
+func (existingMatchServer) CreateMatch(context.Context, *v1.CreateMatchRequest) (*v1.CreateMatchResponse, error) {
+	return nil, status.Error(codes.AlreadyExists, "duplicate request")
+}
+
+func (existingMatchServer) ListMatches(_ context.Context, _ *v1.ListMatchesRequest) (*v1.ListMatchesResponse, error) {
+	return &v1.ListMatchesResponse{Matches: []*v1.Match{{Id: "existing-match", TournamentId: "11111111-1111-4111-8111-111111111111", HomeTeamId: "22222222-2222-4222-8222-222222222222", AwayTeamId: "33333333-3333-4333-8333-333333333333", Venue: "Paro Ground", Kickoff: timestamppb.New(time.Date(2026, 11, 3, 4, 0, 0, 0, time.UTC))}}}, nil
+}
+
+type standingsServer struct {
+	standingsv1.UnimplementedStandingsServiceServer
+}
+
+func (standingsServer) GetStandings(_ context.Context, req *standingsv1.GetStandingsRequest) (*standingsv1.GetStandingsResponse, error) {
+	return &standingsv1.GetStandingsResponse{Standings: []*standingsv1.Standing{{TeamId: req.GetTournamentId()}, {TeamId: "team-two"}}}, nil
+}
+
 func (matchServer) CreateMatch(_ context.Context, req *v1.CreateMatchRequest) (*v1.CreateMatchResponse, error) {
 	switch req.GetHomeTeamId() {
 	case "clash":
@@ -79,6 +101,7 @@ func dial(t *testing.T) *grpc.ClientConn {
 	v1.RegisterTeamServiceServer(server, teamServer{})
 	venuev1.RegisterVenueServiceServer(server, venueServer{})
 	v1.RegisterMatchServiceServer(server, matchServer{})
+	standingsv1.RegisterStandingsServiceServer(server, standingsServer{})
 	go func() { _ = server.Serve(listener) }()
 	t.Cleanup(server.Stop)
 	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -104,6 +127,9 @@ func TestClients(t *testing.T) {
 	if _, err := NewTeams(conn).IDsInTournament(ctx, "down"); !errors.Is(err, core.ErrDependency) {
 		t.Fatalf("team outage: %v", err)
 	}
+	if ids, err := NewStandings(conn).TeamIDsByRank(ctx, "ranked"); err != nil || len(ids) != 2 || ids[0] != "ranked" {
+		t.Fatalf("standings order: %v %v", ids, err)
+	}
 	venues, err := NewVenues(conn).InDzongkhag(ctx, "Paro")
 	if err != nil || len(venues) != 2 || venues[0].Name != "Bondey Ground" {
 		t.Fatalf("venues sorted by name: %+v %v", venues, err)
@@ -125,5 +151,22 @@ func TestClients(t *testing.T) {
 	fixture.HomeTeamID = "down"
 	if _, err := NewMatches(conn).Create(ctx, fixture); !errors.Is(err, core.ErrDependency) {
 		t.Fatalf("match outage: %v", err)
+	}
+}
+
+func TestMatchCreateRecoversExistingFixtureAfterRetry(t *testing.T) {
+	listener := bufconn.Listen(1 << 20)
+	server := grpc.NewServer()
+	v1.RegisterMatchServiceServer(server, existingMatchServer{})
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(server.Stop)
+	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	fixture := domain.Fixture{TournamentID: "11111111-1111-4111-8111-111111111111", HomeTeamID: "22222222-2222-4222-8222-222222222222", AwayTeamID: "33333333-3333-4333-8333-333333333333", VenueName: "Paro Ground", Kickoff: time.Date(2026, 11, 3, 4, 0, 0, 0, time.UTC)}
+	if id, err := NewMatches(conn).Create(context.Background(), fixture); err != nil || id != "existing-match" {
+		t.Fatalf("idempotent match create: %q %v", id, err)
 	}
 }
