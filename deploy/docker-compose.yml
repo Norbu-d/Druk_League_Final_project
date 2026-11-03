@@ -245,9 +245,15 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      NATS_URL: nats://nats:4222
+      TEAM_SERVICE_ADDR: team:50051
     depends_on:
       db-init:
         condition: service_completed_successfully
+      nats:
+        condition: service_started
+      team:
+        condition: service_started
   media:
     build:
       context: ..

@@ -1,6 +1,6 @@
 // Command e2e is an end-to-end smoke test of the split services. It runs inside the Compose
 // network (service ports are not published) and exercises Auth, User, Tournament, Team,
-// Venue, Fixture, Official, Match, Score and Standings, including the NATS flow.
+// Venue, Fixture, Official, Match, Score, Standings and Notification, including NATS event flow.
 //
 //	docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2e \
 //	  -e E2E_ADMIN_PASSWORD=... drukleague-service-builder:local go run .
@@ -18,6 +18,7 @@ import (
 
 	authv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/auth/v1"
 	fixturev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
+	notificationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/notification/v1"
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
@@ -67,7 +68,8 @@ func code(err error) codes.Code { return status.Code(err) }
 func main() {
 	adminUser := env("E2E_ADMIN_USER", "admin")
 	adminPassword := env("E2E_ADMIN_PASSWORD", "drukleague-dev")
-	run := time.Now().UTC().Format("0102-150405")
+	runStarted := time.Now().UTC()
+	run := runStarted.Format("0102-150405")
 	defer cancelRun()
 	bg := runCtx
 
@@ -81,6 +83,7 @@ func main() {
 	matches := v1.NewMatchServiceClient(dial("match"))
 	scores := v1.NewScoreServiceClient(dial("score"))
 	standings := standingsv1.NewStandingsServiceClient(dial("standings"))
+	notifications := notificationv1.NewNotificationServiceClient(dial("notification"))
 
 	// --- Auth (Part 4)
 	_, err := auth.Login(bg, &authv1.LoginRequest{Username: adminUser, Password: "definitely-wrong"})
@@ -111,6 +114,16 @@ func main() {
 	_, err = users.ListUsers(as(officialToken), &v1.ListUsersRequest{})
 	check("official cannot list users", code(err) == codes.PermissionDenied, err)
 
+	// --- Team manager accounts used to verify MatchFinalized notifications
+	managerTokens := make([]string, 4)
+	managerIDs := make([]string, 4)
+	for i := range managerTokens {
+		managerName := fmt.Sprintf("manager-%d-%s", i, run)
+		manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: "manager-password-1", Role: "team_manager"})).GetUser()
+		managerLogin := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: "manager-password-1"}))
+		managerIDs[i], managerTokens[i] = manager.GetId(), managerLogin.GetAccessToken()
+	}
+
 	// --- Venue (Part 3)
 	venue := must(venues.CreateVenue(as(admin), &venuev1.CreateVenueRequest{Name: "E2E Ground " + run, Dzongkhag: "thimphu", Capacity: 1500})).GetVenue()
 	check("venue dzongkhag is canonicalised via Dzongkhag service", venue.GetDzongkhag() == "Thimphu", venue.GetDzongkhag())
@@ -123,15 +136,25 @@ func main() {
 	tournament := must(tournaments.CreateTournament(as(admin), &v1.CreateTournamentRequest{Name: "E2E Cup " + run, Sport: "football", Season: "2026", Dzongkhag: "Thimphu"})).GetTournament()
 	teamIDs := []string{}
 	for i, name := range []string{"Thimphu", "Paro", "Punakha", "Haa"} {
-		team := must(teams.CreateTeam(as(admin), &v1.CreateTeamRequest{Name: name + " E2E " + run, ShortCode: fmt.Sprintf("E%d%s", i, run[len(run)-3:]), Dzongkhag: name, TournamentId: tournament.GetId()})).GetTeam()
+		team := must(teams.CreateTeam(as(managerTokens[i]), &v1.CreateTeamRequest{Name: name + " E2E " + run, ShortCode: fmt.Sprintf("E%d%s", i, run[len(run)-3:]), Dzongkhag: name, TournamentId: tournament.GetId()})).GetTeam()
 		teamIDs = append(teamIDs, team.GetId())
+		check("team is owned by its creator", team.GetManagerId() == managerIDs[i], team.GetManagerId())
 	}
 
 	// --- Fixture generation creates matches (Part 3)
-	start := time.Now().UTC().AddDate(0, 3, 0).Truncate(time.Hour)
+	start := runStarted.AddDate(0, 3, 0).Truncate(time.Second)
 	generated := must(fixtures.GenerateFixtures(as(admin), &fixturev1.GenerateFixturesRequest{TournamentId: tournament.GetId(), StartsAt: timestamppb.New(start)}))
 	check("4 teams produce 6 fixtures, all linked to matches", generated.GetCreatedCount() == 6 && len(generated.GetFixtures()) == 6 && allLinked(generated.GetFixtures()), generated.GetCreatedCount())
-	check("fixtures use the tournament dzongkhag's venue", generated.GetFixtures()[0].GetVenueId() == venue.GetId(), generated.GetFixtures()[0].GetVenueId())
+	districtVenues := must(venues.ListVenues(as(admin), &venuev1.ListVenuesRequest{Dzongkhag: tournament.GetDzongkhag(), PageSize: 100}))
+	venueIDs := make(map[string]bool, len(districtVenues.GetVenues()))
+	for _, item := range districtVenues.GetVenues() {
+		venueIDs[item.GetId()] = true
+	}
+	fixtureVenueID := ""
+	if len(generated.GetFixtures()) > 0 {
+		fixtureVenueID = generated.GetFixtures()[0].GetVenueId()
+	}
+	check("fixtures use a venue in the tournament dzongkhag", fixtureVenueID != "" && venueIDs[fixtureVenueID], fixtureVenueID)
 	again := must(fixtures.GenerateFixtures(as(admin), &fixturev1.GenerateFixturesRequest{TournamentId: tournament.GetId()}))
 	check("second generation creates nothing new", again.GetCreatedCount() == 0 && len(again.GetFixtures()) == 6)
 	listed := must(matches.ListMatches(as(admin), &v1.ListMatchesRequest{TournamentId: tournament.GetId()}))
@@ -161,7 +184,16 @@ func main() {
 
 	var table []*standingsv1.Standing
 	completed := false
-	for i := 0; i < 30 && (len(table) < 2 || !completed); i++ {
+	matchTeams := map[string]bool{match.GetHomeTeamId(): true, match.GetAwayTeamId(): true}
+	expectedManagers := map[string]bool{}
+	for i, teamID := range teamIDs {
+		if matchTeams[teamID] {
+			expectedManagers[managerIDs[i]] = true
+		}
+	}
+	managerNotices := make(map[string][]*notificationv1.Notification)
+	notificationsReady := false
+	for i := 0; i < 30 && (len(table) < 2 || !completed || !notificationsReady); i++ {
 		time.Sleep(time.Second)
 		if response, err := standings.GetStandings(as(admin), &standingsv1.GetStandingsRequest{TournamentId: tournament.GetId()}); err == nil {
 			table = response.GetStandings()
@@ -169,9 +201,40 @@ func main() {
 		if m, err := matches.GetMatch(as(admin), &v1.GetMatchRequest{Id: matchID}); err == nil {
 			completed = m.GetMatch().GetStatus() == "completed"
 		}
+		notificationsReady = len(expectedManagers) == 2
+		for i, managerID := range managerIDs {
+			response, err := notifications.ListNotifications(as(managerTokens[i]), &notificationv1.ListNotificationsRequest{PageSize: 50})
+			if err != nil {
+				notificationsReady = false
+				continue
+			}
+			managerNotices[managerID] = response.GetNotifications()
+			if expectedManagers[managerID] && len(response.GetNotifications()) == 0 {
+				notificationsReady = false
+			}
+		}
 	}
 	check("Match consumed MatchFinalized (status completed)", completed)
 	check("Standings consumed MatchFinalized (2 rows)", len(table) == 2, len(table))
+	managersNotified, unrelatedManagersQuiet := true, true
+	for _, managerID := range managerIDs {
+		items := managerNotices[managerID]
+		if expectedManagers[managerID] {
+			found := false
+			for _, item := range items {
+				if item.GetSubject() == "Match finalized" && strings.Contains(item.GetBody(), "finished 3-1.") {
+					found = true
+				}
+			}
+			if !found {
+				managersNotified = false
+			}
+		} else if len(items) != 0 {
+			unrelatedManagersQuiet = false
+		}
+	}
+	check("participating team managers receive MatchFinalized notice", managersNotified)
+	check("other team managers receive no notice for this match", unrelatedManagersQuiet)
 	if len(table) == 2 {
 		check("winner has 3 points, played 1, team name from Team service", table[0].GetPoints() == 3 && table[0].GetPlayed() == 1 && table[0].GetTeamName() != "" && table[1].GetLost() == 1, table[0])
 	}

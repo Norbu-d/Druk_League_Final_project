@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-10-19
 **Project root:** `D:\druk-league`
-**Run state:** Containers were last verified on 2026-10-14. On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and **tested locally with `go test`**, but **no Docker image has been rebuilt since**. The Dockerfile and Compose changes in section 10 must be made before building. Docker Desktop's disk image is now on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** On 2026-11-03, Notification and Team manager ownership were built in Docker Compose and verified by the end-to-end flow (all checks passed). Earlier verification notes below are historical. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-10-19, **14 of those modules have domain logic and unit tests** (Match, Score, Standings, Fixture, Venue, Official, User, Auth, plus the shared packages), Dzongkhag/Team/Tournament/Player/Registration have untested handlers, and 7 are still health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists what changed on 2026-10-19. Do not present the MVP as the finished architecture.
 
@@ -38,7 +38,7 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag spor
 | API Gateway + BFF | The monolith is still the "gateway"; no BFF yet (Part 5). Service port 50051 is not published outside Compose |
 | gRPC between services | All outbound calls now use `servicekit.Dial`: per-call deadline, retry on safe reads, circuit breaker, request-id and token propagation. Fixture calls Tournament/Team/Venue/Match; Official calls Match; Auth calls User; Venue calls Dzongkhag |
 | Each service owns its data | New services have their own databases; the monolith keeps its own shared one; the two are not connected |
-| NATS JetStream event flows | Shared `packages/eventkit`: durable consumers with bounded redelivery (5) and a **dead-letter stream `DRUKLEAGUE_DLQ`**, tested against an embedded JetStream server. Match and Standings consumers use it. Fixture publishes `FixturesGenerated` from its own outbox. Notification/Audit consumers not written yet |
+| NATS JetStream event flows | Shared `packages/eventkit`: durable consumers with bounded redelivery (5) and a **dead-letter stream `DRUKLEAGUE_DLQ`**, tested against an embedded JetStream server. Match, Standings and Notification consumers use it. Fixture publishes `FixturesGenerated` from its own outbox. Audit consumer not written yet |
 | OpenFaaS functions | None |
 | OpenTelemetry, circuit breaker, fault isolation | Circuit breaker, deadlines, retries, request-id logging and panic recovery are in `servicekit` (unit-tested). OpenTelemetry not started. Team → Tournament reference check still **open** |
 | 80% unit-test coverage, CI gates | Unit + PostgreSQL integration tests for 8 services and the shared packages (section 10). 12 modules still have no tests; no CI workflow yet |
@@ -53,7 +53,7 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 |---|---|---|
 | Tandin | Auth | **Implemented 19 Oct (tested, not containerised):** Login, RefreshToken (rotating), RevokeSession, login lockout (5 failures / 15 min) |
 | Tandin | User | **Rewritten 19 Oct (tested, not containerised):** hexagonal, bcrypt, `VerifyCredentials`, bootstrap super admin from `BOOTSTRAP_ADMIN_*`, `team_manager` role, self/admin/service read rules |
-| Tandin | Team | Create/Get/List; `CreateTeam`, `GetTeam`, `ListTeams` verified. Does not validate `tournament_id` |
+| Tandin | Team | Create/Get/List; `manager_id` ownership and filtering added for team managers. Does not validate `tournament_id` |
 | Tandin | Player | Create/Get/List/Update; `ListPlayers` verified (empty); others not exercised |
 | Tandin | Tournament | Create/Get/List; full Create → Get → List round trip verified |
 | Tandin | Registration | Register/Review/List; `ListRegistrations` verified (empty); others not exercised |
@@ -64,7 +64,8 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Norbu | Venue | **Rewritten 19 Oct (tested, not containerised):** hexagonal, admin-only create, dzongkhag checked via Dzongkhag service (cached), unique name per dzongkhag |
 | Sonam | Dzongkhag | Get/List; `ListDzongkhags` verified (all 20 districts) |
 | Sonam | Official | **Rewritten 19 Oct (tested, not containerised):** assigns through Match (source of truth), records tournament, filter by tournament now works |
-| Sonam | Notification, Audit Log, Media | Shells |
+| Sonam | Notification | In-app Send/List, durable MatchFinalized consumer, and notices for participating team managers; Docker Compose E2E verified 3 Nov 2026 |
+| Sonam | Audit Log, Media | Shells |
 | Namgay | Report, Search, Analytics, Configuration | Shells |
 
 Part 3 (Fixture, Venue, Official) is written and unit-tested; it still needs the Docker build and container checks in section 10.
@@ -160,7 +161,7 @@ Not yet exercised: `UpdatePlayer`, `RegisterTeam`, `ReviewRegistration`, `Create
 4. **Risk R1:** the deck rates "20 services in one semester" High/High; the proposal says Medium. Make them match.
 5. **Finalised-result correction:** admin correction with a reason + audit entry (user stories) vs append-only correction events (architecture note).
 6. **Sprint 4/5 dependency:** fixture clash detection needs Venue, planned for Sprint 5. Reorder or stub Venue earlier.
-7. **NATS resilience:** bounded redelivery and dead-lettering are implemented in `eventkit` and pass against an embedded JetStream server. Still test NATS outage/reconnect in Docker, and write the Notification/Audit consumers.
+7. **NATS resilience:** bounded redelivery and dead-lettering are implemented in `eventkit` and pass against an embedded JetStream server. Notification's MatchFinalized consumer is implemented and E2E verified; still test NATS outage/reconnect in Docker and write the Audit consumer.
 8. **Hexagonal and resilience wording:** the proposal cites hexagonal architecture but never says it will be applied. Add one methodology sentence and a resilience objective, then update the deck's architecture and testing slides, the risk table and the speaker notes.
 9. **Cross-service integrity:** Team stores any `tournament_id`. Choose a synchronous gRPC check against Tournament (with deadline, retry, circuit breaker) or eventual consistency with a cleanup event. Record the finding in the risk register either way.
 
@@ -176,9 +177,9 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 3. **Secrets before sharing:** rotate everything in `deploy/.env`. `JWT_SECRET` is safe to change on its own (recreate the API afterwards). `POSTGRES_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD` need a coordinated change (PostgreSQL reads its password only when the volume is created; the bootstrap admin exists once created), so choose `ALTER USER` plus an admin reset, or a clean dev reset. Fix the README's outdated default-login line. Bind DB/API ports to loopback for local runs.
 4. **Part 2:** Match, Score and Standings are extracted. Verified Match → Team/User, Score → Match, Score transactional outbox → JetStream, Match completion consumer, Standings consumer, GetScore/GetStandings and duplicate-event handling. Standings is eventually consistent with Score; no distributed transaction spans their databases.
 5. **Part 3:** code and tests done (19 Oct); container checks pending. **Part 4:** User + Auth code and tests done (19 Oct); container checks pending. **Part 5 (next to write):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
-6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream) and the Fixture outbox are done. Still to do: Notification and Audit Log consumers, and the OpenFaaS/faasd function.
+6. **Part 6:** `eventkit`, the Fixture outbox, and the Notification consumer are done. Still to do: Audit Log consumer and the OpenFaaS/faasd function.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
-8. **Part 8:** the remaining 7 shells: Notification, Audit Log, Media, Report, Search, Analytics, Configuration.
+8. **Part 8:** the remaining 6 shells: Audit Log, Media, Report, Search, Analytics, Configuration.
 9. **Part 9 (SWE302):** unit tests with port fakes and PostgreSQL integration tests exist for 8 services plus the shared packages (section 10). Still to do: tests for the 12 remaining modules and the monolith; fix `scripts/coverage.sh` on Windows; GitHub Actions with lint, tests and a coverage gate; gosec, govulncheck, Trivy, ZAP; k6; Playwright; fault-isolation tests.
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
@@ -415,3 +416,9 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 ```
 
 - Each run leaves uniquely named test rows (a tournament, 4 teams, a venue, an official and 6 matches), because there are no delete RPCs.
+
+### Verified 3 Nov 2026 — SCRUM-18 Notification
+- Implemented in-app Send/List and a durable `MatchFinalized` consumer. It creates notices for the managers of the two participating teams, including both team names, dzongkhags, and the final score. Duplicate event/recipient pairs are deduplicated.
+- Added Team `manager_id` persistence and lookup so notices can be addressed to team managers.
+- Built the Notification and Team images and restarted them with Docker Compose. The end-to-end run passed all checks, including team ownership, district venue selection, finalisation, and notification delivery/exclusion.
+- Notification unit tests and NATS outage/reconnect verification remain outstanding.

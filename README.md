@@ -5,7 +5,7 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag comp
 The repository holds two things that are not yet connected:
 
 1. **An MVP monolith** (`services/api-gateway`) with a plain HTML/CSS/JS frontend. The browser talks only to this today.
-2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 13 have real logic; 7 are still health-only shells.
+2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 14 have service logic; 6 are still health-only shells. Notification was verified through the Docker Compose end-to-end run; unit tests remain to be added.
 
 For detailed status and the handoff notes, see [progress.md](progress.md). For the target architecture, see [servicedesign.md](servicedesign.md).
 
@@ -43,7 +43,8 @@ The microservices listen on gRPC port 50051 inside the Compose network only; it 
 | Official | Assigns through Match, filter by tournament |
 | Dzongkhag | Reference data for the 20 dzongkhags |
 | Team, Tournament, Player, Registration | Basic create/get/list (Player update, Registration review). Not yet hexagonal; Team does not check that `tournament_id` exists |
-| Notification, Audit Log, Media, Report, Search, Analytics, Configuration | Shells (gRPC health only) |
+| Notification | Stores in-app notifications, supports Send/List gRPC calls and consumes MatchFinalized; Docker Compose end-to-end verification passed 3 Nov 2026 |
+| Audit Log, Media, Report, Search, Analytics, Configuration | Shells (gRPC health only) |
 
 Shared packages:
 
@@ -56,7 +57,7 @@ Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,
 ### Not built yet
 
 - API gateway and BFF. nginx still routes `/api/` to the monolith, so the frontend does not use the microservices.
-- Notification and Audit Log event consumers.
+- Audit Log event consumer. Notification's consumer is implemented and its Compose end-to-end flow is verified; unit tests remain.
 - OpenFaaS/faasd serverless functions.
 - OpenTelemetry tracing.
 - Team → Tournament reference check; Team ownership via `manager_id`.
