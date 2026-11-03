@@ -504,3 +504,10 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Merged the latest `origin/development` into `feature/sonam-platform-services`, preserving the current design-review notes and shared development changes.
 - Kept development's Notification unit tests, event validation and role-based Team access, along with Sonam's manager notification E2E assertions and unique kickoff-time fix.
 - `go test ./...` passed in Notification, Team, Registration and `tools/e2e`. Rerun the Compose E2E flow after rebuilding Notification and Team against the merged source.
+
+### SCRUM-45 — Knockout fixture progression — 3 Nov 2026
+- Added standings-seeded knockout brackets in Fixture, including byes for non-power-of-two team counts and automatic next-round fixtures after both feeder matches finalize.
+- `league_knockout` starts its knockout phase after every league fixture is finalized; Match permits only the trusted `fixture-service` identity to create generated matches.
+- Fixture and Match `go test ./...` passed. PostgreSQL integration tests were skipped because `TEST_DATABASE_URL` was not configured; Docker was unavailable in this workspace for the Compose check.
+- CI follow-up: scoped fixture pairing uniqueness by format so a league-stage pairing can recur in the knockout stage; replaced concatenated SQL column lists with fixed query strings after Sonar findings.
+- CI security follow-up: guarded knockout bracket indexes before converting them to `int32`, and propagated errors from closing bracket-entry query rows. Local `git diff --check` passed; the security script and Go tests could not be completed in this workspace, so confirm them in CI after pushing.

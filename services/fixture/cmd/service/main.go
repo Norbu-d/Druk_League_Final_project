@@ -21,7 +21,7 @@ import (
 
 func dial(name, fallback string) *grpc.ClientConn {
 	// Generation is an admin action; the admin's token is forwarded so callees apply their own rules.
-	conn, err := servicekit.Dial(servicekit.Env(name, fallback), servicekit.ClientOptions{Auth: servicekit.ForwardCaller, Timeout: 5 * time.Second})
+	conn, err := servicekit.Dial(servicekit.Env(name, fallback), servicekit.ClientOptions{Auth: servicekit.ForwardOrService, Tokens: servicekit.NewTokenSource("fixture-service", servicekit.Secret(), 0), Timeout: 5 * time.Second})
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,7 +33,8 @@ func main() {
 	teamConn := dial("TEAM_SERVICE_ADDR", "team:50051")
 	venueConn := dial("VENUE_SERVICE_ADDR", "venue:50051")
 	matchConn := dial("MATCH_SERVICE_ADDR", "match:50051")
-	for _, conn := range []*grpc.ClientConn{tournamentConn, teamConn, venueConn, matchConn} {
+	standingsConn := dial("STANDINGS_SERVICE_ADDR", "standings:50051")
+	for _, conn := range []*grpc.ClientConn{tournamentConn, teamConn, venueConn, matchConn, standingsConn} {
 		defer conn.Close()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -43,6 +44,7 @@ func main() {
 	var natsErr error
 	register := func(server *grpc.Server, db *sql.DB) error {
 		repository := postgres.New(db)
+		service := app.New(repository, grpcclients.NewTournaments(tournamentConn), grpcclients.NewTeams(teamConn), grpcclients.NewVenues(venueConn), grpcclients.NewMatches(matchConn), grpcclients.NewStandings(standingsConn))
 		once.Do(func() {
 			var js nats.JetStreamContext
 			natsConn, js, natsErr = eventkit.Connect(servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-fixture")
@@ -50,7 +52,7 @@ func main() {
 				natsErr = eventkit.EnsureStreams(js)
 			}
 			if natsErr == nil {
-				natsErr = eventkit.StartConsumer(ctx, js, natsadapter.FinalizedMatchConsumer())
+				natsErr = eventkit.StartConsumer(ctx, js, natsadapter.FinalizedMatchConsumer(service.HandleMatchFinalized))
 			}
 			if natsErr == nil {
 				go natsadapter.RunRelay(ctx, repository, js, time.Second)
@@ -59,7 +61,6 @@ func main() {
 		if natsErr != nil {
 			return natsErr
 		}
-		service := app.New(repository, grpcclients.NewTournaments(tournamentConn), grpcclients.NewTeams(teamConn), grpcclients.NewVenues(venueConn), grpcclients.NewMatches(matchConn))
 		fixturev1.RegisterFixtureServiceServer(server, grpcadapter.New(service))
 		return nil
 	}

@@ -176,11 +176,14 @@ services:
       TEAM_SERVICE_ADDR: team:50051
       VENUE_SERVICE_ADDR: venue:50051
       MATCH_SERVICE_ADDR: match:50051
+      STANDINGS_SERVICE_ADDR: standings:50051
       NATS_URL: nats://nats:4222
     depends_on:
       db-init:
         condition: service_completed_successfully
       nats:
+        condition: service_started
+      standings:
         condition: service_started
   standings:
     build:

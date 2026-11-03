@@ -38,7 +38,7 @@ The microservices listen on gRPC port 50051 inside the Compose network only; it 
 | Match | Scheduling with team/venue clash checks, official assignment, marks matches completed on `MatchFinalized` |
 | Score | Live scores (0–99), one-time finalisation by the assigned official, transactional outbox → JetStream |
 | Standings | Consumes `MatchFinalized` (deduplicated by `event_id`), win/draw/loss points, team names from Team |
-| Fixture | Round-robin and double round-robin, venue rotation, creates matches in Match, `FixturesGenerated` outbox |
+| Fixture | Round-robin, double round-robin and standings-seeded knockout brackets, venue rotation, next-round generation after finalized results, creates matches in Match, `FixturesGenerated` outbox |
 | Venue | Admin-only create, dzongkhag checked through the Dzongkhag service, unique name per dzongkhag |
 | Official | Assigns through Match, filter by tournament |
 | Dzongkhag | Reference data for the 20 dzongkhags |

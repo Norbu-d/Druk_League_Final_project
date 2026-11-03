@@ -22,7 +22,13 @@ func New(repo ports.Repository, teams ports.TeamDirectory, users ports.UserDirec
 }
 
 func (s *Service) Create(ctx context.Context, role string, m domain.Match) (domain.Match, error) {
-	if role != core.RoleSuperAdmin {
+	return s.CreateAs(ctx, role, "", m)
+}
+
+// CreateAs allows the fixture service's event consumer to create bracket matches
+// after MatchFinalized, while preserving the admin-only user-facing operation.
+func (s *Service) CreateAs(ctx context.Context, role, serviceName string, m domain.Match) (domain.Match, error) {
+	if role != core.RoleSuperAdmin && !(role == core.RoleService && serviceName == "fixture-service") {
 		return domain.Match{}, domain.ErrForbidden
 	}
 	m.TournamentID = strings.TrimSpace(m.TournamentID)
