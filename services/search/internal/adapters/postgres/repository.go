@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"strconv"
+	"errors"
 	"strings"
 
 	"github.com/drukleague/platform/services/search/internal/domain"
@@ -15,21 +15,36 @@ type Repository struct{ db *sql.DB }
 func New(db *sql.DB) *Repository { return &Repository{db: db} }
 
 func (r *Repository) Search(ctx context.Context, query string, entityTypes []string, limit, offset int) ([]domain.Hit, error) {
-	statement := `SELECT entity_type, entity_id::text, content
-		FROM search_documents
-		WHERE strpos(lower(content), lower($1)) > 0`
-	args := []any{query}
-	if len(entityTypes) > 0 {
-		placeholders := make([]string, 0, len(entityTypes))
-		for _, entityType := range entityTypes {
-			args = append(args, entityType)
-			placeholders = append(placeholders, "$"+strconv.Itoa(len(args)))
-		}
-		statement += " AND entity_type IN (" + strings.Join(placeholders, ",") + ")"
+	var statement string
+	var args []any
+	switch len(entityTypes) {
+	case 0:
+		statement = `SELECT entity_type, entity_id::text, content
+			FROM search_documents
+			WHERE strpos(lower(content), lower($1)) > 0
+			ORDER BY updated_at DESC, entity_type, entity_id LIMIT $2 OFFSET $3`
+		args = []any{query, limit, offset}
+	case 1:
+		statement = `SELECT entity_type, entity_id::text, content
+			FROM search_documents
+			WHERE strpos(lower(content), lower($1)) > 0 AND entity_type = $2
+			ORDER BY updated_at DESC, entity_type, entity_id LIMIT $3 OFFSET $4`
+		args = []any{query, entityTypes[0], limit, offset}
+	case 2:
+		statement = `SELECT entity_type, entity_id::text, content
+			FROM search_documents
+			WHERE strpos(lower(content), lower($1)) > 0 AND entity_type IN ($2, $3)
+			ORDER BY updated_at DESC, entity_type, entity_id LIMIT $4 OFFSET $5`
+		args = []any{query, entityTypes[0], entityTypes[1], limit, offset}
+	case 3:
+		statement = `SELECT entity_type, entity_id::text, content
+			FROM search_documents
+			WHERE strpos(lower(content), lower($1)) > 0 AND entity_type IN ($2, $3, $4)
+			ORDER BY updated_at DESC, entity_type, entity_id LIMIT $5 OFFSET $6`
+		args = []any{query, entityTypes[0], entityTypes[1], entityTypes[2], limit, offset}
+	default:
+		return nil, errors.New("too many search entity types")
 	}
-	args = append(args, limit, offset)
-	limitPosition, offsetPosition := len(args)-1, len(args)
-	statement += " ORDER BY updated_at DESC, entity_type, entity_id LIMIT $" + strconv.Itoa(limitPosition) + " OFFSET $" + strconv.Itoa(offsetPosition)
 
 	rows, err := r.db.QueryContext(ctx, statement, args...)
 	if err != nil {
