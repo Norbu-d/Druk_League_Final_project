@@ -3,10 +3,12 @@ package grpcadapter
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	"github.com/drukleague/platform/packages/servicekit/testdb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -26,6 +28,72 @@ func TestCreateTournamentRequiresFieldsAndValidTimestamp(t *testing.T) {
 		StartsAt: &timestamppb.Timestamp{Seconds: 253402300800},
 	}); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("invalid timestamp error = %v, want InvalidArgument", err)
+	}
+}
+
+func TestTournamentCRUDAndPagination(t *testing.T) {
+	db := testdb.New(t, "../../../migrations")
+	server := New(db)
+	ctx := context.Background()
+	starts := time.Date(2026, time.November, 3, 8, 30, 0, 0, time.UTC)
+	first, err := server.CreateTournament(ctx, &v1.CreateTournamentRequest{Name: " Cup ", Sport: " Football ", Season: " 2026 ", Venue: " Stadium ", Dzongkhag: " Thimphu ", StartsAt: timestamppb.New(starts)})
+	if err != nil {
+		t.Fatalf("CreateTournament() error = %v", err)
+	}
+	if first.GetTournament().GetName() != "Cup" || first.GetTournament().GetSport() != "Football" || first.GetTournament().GetVenue() != "Stadium" || first.GetTournament().GetStartsAt() == nil || !first.GetTournament().GetStartsAt().AsTime().Equal(starts) {
+		t.Fatalf("CreateTournament() returned incomplete tournament: %+v", first.GetTournament())
+	}
+	second, err := server.CreateTournament(ctx, &v1.CreateTournamentRequest{Name: "League", Sport: "Football", Season: "2026", Dzongkhag: "Paro"})
+	if err != nil {
+		t.Fatalf("CreateTournament() second error = %v", err)
+	}
+
+	got, err := server.GetTournament(ctx, &v1.GetTournamentRequest{Id: first.GetTournament().GetId()})
+	if err != nil || got.GetTournament().GetName() != "Cup" {
+		t.Fatalf("GetTournament() = (%+v, %v), want Cup", got, err)
+	}
+	if _, err := server.GetTournament(ctx, &v1.GetTournamentRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("GetTournament() empty id error = %v, want InvalidArgument", err)
+	}
+	if _, err := server.GetTournament(ctx, &v1.GetTournamentRequest{Id: "bad-id"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("GetTournament() invalid id error = %v, want InvalidArgument", err)
+	}
+	if _, err := server.GetTournament(ctx, &v1.GetTournamentRequest{Id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}); status.Code(err) != codes.NotFound {
+		t.Fatalf("GetTournament() missing id error = %v, want NotFound", err)
+	}
+
+	page1, err := server.ListTournaments(ctx, &v1.ListTournamentsRequest{Season: "2026", PageSize: 1})
+	if err != nil || len(page1.GetTournaments()) != 1 || page1.GetNextPageToken() != "1" {
+		t.Fatalf("ListTournaments() first page = (%+v, %v), want one tournament and next token 1", page1, err)
+	}
+	page2, err := server.ListTournaments(ctx, &v1.ListTournamentsRequest{Season: "2026", PageSize: 1, PageToken: page1.GetNextPageToken()})
+	if err != nil || len(page2.GetTournaments()) != 1 || page2.GetNextPageToken() != "" || page2.GetTournaments()[0].GetId() != second.GetTournament().GetId() {
+		t.Fatalf("ListTournaments() second page = (%+v, %v), want second tournament and no next token", page2, err)
+	}
+}
+
+func TestTournamentDatabaseErrors(t *testing.T) {
+	db := testdb.New(t, "../../../migrations")
+	if err := db.Close(); err != nil {
+		t.Fatalf("close test database: %v", err)
+	}
+	server := New(db)
+	ctx := context.Background()
+	if _, err := server.CreateTournament(ctx, &v1.CreateTournamentRequest{Name: "Cup", Sport: "Football", Season: "2026", Dzongkhag: "Thimphu"}); status.Code(err) != codes.Internal {
+		t.Fatalf("CreateTournament() database error = %v, want Internal", err)
+	}
+	if _, err := server.GetTournament(ctx, &v1.GetTournamentRequest{Id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}); status.Code(err) != codes.Internal {
+		t.Fatalf("GetTournament() database error = %v, want Internal", err)
+	}
+	if _, err := server.ListTournaments(ctx, &v1.ListTournamentsRequest{}); status.Code(err) != codes.Internal {
+		t.Fatalf("ListTournaments() database error = %v, want Internal", err)
+	}
+}
+
+func TestScanTournamentPropagatesScanError(t *testing.T) {
+	want := errors.New("scan failed")
+	if _, err := scanTournament(testScanner(func(...any) error { return want })); !errors.Is(err, want) {
+		t.Fatalf("scanTournament() error = %v, want %v", err, want)
 	}
 }
 

@@ -515,3 +515,8 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 ### SCRUM-54 — Per-service unit tests — 3 Nov 2026
 - Added focused Player and Tournament gRPC unit tests for required-field validation, pagination defaults/limits and invalid tokens, plus nullable tournament start-time conversion.
 - `go test ./...` passed in both `services/player` and `services/tournament`.
+
+### PR #5 CI follow-up — 3 Nov 2026
+- Expanded Player and Tournament gRPC tests with PostgreSQL-backed CRUD, pagination and error handling coverage to address the reported 80% coverage failures.
+- Passed the workflow's built-in `github.token` to Buf setup to avoid unauthenticated GitHub API rate limits.
+- `gofmt` and `git diff --check` are clean. Local test execution did not return in this workspace; CI must confirm coverage and the Buf job after push.
