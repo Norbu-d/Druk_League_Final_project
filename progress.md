@@ -527,3 +527,9 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Role is applied after sign-in, restored from the session token on reload, and cleared on sign-out.
 - Manually verified: Viewer direct access to `#officials` redirects to Overview; Super Admin can open Officials.
 - Addressed the SonarCloud findings reported on PR #6 in `api.js` (base64url replacements, conditional braces and explicit ignored refresh promise); rerun the PR check after pushing.
+
+## 13. Sonam — Search gRPC endpoint (SCRUM-88 / SCRUM-66, 2026-11-03)
+- Implemented the Search gRPC endpoint with query validation, team/player/tournament filters and pagination backed by `search_documents`.
+- `go test ./...` completed for the Search module; Docker image build succeeded and the Search container started successfully.
+- Automated behavior tests are still needed; indexing and data synchronization remain under SCRUM-87.
+- Replaced dynamic SQL placeholder construction with fixed parameterized queries after the PR security scan flagged Gosec G202; rerun CI after pushing this follow-up.
