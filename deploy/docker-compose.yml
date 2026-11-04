@@ -276,6 +276,8 @@ services:
     environment:
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/report_service?sslmode=disable
       GRPC_ADDR: :50051
+      REPORT_HTTP_ADDR: :8080
+      REPORT_PUBLIC_BASE_URL: /api/reports/files
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:

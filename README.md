@@ -4,8 +4,8 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag comp
 
 The repository holds two things that are not yet connected:
 
-1. **An MVP monolith** (`services/api-gateway`) with a plain HTML/CSS/JS frontend. The browser talks only to this today.
-2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 14 have service logic; 6 are still health-only shells. Notification unit tests passed after syncing `development`; its Compose E2E passed before the sync and needs a rerun on the merged code.
+1. **An MVP monolith** (`services/api-gateway`) with a plain HTML/CSS/JS frontend. Most browser API calls still go here; report creation and downloads are proxied to the Report service.
+2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 15 have real logic; 5 are still health-only shells.
 
 For detailed status and the handoff notes, see [progress.md](progress.md); planned design changes from the 22 Oct review are in its section 11. For the target architecture, see [servicedesign.md](servicedesign.md).
 
@@ -23,11 +23,9 @@ docker compose up -d
 
 - Web app: http://localhost:4173
 - Monolith API: http://localhost:8080
-- Prometheus: http://localhost:9090 (check **Status → Targets** for service scrape health)
-- Grafana: http://localhost:3000 (user `admin`; password is `GRAFANA_ADMIN_PASSWORD`, default `drukleague-grafana`)
 - Log in with the `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` you set. The admin is created only on first start, so changing the password in `.env` later does not change an existing admin.
 
-The microservices listen on gRPC port 50051 inside the Compose network only; it is not published to the host. They expose Prometheus metrics at `/metrics` on internal port 9090. Grafana provisions the Prometheus data source and the DrukLeague services dashboard automatically. OpenTelemetry tracing is not configured yet.
+The microservices listen on gRPC port 50051 inside the Compose network only. Report downloads use an authenticated HTTP route through the web container on port 4173.
 
 **Docker tips:** on a low-resource machine, build one service at a time (`$env:COMPOSE_PARALLEL_LIMIT = 1`, then `docker compose build <service>`) and start with `docker compose up -d --no-build`. Never run `docker volume prune`, `docker system prune --volumes` or `docker compose down -v`; they delete the database and NATS volumes.
 
@@ -40,13 +38,14 @@ The microservices listen on gRPC port 50051 inside the Compose network only; it 
 | Match | Scheduling with team/venue clash checks, official assignment, marks matches completed on `MatchFinalized` |
 | Score | Live scores (0–99), one-time finalisation by the assigned official, transactional outbox → JetStream |
 | Standings | Consumes `MatchFinalized` (deduplicated by `event_id`), win/draw/loss points, team names from Team |
-| Fixture | Round-robin, double round-robin and standings-seeded knockout brackets, venue rotation, next-round generation after finalized results, creates matches in Match, `FixturesGenerated` outbox |
+| Fixture | Round-robin and double round-robin, venue rotation, creates matches in Match, `FixturesGenerated` outbox |
 | Venue | Admin-only create, dzongkhag checked through the Dzongkhag service, unique name per dzongkhag |
 | Official | Assigns through Match, filter by tournament |
 | Dzongkhag | Reference data for the 20 dzongkhags |
 | Team, Tournament, Player, Registration | Basic create/get/list (Player update, Registration review). Not yet hexagonal; Team does not check that `tournament_id` exists |
-| Notification | Stores in-app notifications, supports Send/List gRPC calls and consumes MatchFinalized; unit tests passed after the merge; Compose E2E rerun pending |
-| Audit Log, Media, Report, Search, Analytics, Configuration | Shells (gRPC health only) |
+| Notification | Consumes `MatchFinalized` and stores idempotent in-app result notices for participating team managers |
+| Report | Generates persistent tournament standings and fixture reports as CSV/JSON; authenticated same-origin downloads |
+| Audit Log, Media, Search, Analytics, Configuration | Shells (gRPC health only) |
 
 Shared packages:
 
@@ -59,18 +58,18 @@ Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,
 ### Not built yet
 
 - API gateway and BFF. nginx still routes `/api/` to the monolith, so the frontend does not use the microservices.
-- Audit Log event consumer. Notification's consumer is implemented; rerun Compose E2E after the development merge and verify NATS outage/reconnect behavior.
+- Audit Log event consumer.
 - OpenFaaS/faasd serverless functions.
 - OpenTelemetry tracing.
-- Team → Tournament reference check. Team manager access is limited to their own teams.
-- The 7 shell services above.
-- Automated tests for the 12 modules that currently have none.
+- Team → Tournament reference check.
+- The 5 shell services above.
+- Automated tests for the modules that currently have none.
 
 ### Known design gaps and planned changes
 
 Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details and the proposed order of work are in [progress.md](progress.md) section 11.
 
-- **Auth:** shared HS256 secret (any verifying service can mint tokens); no distinct service identity; no explicit user → official mapping; no password change, admin reset or deactivate; lockout can be abused to lock out an account. Team manager ownership is enforced by Team.
+- **Auth:** shared HS256 secret (any verifying service can mint tokens); no distinct service identity; no explicit user → official mapping; no password change, admin reset or deactivate; lockout can be abused to lock out an account.
 - **Registration:** the tournament link should move from Team to Registration (with `pending`/`approved`/`rejected`/`withdrawn` status) and Fixture should read approved registrations; deadline, capacity and roster-lock rules are undefined.
 - **Matches and fixtures:** no correction path for a wrongly finalised result; finalise uses the last saved live score, not a submitted one; only `scheduled`/`completed` states; byes, withdrawals and late teams not handled; no official-overlap check; tie-breakers undefined; `starts_at` should be stored in UTC (Bhutan is UTC+6).
 - **Operations:** Standings cannot be rebuilt, the dead-letter stream cannot be inspected or replayed, no backup script, no outbox or stream retention, no idempotency on create calls, no readiness checks in Compose.
@@ -80,7 +79,7 @@ Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details a
 
 ## Testing
 
-Unit and PostgreSQL integration tests exist for Auth, User, Match, Score, Standings, Fixture, Venue, Official and the shared packages. Integration tests are skipped unless `TEST_DATABASE_URL` is set:
+Unit and PostgreSQL integration tests exist for Auth, User, Team, Match, Score, Standings, Fixture, Venue, Official, Notification, Report and the shared packages. Integration tests are skipped unless `TEST_DATABASE_URL` is set:
 
 ```powershell
 docker run -d --rm --name drukleague-testdb -e POSTGRES_PASSWORD=test -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql/data postgres:17-alpine

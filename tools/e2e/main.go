@@ -11,6 +11,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"runtime"
 	"strings"
@@ -20,6 +22,7 @@ import (
 	fixturev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
 	notificationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/notification/v1"
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
+	reportv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/report/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	venuev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
@@ -84,6 +87,7 @@ func main() {
 	scores := v1.NewScoreServiceClient(dial("score"))
 	standings := standingsv1.NewStandingsServiceClient(dial("standings"))
 	notifications := notificationv1.NewNotificationServiceClient(dial("notification"))
+	reports := reportv1.NewReportServiceClient(dial("report"))
 
 	// --- Auth (Part 4)
 	_, err := auth.Login(bg, &authv1.LoginRequest{Username: adminUser, Password: "definitely-wrong"})
@@ -238,6 +242,13 @@ func main() {
 	if len(table) == 2 {
 		check("winner has 3 points, played 1, team name from Team service", table[0].GetPoints() == 3 && table[0].GetPlayed() == 1 && table[0].GetTeamName() != "" && table[1].GetLost() == 1, table[0])
 	}
+	standingsReport := must(reports.CreateReport(as(admin), &reportv1.CreateReportRequest{ReportType: "standings", TournamentId: tournament.GetId(), Format: "csv"})).GetReport()
+	check("standings report is generated and downloadable", standingsReport.GetStatus() == "complete" && standingsReport.GetDownloadUrl() != "", standingsReport)
+	standingsCSV := downloadReport(standingsReport.GetDownloadUrl(), admin)
+	check("standings CSV contains the tournament teams and table headers", strings.Contains(standingsCSV, "team_name") && strings.Contains(standingsCSV, "Thimphu E2E "+run) && strings.Contains(standingsCSV, "Paro E2E "+run), standingsCSV)
+	fixtureReport := must(reports.CreateReport(as(admin), &reportv1.CreateReportRequest{ReportType: "fixtures", TournamentId: tournament.GetId(), Format: "json"})).GetReport()
+	fixtureJSON := downloadReport(fixtureReport.GetDownloadUrl(), admin)
+	check("fixture JSON export includes every generated fixture", fixtureReport.GetStatus() == "complete" && strings.Count(fixtureJSON, `"tournament_id"`) == 6 && strings.Contains(fixtureJSON, `"home_team_id"`), fixtureJSON)
 	_, err = officials.AssignOfficial(as(admin), &officialv1.AssignOfficialRequest{MatchId: matchID, OfficialUserId: official.GetId()})
 	check("completed match cannot be reassigned", code(err) == codes.AlreadyExists, err)
 
@@ -267,4 +278,20 @@ func env(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func downloadReport(downloadURL, token string) string {
+	if !strings.HasPrefix(downloadURL, "/api/reports/files/") {
+		fmt.Printf("FAIL  report download URL is not same-origin: %s\n", downloadURL)
+		failures++
+		return ""
+	}
+	request := must(http.NewRequestWithContext(runCtx, http.MethodGet, "http://report:8080"+downloadURL, nil))
+	request.Header.Set("Authorization", "Bearer "+token)
+	client := &http.Client{Timeout: 10 * time.Second}
+	response := must(client.Do(request))
+	defer response.Body.Close()
+	body := must(io.ReadAll(response.Body))
+	check("report download returns an attachment", response.StatusCode == http.StatusOK && strings.Contains(response.Header.Get("Content-Disposition"), "attachment"), response.Status, response.Header)
+	return string(body)
 }
