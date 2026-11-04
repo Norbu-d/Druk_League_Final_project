@@ -23,9 +23,11 @@ docker compose up -d
 
 - Web app: http://localhost:4173
 - Monolith API: http://localhost:8080
+- Prometheus: http://localhost:9090 (check **Status → Targets** for service scrape health)
+- Grafana: http://localhost:3000 (user `admin`; password is `GRAFANA_ADMIN_PASSWORD`, default `drukleague-grafana`)
 - Log in with the `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` you set. The admin is created only on first start, so changing the password in `.env` later does not change an existing admin.
 
-The microservices listen on gRPC port 50051 inside the Compose network only; it is not published to the host.
+The microservices listen on gRPC port 50051 inside the Compose network only; it is not published to the host. They expose Prometheus metrics at `/metrics` on internal port 9090. Grafana provisions the Prometheus data source and the DrukLeague services dashboard automatically. OpenTelemetry tracing is not configured yet.
 
 **Docker tips:** on a low-resource machine, build one service at a time (`$env:COMPOSE_PARALLEL_LIMIT = 1`, then `docker compose build <service>`) and start with `docker compose up -d --no-build`. Never run `docker volume prune`, `docker system prune --volumes` or `docker compose down -v`; they delete the database and NATS volumes.
 

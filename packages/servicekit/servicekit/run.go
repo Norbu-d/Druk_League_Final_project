@@ -3,8 +3,10 @@ package servicekit
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -51,13 +53,27 @@ func Run(serviceName string, register ...func(*grpc.Server, *sql.DB) error) erro
 	if err := ApplyMigrations(ctx, db, migrationsDir); err != nil {
 		return fmt.Errorf("apply service migrations: %w", err)
 	}
+	metricsAddr := os.Getenv("METRICS_ADDR")
+	if metricsAddr == "" {
+		metricsAddr = ":9090"
+	}
+	metricsListener, err := net.Listen("tcp", metricsAddr)
+	if err != nil {
+		return fmt.Errorf("listen for Prometheus metrics on %s: %w", metricsAddr, err)
+	}
+	defer metricsListener.Close()
 
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", addr, err)
 	}
-	// Recovery runs first so a panic anywhere below becomes codes.Internal; logging assigns the request id.
+	metricsInterceptor, metricsHandler := NewPrometheusMetrics(serviceName)
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", metricsHandler)
+	metricsServer := &http.Server{Handler: metricsMux, ReadHeaderTimeout: 5 * time.Second}
+	// Metrics wraps recovery so panics are recorded with their final gRPC status code.
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		metricsInterceptor,
 		RecoveryUnaryInterceptor(),
 		LoggingUnaryInterceptor(serviceName),
 		AuthUnaryInterceptor(Secret()),
@@ -72,17 +88,30 @@ func Run(serviceName string, register ...func(*grpc.Server, *sql.DB) error) erro
 			return fmt.Errorf("register gRPC service: %w", err)
 		}
 	}
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- server.Serve(listener) }()
+	serveErr := make(chan error, 2)
+	go func() {
+		if err := metricsServer.Serve(metricsListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serveErr <- fmt.Errorf("serve Prometheus metrics: %w", err)
+		}
+	}()
+	go func() {
+		if err := server.Serve(listener); err != nil {
+			serveErr <- fmt.Errorf("serve gRPC: %w", err)
+		}
+	}()
 	select {
 	case err := <-serveErr:
-		if err != nil {
-			return fmt.Errorf("serve gRPC: %w", err)
-		}
-		return nil
+		server.Stop()
+		_ = metricsServer.Close()
+		return err
 	case <-ctx.Done():
 		healthServer.Shutdown()
 		server.GracefulStop()
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := metricsServer.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shut down Prometheus metrics server: %w", err)
+		}
 		return nil
 	}
 }

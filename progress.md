@@ -537,3 +537,8 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 ## 14. Sonam — Configuration schema design (SCRUM-93, 2026-11-03)
 - Added an additive migration for typed configuration metadata, descriptions, creation timestamps, and checks for non-empty bounded keys and supported value types. The existing key/value gRPC contract remains compatible.
 - Built the Configuration image and started the container; verified `value_type`, `description`, and `created_at` plus both key/type constraints in PostgreSQL.
+
+## 15. Sonam — Prometheus and Grafana monitoring (SCRUM-72, 2026-11-04)
+- Added gRPC request counters and latency histograms to the shared service runtime, Prometheus scrape targets for all 20 services, and a provisioned Grafana dashboard.
+- Rebuilt and started the Compose stack; Prometheus showed 20/20 targets UP and the dashboard displayed metrics after gRPC E2E traffic.
+- The REST API gateway accesses PostgreSQL directly, so normal UI actions do not create gRPC metric samples. OpenTelemetry tracing remains deferred per the Jira scope.
