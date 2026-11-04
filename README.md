@@ -45,7 +45,8 @@ The microservices listen on gRPC port 50051 inside the Compose network only. Rep
 | Team, Tournament, Player, Registration | Basic create/get/list (Player update, Registration review). Not yet hexagonal; Team does not check that `tournament_id` exists |
 | Notification | Consumes `MatchFinalized` and stores idempotent in-app result notices for participating team managers |
 | Report | Generates persistent tournament standings and fixture reports as CSV/JSON; authenticated same-origin downloads |
-| Audit Log, Media, Search, Analytics, Configuration | Shells (gRPC health only) |
+| Audit Log | Persistent PostgreSQL audit entries, admin-only paginated reads, authenticated recording RPC, and durable MatchFinalized/admin-action consumers |
+| Media, Analytics, Configuration | Shells (gRPC health only) |
 
 Shared packages:
 
@@ -58,7 +59,7 @@ Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,
 ### Not built yet
 
 - API gateway and BFF. nginx still routes `/api/` to the monolith, so the frontend does not use the microservices.
-- Audit Log event consumer.
+- Producers for the generic `drukleague.admin.*` audit event subject family.
 - OpenFaaS/faasd serverless functions.
 - OpenTelemetry tracing.
 - Team → Tournament reference check.
