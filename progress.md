@@ -529,3 +529,10 @@ Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (d
 ## 15. Progress update practice
 
 Whenever a Jira story is completed, add a dated entry here with its key, implemented behavior, test/verification evidence, commit or PR state, and Jira status. Keep unverified local runs and known requirement gaps explicit; do not mark the Jira story Done while a required child item or acceptance requirement remains open.
+
+## 16. SCRUM-68 — Audit log service (implementation underway, 4 Nov 2026)
+
+- Jira shows SCRUM-68 in Sprint 7 (*Search & Config*), assigned to Namgay Lhamo, In Progress and due 28 Dec 2026. Its open subtasks are SCRUM-91 (database schema) and SCRUM-92 (audit event recording), both assigned to Namgay.
+- Implemented persistent audit-entry storage and idempotency for event-backed records, an authenticated gRPC record/list API, admin-only audit reads, and durable consumers for `MatchFinalized` and the `drukleague.admin.*` event family.
+- Added the audit-entry schema migration and wired the audit-log service to PostgreSQL and JetStream. The existing `RecordAuditEntry` RPC derives the actor from the authenticated identity rather than trusting the request actor field.
+- Verification is still pending; no local test or build command has been run for these changes. Generic admin-event producers do not yet publish to `drukleague.admin.*`. Keep SCRUM-68 and its subtasks open until the remaining event-producer scope is resolved and CI/acceptance checks pass.
