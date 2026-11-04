@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090
+
+  - job_name: drukleague-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - auth:9090
+          - user:9090
+          - team:9090
+          - player:9090
+          - tournament:9090
+          - registration:9090
+          - match:9090
+          - score:9090
+          - fixture:9090
+          - standings:9090
+          - venue:9090
+          - official:9090
+          - dzongkhag:9090
+          - notification:9090
+          - media:9090
+          - report:9090
+          - search:9090
+          - analytics:9090
+          - audit-log:9090
+          - configuration:9090

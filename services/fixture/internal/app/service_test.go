@@ -14,15 +14,23 @@ import (
 const (
 	tournament = "11111111-1111-4111-8111-111111111111"
 	adminID    = "22222222-2222-4222-8222-222222222222"
+	teamA      = "33333333-3333-4333-8333-333333333333"
+	teamB      = "44444444-4444-4444-8444-444444444444"
+	teamC      = "55555555-5555-4555-8555-555555555555"
+	teamD      = "66666666-6666-4666-8666-666666666666"
 )
 
 var admin = Caller{ID: adminID, Role: core.RoleSuperAdmin}
 
 type fakeRepo struct {
-	stored  []domain.Fixture
-	event   domain.OutboxEvent
-	linked  map[string]string
-	linkErr error
+	stored         []domain.Fixture
+	event          domain.OutboxEvent
+	linked         map[string]string
+	linkErr        error
+	knockout       domain.KnockoutPlan
+	advanced       domain.Fixture
+	advanceCreated bool
+	pending        []domain.Fixture
 }
 
 func (f *fakeRepo) SaveSchedule(_ context.Context, _ string, fixtures []domain.Fixture, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
@@ -34,6 +42,21 @@ func (f *fakeRepo) SaveSchedule(_ context.Context, _ string, fixtures []domain.F
 	}
 	f.stored, f.event = fixtures, event
 	return append([]domain.Fixture(nil), fixtures...), true, nil
+}
+func (f *fakeRepo) SaveKnockoutSchedule(_ context.Context, _ string, plan domain.KnockoutPlan, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
+	f.knockout, f.event = plan, event
+	for i := range plan.Fixtures {
+		plan.Fixtures[i].ID = string(rune('a' + i))
+	}
+	f.stored = plan.Fixtures
+	f.pending = append([]domain.Fixture(nil), plan.Fixtures...)
+	return append([]domain.Fixture(nil), f.stored...), true, nil
+}
+func (f *fakeRepo) AdvanceKnockout(context.Context, domain.MatchFinalized) (domain.Fixture, bool, error) {
+	return f.advanced, f.advanceCreated, nil
+}
+func (f *fakeRepo) PendingFixtures(context.Context, string) ([]domain.Fixture, error) {
+	return f.pending, nil
 }
 func (f *fakeRepo) LinkMatch(_ context.Context, fixtureID, matchID string) error {
 	if f.linkErr != nil {
@@ -84,6 +107,15 @@ func (f *fakeMatches) Create(context.Context, domain.Fixture) (string, error) {
 	return "match-" + string(rune('0'+f.created)), nil
 }
 
+type fakeStandings struct {
+	ranked []string
+	err    error
+}
+
+func (f fakeStandings) TeamIDsByRank(context.Context, string) ([]string, error) {
+	return f.ranked, f.err
+}
+
 func newService(repo *fakeRepo, teamIDs []string, matches *fakeMatches) (*Service, *string) {
 	var district string
 	s := New(repo, fakeTournaments{}, fakeTeams{ids: teamIDs}, fakeVenues{dzongkhag: &district}, matches)
@@ -111,6 +143,60 @@ func TestGenerateCreatesFixturesMatchesAndEvent(t *testing.T) {
 	}
 	if !fixtures[0].Kickoff.Equal(time.Date(2026, 10, 26, 4, 0, 0, 0, time.UTC)) {
 		t.Fatalf("default start not applied: %v", fixtures[0].Kickoff)
+	}
+}
+
+func TestGenerateKnockoutUsesStandingsOrder(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}}, &fakeMatches{}
+	s, _ := newService(repo, []string{teamA, teamB, teamC, teamD}, matches)
+	s.standings = fakeStandings{ranked: []string{teamA, teamB, teamC, teamD}}
+	fixtures, created, err := s.Generate(context.Background(), admin, tournament, domain.FormatKnockout, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created != 2 || len(fixtures) != 2 || matches.created != 2 {
+		t.Fatalf("created=%d fixtures=%d matches=%d", created, len(fixtures), matches.created)
+	}
+	if fixtures[0].HomeTeamID != teamA || fixtures[0].AwayTeamID != teamD || fixtures[0].HomeSeed != 1 || fixtures[0].AwaySeed != 4 {
+		t.Fatalf("standings order was not used for bracket: %+v", fixtures[0])
+	}
+}
+
+func TestGenerateLeagueKnockoutCreatesLeagueStage(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}}, &fakeMatches{}
+	s, _ := newService(repo, []string{"a", "b", "c", "d"}, matches)
+	fixtures, _, err := s.Generate(context.Background(), admin, tournament, domain.FormatLeagueKnockout, time.Time{})
+	if err != nil || len(fixtures) != 6 || fixtures[0].Format != domain.FormatLeagueKnockout {
+		t.Fatalf("league stage: fixtures=%d err=%v first=%+v", len(fixtures), err, fixtures[0])
+	}
+}
+
+func TestHandleMatchFinalizedCreatesNextMatch(t *testing.T) {
+	next := domain.Fixture{ID: "next-fixture", TournamentID: tournament, HomeTeamID: teamA, AwayTeamID: teamB}
+	repo := &fakeRepo{linked: map[string]string{}, advanceCreated: true, advanced: next, pending: []domain.Fixture{next}}
+	matches := &fakeMatches{}
+	s, _ := newService(repo, nil, matches)
+	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{MatchID: "m1", TournamentID: tournament}); err != nil {
+		t.Fatal(err)
+	}
+	if matches.created != 1 || repo.linked["next-fixture"] == "" {
+		t.Fatalf("next match wasn't created and linked: matches=%d linked=%v", matches.created, repo.linked)
+	}
+}
+
+func TestLeagueKnockoutSeedsAfterGroupStageCompletes(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}, advanceCreated: true, advanced: domain.Fixture{TournamentID: tournament, Format: domain.FormatLeagueKnockout}}, &fakeMatches{}
+	s, _ := newService(repo, []string{teamA, teamB, teamC, teamD}, matches)
+	s.standings = fakeStandings{ranked: []string{teamC, teamA, teamD, teamB}}
+	finalizedAt := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
+	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{TournamentID: tournament, FinalizedAt: finalizedAt}); err != nil {
+		t.Fatal(err)
+	}
+	if repo.knockout.Fixtures[0].HomeTeamID != teamC || repo.knockout.Fixtures[0].AwayTeamID != teamB {
+		t.Fatalf("playoff not seeded from standings: %+v", repo.knockout.Fixtures[0])
+	}
+	if !repo.knockout.Fixtures[0].Kickoff.Equal(finalizedAt.AddDate(0, 0, 7)) || matches.created != 2 {
+		t.Fatalf("playoff matches not scheduled: kickoff=%v created=%d", repo.knockout.Fixtures[0].Kickoff, matches.created)
 	}
 }
 
@@ -144,7 +230,7 @@ func TestGenerateRejections(t *testing.T) {
 	if _, _, err := s.Generate(context.Background(), admin, "x", "", time.Time{}); !errors.Is(err, core.ErrInvalid) {
 		t.Fatal("bad id accepted")
 	}
-	if _, _, err := s.Generate(context.Background(), admin, tournament, "knockout", time.Time{}); !errors.Is(err, core.ErrInvalid) {
+	if _, _, err := s.Generate(context.Background(), admin, tournament, "not-a-format", time.Time{}); !errors.Is(err, core.ErrInvalid) {
 		t.Fatal("unsupported format accepted")
 	}
 	lonely, _ := newService(&fakeRepo{linked: map[string]string{}}, []string{"a"}, &fakeMatches{})
