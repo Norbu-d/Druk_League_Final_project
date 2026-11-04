@@ -46,6 +46,8 @@
       catch(error){toast(error.message);}
       return;
     }
+    const formAction={'tournament-form':'new-tournament','team-form':'new-team','score-form':'update-score'}[form.id];
+    if (formAction && !canRoleAction(formAction)) { event.preventDefault(); toast('Your role cannot perform this action.'); return; }
     if (!token()) return;
     if (['tournament-form','team-form','score-form'].includes(form.id)) event.preventDefault();
     if (form.id==='tournament-form') {
@@ -65,6 +67,7 @@
   });
   document.addEventListener('click',async(event)=>{
     if(event.target.closest('[data-action="generate-fixtures"]')) {
+      if(!canRoleAction('generate-fixtures')) {toast('Only Super Admins can generate fixtures.');return;}
       if(!token()){toast('Sign in to generate saved fixtures.');return;}
       const tournament=tournaments.find(t=>t.id);if(!tournament){toast('Create a tournament and register at least two teams first.');return;}
       try{const result=await request(`/tournaments/${tournament.id}/fixtures`,{method:'POST'});toast(`${result.fixtures_created} fixtures created.`);await refresh();}catch(error){toast(error.message);}
