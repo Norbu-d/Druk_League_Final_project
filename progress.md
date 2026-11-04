@@ -1,10 +1,10 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-04
+**Last updated:** 2026-11-05
 **Project root:** `D:\Druk_League_Final_project`
-**Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11. SCRUM-44 (Fixture consumer), SCRUM-18 (Notification service), and team manager ownership were implemented on the Namgay feature branch and included in PR #3, merged to `development` on 2026-11-02. SCRUM-65 (Report service) was then implemented on the same branch. PR #10 is open against `development`; its code-change checks passed, and checks are rerunning after the latest progress-documentation commit. Sections 12–14 record the work and its verification. Local full Compose verification remains pending because Docker Desktop is unavailable in this session; service tests run in CI. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–18 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
-> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-04, 11 services have domain logic and unit or PostgreSQL integration tests (Match, Score, Standings, Fixture, Venue, Official, User, Auth, Team, Notification, Report; shared packages are tested too), Dzongkhag/Tournament/Player/Registration still need tests, and five services remain health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
+> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-05, the report, search-query and audit-log services have implementation work beyond health shells; media schema design is complete while media upload/retrieval remains open. Four CRUD modules and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
 ---
 
@@ -65,9 +65,11 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Sonam | Dzongkhag | Get/List; `ListDzongkhags` verified (all 20 districts) |
 | Sonam | Official | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** assigns through Match (source of truth), records tournament, filter by tournament now works |
 | Namgay | Notification | Persistent NATS consumer and in-app result notices implemented in SCRUM-18 |
-| Sonam | Audit Log, Media | Shells |
+| Sonam | Media | SCRUM-83 schema designed and merged in PR #11; upload/retrieval remains under SCRUM-84 |
+| Namgay | Audit Log | Implementation underway under SCRUM-68 (section 18) |
 | Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65 |
-| Namgay | Search, Analytics, Configuration | Shells |
+| Sonam | Search, Configuration | Search query endpoint and configuration schema merged; indexing/read-write follow-ups remain under SCRUM-87 and SCRUM-94 |
+| Namgay | Analytics | Shell |
 
 Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
 
@@ -185,7 +187,7 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 5. **Part 3:** code, tests and container checks done (19 Oct). **Part 4:** User + Auth, same. **Part 5 (next to write; section 11.1 step 4 proposes a minimal version first):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
 6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream), Fixture outbox and Notification consumer are done. Still to do: Audit Log consumer and OpenFaaS/faasd function.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
-8. **Part 8:** five shells remain: Audit Log, Media, Search, Analytics, Configuration. Notification and Report now have service logic.
+8. **Part 8:** media schema design is complete; upload/retrieval (SCRUM-84), search indexing (SCRUM-87), and configuration read/write endpoints (SCRUM-94) remain. Analytics is still a health shell; Audit Log implementation is underway. Notification and Report have service logic.
 9. **Part 9 (SWE302):** unit tests with port fakes and PostgreSQL integration tests exist for 8 services plus the shared packages (section 10). GitHub Actions now runs Go formatting, vet, build, tests, coverage, Buf, govulncheck, gosec, Trivy and k6 checks. Remaining: tests for modules that currently have none and the monolith; ZAP; Playwright; fault-isolation tests.
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
@@ -526,16 +528,27 @@ Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (d
 - Added service unit, gRPC, HTTP and PostgreSQL integration tests, and end-to-end smoke assertions for report creation and download. The local full Compose run remains unavailable; the CI suite provides database-backed coverage.
 - Committed as `b27d9a6` on `feature/namgay-insights-testing` and pushed in PR #10 against `development`. All checks passed for the report code commit; the 4 Nov progress-documentation update triggered a fresh CI run. PR #10 remains open. Jira SCRUM-65 was updated to Done on 4 Nov 2026.
 
+## Sonam — Earlier merged contributions
+
+- **SCRUM-18 / PR #1:** contributed the initial Notification service and MatchFinalized result-notice implementation on `feature/sonam-platform-services`; the Jira story's later ownership and follow-up are described in section 13.
+- **SCRUM-45 / PR #4:** implemented standings-seeded knockout brackets, byes, and automatic next-round fixture generation after finalized results. Scoped fixture-pair uniqueness by format and addressed CI security findings. PR checks passed and the PR merged.
+- **SCRUM-54 / PR #5:** added and expanded Dzongkhag, Player, and Tournament tests, including validation, CRUD, pagination, and error cases; addressed Buf setup and coverage findings. All PR checks passed and it merged.
+- **SCRUM-48 / PR #6:** added role-based frontend route guards with redirect behavior and session role restoration; verified Viewer restrictions and Super Admin access, addressed Sonar findings, and merged after checks passed.
+- **SCRUM-88 / SCRUM-66 / PR #7:** implemented the Search gRPC query endpoint with validation, team/player/tournament filters, and pagination. Replaced dynamic SQL with fixed parameterized queries after the security scan. PR checks passed and it merged; search indexing/data synchronization remains tracked separately by SCRUM-87.
+- **SCRUM-93:** added and verified the Configuration typed-metadata schema migration; the existing key/value contract remains compatible. The schema change merged; read/write endpoints remain tracked by SCRUM-94.
+
 ## 15. Sonam — Prometheus and Grafana monitoring (SCRUM-72, 2026-11-04)
 - Added gRPC request counters and latency histograms to the shared service runtime, Prometheus scrape targets for all 20 services, and a provisioned Grafana dashboard.
 - Rebuilt and started the Compose stack; Prometheus showed 20/20 targets UP and the dashboard displayed metrics after gRPC E2E traffic.
 - The REST API gateway accesses PostgreSQL directly, so normal UI actions do not create gRPC metric samples. OpenTelemetry tracing remains deferred per the Jira scope.
 - Added tests for Prometheus metrics formatting and gRPC request recording; the full `bash scripts/coverage.sh 80` check passed locally with PostgreSQL integration tests enabled, and `packages/servicekit` reached 85.2% coverage.
+- PR #9 passed all checks and merged to `development`; Jira SCRUM-72 is Done. OpenTelemetry tracing remains deferred per the issue scope.
 
 ## 16. Sonam — Media-service database schema (SCRUM-83, 2026-11-04)
 - Added an additive migration for match-linked media assets with photo/highlight type, caption, optional duration, and an index for listing a match's media by creation time.
 - Kept `match_id` as an opaque UUID because Match owns a separate database; a check constraint requires it for new rows while allowing existing rows to be migrated.
 - Applied the initial and metadata migrations to a temporary PostgreSQL database; reapplied the metadata migration successfully to verify idempotency, then dropped the test database.
+- Committed as `2189db9`; merged development with conflict resolution in `0ad6f41`. PR #11 passed all checks and merged to `development` on 5 Nov 2026. Jira SCRUM-83 is Done; no sprint dates changed.
 
 ## 17. Progress update practice
 
