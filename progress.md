@@ -1,10 +1,10 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-10-22
-**Project root:** `D:\druk-league`
-**Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11 (planned changes; **nothing in it is implemented yet**). Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Last updated:** 2026-11-04
+**Project root:** `D:\Druk_League_Final_project`
+**Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11. Since then, SCRUM-44 (Fixture consumer), SCRUM-18 (Notification service), team manager ownership, and SCRUM-65 (Report service) have been implemented on the Namgay feature branch; PR #3 was merged to `development` on 2026-11-02. The Report implementation adds persistent standings/fixture CSV and JSON exports with authenticated downloads. Local full Compose verification remains pending because Docker Desktop is unavailable in this session; service tests run in CI. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
-> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-10-19, **8 of those modules have domain logic and unit tests** (Match, Score, Standings, Fixture, Venue, Official, User, Auth; the shared packages are tested too), Dzongkhag/Team/Tournament/Player/Registration have untested handlers, and 7 are still health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists what changed on 2026-10-19; section 11 holds the 2026-10-22 design review. Do not present the MVP as the finished architecture.
+> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-04, 11 services have domain logic and unit or PostgreSQL integration tests (Match, Score, Standings, Fixture, Venue, Official, User, Auth, Team, Notification, Report; shared packages are tested too), Dzongkhag/Tournament/Player/Registration still need tests, and five services remain health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
 ---
 
@@ -34,17 +34,17 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag spor
 
 | Proposal / deck says | Code today |
 |---|---|
-| 20 independently deployable services | 20 modules run as containers (2026-10-14). Since then Fixture, Venue, Official, User and Auth have real hexagonal logic (code + tests; rebuilt in Docker and e2e-checked 19 Oct); 7 remain health shells |
+| 20 independently deployable services | 20 modules run as containers (2026-10-14). Fixture, Venue, Official, User, Auth, Team, Notification and Report have real service logic; five modules remain health shells |
 | API Gateway + BFF | The monolith is still the "gateway"; no BFF yet (Part 5). Service port 50051 is not published outside Compose |
 | gRPC between services | All outbound calls now use `servicekit.Dial`: per-call deadline, retry on safe reads, circuit breaker, request-id and token propagation. Fixture calls Tournament/Team/Venue/Match; Official calls Match; Auth calls User; Venue calls Dzongkhag |
 | Each service owns its data | New services have their own databases; the monolith keeps its own shared one; the two are not connected |
-| NATS JetStream event flows | Shared `packages/eventkit`: durable consumers with bounded redelivery (5) and a **dead-letter stream `DRUKLEAGUE_DLQ`**, tested against an embedded JetStream server. Match and Standings consumers use it. Fixture publishes `FixturesGenerated` from its own outbox. Notification/Audit consumers not written yet |
+| NATS JetStream event flows | Shared `packages/eventkit`: durable consumers with bounded redelivery (5) and a **dead-letter stream `DRUKLEAGUE_DLQ`**, tested against an embedded JetStream server. Match, Standings, and Notification consume `MatchFinalized`; Fixture publishes `FixturesGenerated` from its own outbox. Audit Log consumer remains |
 | OpenFaaS functions | None |
 | OpenTelemetry, circuit breaker, fault isolation | Circuit breaker, deadlines, retries, request-id logging and panic recovery are in `servicekit` (unit-tested). OpenTelemetry not started. Team → Tournament reference check still **open** |
-| 80% unit-test coverage, CI gates | Unit + PostgreSQL integration tests for 8 services and the shared packages (section 10). 12 modules still have no tests; no CI workflow yet |
+| 80% unit-test coverage, CI gates | GitHub Actions enforces the 80% coverage threshold on modules with tests. Unit + PostgreSQL integration tests cover 11 services and shared packages; four CRUD modules, five shell services, and the monolith still need tests |
 | Hexagonal architecture (cited in the literature review) | Used in Dzongkhag, Match, Score, Standings, Fixture, Venue, Official, User, Auth. Team, Tournament, Player, Registration and the monolith still need extraction |
 | JWT + **bcrypt** (deck) | **Services now use bcrypt (cost 12) and `golang-jwt/v5`.** Old PBKDF2 hashes still verify and are upgraded to bcrypt at next login. The monolith still uses its own code until Part 5 replaces it |
-| Team users register and track teams | `team_manager` role added in User (Auth/User contracts + DB constraint). Team ownership (`manager_id` on Team) is in the contract but Team does not use it yet |
+| Team users register and track teams | `team_manager` role and Team `manager_id` ownership are implemented; managers can create/read only their own teams |
 
 ### The 20 services
 Verified = checked in a running container on 12 Oct 2026 with an authenticated gRPC call. All modules have their own contract and Dockerfile.
@@ -64,8 +64,10 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Norbu | Venue | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** hexagonal, admin-only create, dzongkhag checked via Dzongkhag service (cached), unique name per dzongkhag |
 | Sonam | Dzongkhag | Get/List; `ListDzongkhags` verified (all 20 districts) |
 | Sonam | Official | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** assigns through Match (source of truth), records tournament, filter by tournament now works |
-| Sonam | Notification, Audit Log, Media | Shells |
-| Namgay | Report, Search, Analytics, Configuration | Shells |
+| Sonam | Notification | Persistent NATS consumer and in-app result notices implemented in SCRUM-18 |
+| Sonam | Audit Log, Media | Shells |
+| Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65 |
+| Namgay | Search, Analytics, Configuration | Shells |
 
 Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
 
@@ -160,7 +162,7 @@ Not yet exercised: `UpdatePlayer`, `RegisterTeam`, `ReviewRegistration`, `Create
 4. **Risk R1:** the deck rates "20 services in one semester" High/High; the proposal says Medium. Make them match.
 5. **Finalised-result correction:** admin correction with a reason + audit entry (user stories) vs append-only correction events (architecture note). **22 Oct recommendation:** admin-only void-and-replace with an audit record (section 11.4).
 6. **Sprint 4/5 dependency:** fixture clash detection needs Venue, planned for Sprint 5. Reorder or stub Venue earlier.
-7. **NATS resilience:** bounded redelivery and dead-lettering are implemented in `eventkit` and pass against an embedded JetStream server. Still test NATS outage/reconnect in Docker, and write the Notification/Audit consumers.
+7. **NATS resilience:** bounded redelivery and dead-lettering are implemented in `eventkit` and pass against an embedded JetStream server. Still test NATS outage/reconnect in Docker and implement the Audit Log consumer.
 8. **Hexagonal and resilience wording:** the proposal cites hexagonal architecture but never says it will be applied. Add one methodology sentence and a resilience objective, then update the deck's architecture and testing slides, the risk table and the speaker notes.
 9. **Cross-service integrity:** Team stores any `tournament_id`. Choose a synchronous gRPC check against Tournament (with deadline, retry, circuit breaker) or eventual consistency with a cleanup event. Record the finding in the risk register either way. **22 Oct:** the cleaner fix is to move the tournament link from Team to Registration (item 10, section 11.3).
 10. **Registration model (proposed 22 Oct):** Registration links Team to Tournament with a status; Team becomes a persistent entity; Fixture reads approved registrations. Needs agreement with Tandin (section 11.3).
@@ -181,9 +183,9 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 3. **Secrets before sharing:** rotate everything in `deploy/.env`. `JWT_SECRET` is safe to change on its own (recreate the API afterwards). `POSTGRES_PASSWORD` and `BOOTSTRAP_ADMIN_PASSWORD` need a coordinated change (PostgreSQL reads its password only when the volume is created; the bootstrap admin exists once created), so choose `ALTER USER` plus an admin reset, or a clean dev reset. Fix the README's outdated default-login line. Bind DB/API ports to loopback for local runs.
 4. **Part 2:** Match, Score and Standings are extracted. Verified Match → Team/User, Score → Match, Score transactional outbox → JetStream, Match completion consumer, Standings consumer, GetScore/GetStandings and duplicate-event handling. Standings is eventually consistent with Score; no distributed transaction spans their databases.
 5. **Part 3:** code, tests and container checks done (19 Oct). **Part 4:** User + Auth, same. **Part 5 (next to write; section 11.1 step 4 proposes a minimal version first):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
-6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream) and the Fixture outbox are done. Still to do: Notification and Audit Log consumers, and the OpenFaaS/faasd function.
+6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream), Fixture outbox and Notification consumer are done. Still to do: Audit Log consumer and OpenFaaS/faasd function.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
-8. **Part 8:** the remaining 7 shells: Notification, Audit Log, Media, Report, Search, Analytics, Configuration.
+8. **Part 8:** five shells remain: Audit Log, Media, Search, Analytics, Configuration. Notification and Report now have service logic.
 9. **Part 9 (SWE302):** unit tests with port fakes and PostgreSQL integration tests exist for 8 services plus the shared packages (section 10). GitHub Actions now runs Go formatting, vet, build, tests, coverage, Buf, govulncheck, gosec, Trivy and k6 checks. Remaining: tests for modules that currently have none and the monolith; ZAP; Playwright; fault-isolation tests.
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
@@ -380,7 +382,7 @@ Coverage is per package (statements). `cmd/` wiring is not tested.
 | servicekit/dzongkhags | 100% |
 | eventkit | 89.2% (includes an embedded-JetStream dead-letter test) |
 
-**No tests yet (0%):** Dzongkhag, Team, Tournament, Player, Registration, Notification, Audit Log, Media, Report, Search, Analytics, Configuration, and the monolith. `scripts/coverage.sh` (per-module total) prints FAIL on Windows Git Bash even though the tests pass, most likely its temp-file path. Fix it before using it as a CI gate.
+**Tests still needed:** Dzongkhag, Tournament, Player, Registration, Audit Log, Media, Search, Analytics, Configuration, and the monolith. Team, Notification, and Report now have service tests; CI provides PostgreSQL for their integration tests and enforces the coverage gate.
 
 How to run the integration tests locally (throwaway in-memory database, port 55432, no volume):
 
@@ -437,7 +439,7 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 6. **Tests for Team, Tournament, Player and Registration**, after step 3 so they cover the new registration design.
 7. **If time remains:** Notification and Audit Log consuming `MatchFinalized`; one or two OpenFaaS/faasd functions (11.7).
 
-**Proposed to cut, or to document as a known limitation** (*group decision*, because 7 Oct 2026 decided to build all 20 services): OpenTelemetry, the other five shells (Media, Report, Search, Analytics, Configuration), and asymmetric JWT signing.
+**Proposed to cut, or to document as a known limitation** (*group decision*, because 7 Oct 2026 decided to build all 20 services): OpenTelemetry, the then-shell services, and asymmetric JWT signing. Report has since been implemented; the active shell list is in section 2.
 
 ### 11.2 Auth
 
