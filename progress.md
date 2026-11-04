@@ -526,11 +526,22 @@ Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (d
 - Added service unit, gRPC, HTTP and PostgreSQL integration tests, and end-to-end smoke assertions for report creation and download. The local full Compose run remains unavailable; the CI suite provides database-backed coverage.
 - Committed as `b27d9a6` on `feature/namgay-insights-testing` and pushed in PR #10 against `development`. All checks passed for the report code commit; the 4 Nov progress-documentation update triggered a fresh CI run. PR #10 remains open. Jira SCRUM-65 was updated to Done on 4 Nov 2026.
 
-## 15. Progress update practice
+## 15. Sonam — Prometheus and Grafana monitoring (SCRUM-72, 2026-11-04)
+- Added gRPC request counters and latency histograms to the shared service runtime, Prometheus scrape targets for all 20 services, and a provisioned Grafana dashboard.
+- Rebuilt and started the Compose stack; Prometheus showed 20/20 targets UP and the dashboard displayed metrics after gRPC E2E traffic.
+- The REST API gateway accesses PostgreSQL directly, so normal UI actions do not create gRPC metric samples. OpenTelemetry tracing remains deferred per the Jira scope.
+- Added tests for Prometheus metrics formatting and gRPC request recording; the full `bash scripts/coverage.sh 80` check passed locally with PostgreSQL integration tests enabled, and `packages/servicekit` reached 85.2% coverage.
+
+## 16. Sonam — Media-service database schema (SCRUM-83, 2026-11-04)
+- Added an additive migration for match-linked media assets with photo/highlight type, caption, optional duration, and an index for listing a match's media by creation time.
+- Kept `match_id` as an opaque UUID because Match owns a separate database; a check constraint requires it for new rows while allowing existing rows to be migrated.
+- Applied the initial and metadata migrations to a temporary PostgreSQL database; reapplied the metadata migration successfully to verify idempotency, then dropped the test database.
+
+## 17. Progress update practice
 
 Whenever a Jira story is completed, add a dated entry here with its key, implemented behavior, test/verification evidence, commit or PR state, and Jira status. Keep unverified local runs and known requirement gaps explicit; do not mark the Jira story Done while a required child item or acceptance requirement remains open.
 
-## 16. SCRUM-68 — Audit log service (implementation underway, 4 Nov 2026)
+## 18. SCRUM-68 — Audit log service (implementation underway, 4 Nov 2026)
 
 - Jira shows SCRUM-68 in Sprint 7 (*Search & Config*), assigned to Namgay Lhamo, In Progress and due 28 Dec 2026. Its open subtasks are SCRUM-91 (database schema) and SCRUM-92 (audit event recording), both assigned to Namgay.
 - Implemented persistent audit-entry storage and idempotency for event-backed records, an authenticated gRPC record/list API, admin-only audit reads, and durable consumers for `MatchFinalized` and the `drukleague.admin.*` event family.
