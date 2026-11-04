@@ -543,3 +543,8 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Rebuilt and started the Compose stack; Prometheus showed 20/20 targets UP and the dashboard displayed metrics after gRPC E2E traffic.
 - The REST API gateway accesses PostgreSQL directly, so normal UI actions do not create gRPC metric samples. OpenTelemetry tracing remains deferred per the Jira scope.
 - Added tests for Prometheus metrics formatting and gRPC request recording; the full `bash scripts/coverage.sh 80` check passed locally with PostgreSQL integration tests enabled, and `packages/servicekit` reached 85.2% coverage.
+
+## 16. Sonam — Media-service database schema (SCRUM-83, 2026-11-04)
+- Added an additive migration for match-linked media assets with photo/highlight type, caption, optional duration, and an index for listing a match's media by creation time.
+- Kept `match_id` as an opaque UUID because Match owns a separate database; a check constraint requires it for new rows while allowing existing rows to be migrated.
+- Applied the initial and metadata migrations to a temporary PostgreSQL database; reapplied the metadata migration successfully to verify idempotency, then dropped the test database.
