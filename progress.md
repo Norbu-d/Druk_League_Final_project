@@ -1,6 +1,6 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-04
+**Last updated:** 2026-11-05
 **Project root:** `D:\Druk_League_Final_project`
 **Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11. SCRUM-44 (Fixture consumer), SCRUM-18 (Notification service), and team manager ownership were implemented on the Namgay feature branch and included in PR #3, merged to `development` on 2026-11-02. SCRUM-65 (Report service) was then implemented on the same branch. PR #10 is open against `development`; its code-change checks passed, and checks are rerunning after the latest progress-documentation commit. Sections 12–14 record the work and its verification. Local full Compose verification remains pending because Docker Desktop is unavailable in this session; service tests run in CI. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
@@ -541,4 +541,4 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added `docs/project-charter.md` covering purpose, measurable objectives, in/out of scope, deliverables, stakeholders, governance, milestones, assumptions, constraints, risks, and acceptance/review roles for DrukLeague.
 - Kept milestone dates out of the charter because the Jira sprint dates are being corrected; Jira remains the schedule source. The document distinguishes the 20-service target from the staged implementation and does not claim unreceived approvals.
-- This is a documentation deliverable; no software tests apply. Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview in this progress log; `git diff --cached --check` passed before commit. Committed as `4afa7b6` and pushed in PR #14 against `development`; CI is pending. Jira still shows SCRUM-57 To Do and has not been transitioned. SCRUM-68 remains paused and untouched.
+- This is a documentation deliverable; no software tests apply. Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview; `git diff --cached --check` passed before commit. The charter was committed as `4afa7b6`, documented in `83f955a`, and merged by PR #14 into `development` at merge commit `0dac320` on 5 Nov 2026. All 11 PR checks passed. SCRUM-57 was transitioned to Done in Jira on 5 Nov 2026 after the merge. SCRUM-68 remains paused and untouched.
