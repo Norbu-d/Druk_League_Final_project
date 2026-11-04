@@ -560,3 +560,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Implemented persistent audit-entry storage and idempotency for event-backed records, an authenticated gRPC record/list API, admin-only audit reads, and durable consumers for `MatchFinalized` and the `drukleague.admin.*` event family.
 - Added the audit-entry schema migration and wired the audit-log service to PostgreSQL and JetStream. The existing `RecordAuditEntry` RPC derives the actor from the authenticated identity rather than trusting the request actor field.
 - Verification is still pending; no local test or build command has been run for these changes. Generic admin-event producers do not yet publish to `drukleague.admin.*`. Keep SCRUM-68 and its subtasks open until the remaining event-producer scope is resolved and CI/acceptance checks pass.
+
+## 17. SCRUM-57 — Project charter (draft completed 5 Nov 2026)
+
+- Added `docs/project-charter.md` covering purpose, measurable objectives, in/out of scope, deliverables, stakeholders, governance, milestones, assumptions, constraints, risks, and acceptance/review roles for DrukLeague.
+- Kept milestone dates out of the charter because the Jira sprint dates are being corrected; Jira remains the schedule source. The document distinguishes the 20-service target from the staged implementation and does not claim unreceived approvals.
+- This is a documentation deliverable; no software tests apply. Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview in this progress log; `git diff --cached --check` passed before commit. Committed as `4afa7b6` and pushed in PR #14 against `development`; CI is pending. Jira still shows SCRUM-57 To Do and has not been transitioned. SCRUM-68 remains paused and untouched.
