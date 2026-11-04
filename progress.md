@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-04
 **Project root:** `D:\Druk_League_Final_project`
-**Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11. Since then, SCRUM-44 (Fixture consumer), SCRUM-18 (Notification service), team manager ownership, and SCRUM-65 (Report service) have been implemented on the Namgay feature branch; PR #3 was merged to `development` on 2026-11-02. The Report implementation adds persistent standings/fixture CSV and JSON exports with authenticated downloads. Local full Compose verification remains pending because Docker Desktop is unavailable in this session; service tests run in CI. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** On 2026-10-19, Parts 3, 4 and 7 (and the shared part of 6) were written and tested locally with `go test`; the Dockerfile and Compose changes in section 10 were then made, all 20 images were rebuilt, all 25 containers started, and the `tools/e2e` smoke test passed 29 of 29 checks (section 10, "Verified in containers"). On 2026-10-22 a design review added section 11. SCRUM-44 (Fixture consumer), SCRUM-18 (Notification service), and team manager ownership were implemented on the Namgay feature branch and included in PR #3, merged to `development` on 2026-11-02. SCRUM-65 (Report service) was then implemented on the same branch; PR #10 is open against `development` and all its CI checks pass. Sections 12–14 record the work and its verification. Local full Compose verification remains pending because Docker Desktop is unavailable in this session; service tests run in CI. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-04, 11 services have domain logic and unit or PostgreSQL integration tests (Match, Score, Standings, Fixture, Venue, Official, User, Auth, Team, Notification, Report; shared packages are tested too), Dzongkhag/Tournament/Player/Registration still need tests, and five services remain health shells. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -64,7 +64,7 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Norbu | Venue | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** hexagonal, admin-only create, dzongkhag checked via Dzongkhag service (cached), unique name per dzongkhag |
 | Sonam | Dzongkhag | Get/List; `ListDzongkhags` verified (all 20 districts) |
 | Sonam | Official | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** assigns through Match (source of truth), records tournament, filter by tournament now works |
-| Sonam | Notification | Persistent NATS consumer and in-app result notices implemented in SCRUM-18 |
+| Namgay | Notification | Persistent NATS consumer and in-app result notices implemented in SCRUM-18 |
 | Sonam | Audit Log, Media | Shells |
 | Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65 |
 | Namgay | Search, Analytics, Configuration | Shells |
@@ -500,3 +500,32 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Add faasd and deploy one or two small functions (for example one triggered by `MatchFinalized` that formats a notification, or one that generates a standings report), so the serverless claim is true.
 - In the report, list Kubernetes as future work. Each service already has its own Dockerfile and env-var config, so the move would mostly be manifests.
 - **Before committing:** ask Mr. Pema Namgay in writing whether faasd on Docker is acceptable for the serverless component. If the module spec requires Kubernetes, this recommendation changes. Tracks open decision 3.
+
+---
+
+## 12. SCRUM-44 — Fixture consumes finalized-match events (implemented 2 Nov 2026)
+
+- Fixture now consumes `MatchFinalized` using its own durable JetStream consumer, independently of the other consumers. It records a match as completed through the Fixture application/repository path.
+- Unit coverage was added for the consumer and service flow. The end-to-end smoke program was extended to check completion after finalisation; the existing 29/29 container run predates this extension, and the extended full Compose flow has not been rerun locally because Docker Desktop is unavailable.
+- Work is in the `feature/namgay-insights-testing` history and was included in PR #3, merged to `development` on 2 Nov 2026.
+
+## 13. SCRUM-18 — Notification service (implementation on branch; Jira still In Progress)
+
+Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (due 14 Dec 2026). Its stated requirement is a persistent NATS subscriber that independently consumes `MatchFinalized` and sends result notifications to affected teams/dzongkhags; it must be a microservice, not a serverless function.
+
+- Added a persistent Notification gRPC service backed by PostgreSQL, with `SendNotification` and paginated `ListNotifications` RPCs. A user can list their own notices; administrators can list notices for other users.
+- Added a separate durable JetStream consumer for `drukleague.match.finalized`. It validates events, retries transient failures through `eventkit`, routes invalid events to the permanent-failure path, and deduplicates notices by event, recipient and channel.
+- On finalisation, the service looks up both teams through authenticated Team gRPC calls and creates one in-app notice for each distinct team manager. The result message includes both team names, scores, dzongkhag names and finalisation time. The existing model has no dzongkhag account identity or recipient mapping, so notices are delivered to team managers rather than directly to district accounts.
+- Added domain, application, gRPC, consumer and PostgreSQL integration tests, plus end-to-end smoke assertions for manager-only delivery and result/dzongkhag details. The latter smoke assertions were added after the 19 Oct container run and have not been rerun locally. The service work is included in PR #3, merged to `development` on 2 Nov 2026.
+- **Jira follow-up:** as of 4 Nov, Jira still shows In Progress and reports 1 of 2 child work items complete. Check the remaining child item and confirm whether direct district-account delivery is expected before moving the story to Done. The implementation covers the defined team-manager identities and includes the affected dzongkhags in each notice.
+
+## 14. SCRUM-65 — Report service (implemented; Jira Done)
+
+- Added a persistent Report gRPC service that reads standings and fixtures through authenticated service-to-service gRPC and stores report metadata and export bytes in PostgreSQL.
+- Supports CSV and JSON exports for standings and fixtures, authenticated create/get/download HTTP routes, owner/admin access, pagination, and CSV formula-injection mitigation. The API gateway's Nginx configuration routes report HTTP requests to the service.
+- Added service unit, gRPC, HTTP and PostgreSQL integration tests, and end-to-end smoke assertions for report creation and download. The local full Compose run remains unavailable; the CI suite provides database-backed coverage.
+- Committed as `b27d9a6` on `feature/namgay-insights-testing` and pushed in PR #10 against `development`. All PR checks passed as of 4 Nov 2026; PR #10 remains open. Jira SCRUM-65 was updated to Done on 4 Nov 2026.
+
+## 15. Progress update practice
+
+Whenever a Jira story is completed, add a dated entry here with its key, implemented behavior, test/verification evidence, commit or PR state, and Jira status. Keep unverified local runs and known requirement gaps explicit; do not mark the Jira story Done while a required child item or acceptance requirement remains open.
