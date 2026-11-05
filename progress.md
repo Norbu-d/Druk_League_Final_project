@@ -67,9 +67,9 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Namgay | Notification | Persistent NATS consumer and in-app result notices implemented in SCRUM-18 |
 | Sonam | Media | SCRUM-83 schema designed and merged in PR #11; upload/retrieval remains under SCRUM-84 |
 | Namgay | Audit Log | Implementation underway under SCRUM-68 (section 18) |
-| Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65 |
+| Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65; Sonam's SCRUM-85 schema subtask is Done |
 | Sonam | Search, Configuration | Search query endpoint and configuration schema merged; indexing/read-write follow-ups remain under SCRUM-87 and SCRUM-94 |
-| Sonam | Analytics | SCRUM-89 schema is Done; SCRUM-90 MatchFinalized consumer is underway; query/service endpoints remain open |
+| Sonam | Analytics | SCRUM-89 schema and SCRUM-90 MatchFinalized consumer are Done; query/service endpoints remain open |
 | Namgay | Analytics | Shell |
 
 Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
@@ -527,7 +527,7 @@ Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (d
 - Added a persistent Report gRPC service that reads standings and fixtures through authenticated service-to-service gRPC and stores report metadata and export bytes in PostgreSQL.
 - Supports CSV and JSON exports for standings and fixtures, authenticated create/get/download HTTP routes, owner/admin access, pagination, and CSV formula-injection mitigation. The API gateway's Nginx configuration routes report HTTP requests to the service.
 - Added service unit, gRPC, HTTP and PostgreSQL integration tests, and end-to-end smoke assertions for report creation and download. The local full Compose run remains unavailable; the CI suite provides database-backed coverage.
-- Committed as `b27d9a6` on `feature/namgay-insights-testing` and pushed in PR #10 against `development`. All checks passed for the report code commit; the 4 Nov progress-documentation update triggered a fresh CI run. PR #10 remains open. Jira SCRUM-65 was updated to Done on 4 Nov 2026.
+- Committed as `b27d9a6` on `feature/namgay-insights-testing` and merged to `development` by PR #10 at merge commit `241e735`. All checks passed for the report code commit; Jira SCRUM-65 is Done. The report database schema subtask SCRUM-85 was confirmed against the merged migrations and marked Done on 5 Nov 2026.
 
 ## Sonam — Earlier merged contributions
 
@@ -572,12 +572,12 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added `docs/project-charter.md` covering purpose, measurable objectives, in/out of scope, deliverables, stakeholders, governance, milestones, assumptions, constraints, risks, and acceptance/review roles for DrukLeague.
 - Kept milestone dates out of the charter because the Jira sprint dates are being corrected; Jira remains the schedule source. The document distinguishes the 20-service target from the staged implementation and does not claim unreceived approvals.
+- Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview; `git diff --cached --check` passed before commit. The charter was committed as `4afa7b6`, documented in `83f955a`, and merged by PR #14 into `development` at merge commit `0dac320` on 5 Nov 2026. All 11 PR checks passed. SCRUM-57 and SCRUM-25 were transitioned to Done in Jira on 5 Nov 2026 after confirming both SCRUM-25 subtasks are Done and the architecture documentation exists. SCRUM-68 remains paused and untouched.
 
-## 21. Sonam — Analytics event aggregation (SCRUM-90, implementation underway)
+## 21. Sonam — Analytics event aggregation (SCRUM-90, merged 5 Nov 2026)
 
 - Added a durable `MatchFinalized` consumer that validates event IDs, match/team IDs, score bounds, and finalization time; it looks up tournament season and dzongkhag using the Analytics service identity and writes each finalized match to `analytics_match_facts` idempotently.
-- Added Analytics Compose settings for NATS and Tournament service addresses. Go module tidy, `go build ./...`, and the Analytics Docker image build succeeded. Analytics, NATS, and Tournament are running; the analytics database contains 4 match facts with 4 unique event IDs and match IDs after the consumer processed existing finalized-match events. CI/PR review remains pending; Jira SCRUM-90 is In Progress.
-- This is a documentation deliverable; no software tests apply. Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview; `git diff --cached --check` passed before commit. The charter was committed as `4afa7b6`, documented in `83f955a`, and merged by PR #14 into `development` at merge commit `0dac320` on 5 Nov 2026. All 11 PR checks passed. SCRUM-57 was transitioned to Done in Jira on 5 Nov 2026 after the merge. SCRUM-25 was also transitioned to Done after confirming both subtasks (SCRUM-57 and SCRUM-58) are Done and the architecture documentation exists. SCRUM-68 remains paused and untouched.
+- Added Analytics Compose settings for NATS and Tournament service addresses. `go mod tidy`, `go build ./...`, and the Analytics Docker image build succeeded. Analytics, NATS, and Tournament ran successfully; the analytics database contained 4 match facts with 4 unique event IDs and match IDs after the consumer processed existing finalized-match events. Committed as `3bcfda2` and merged to `development`; Jira SCRUM-90 is Done.
 
 ## 18. SCRUM-49 — Role-based component visibility (merged, 5 Nov 2026)
 
