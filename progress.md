@@ -555,7 +555,7 @@ Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (d
 
 - Added `services/analytics/migrations/002_match_facts.sql` with a finalized-match facts table, unique event and match IDs for deduplication, bounded score checks, season/dzongkhag dimensions, and indexes for tournament, season/dzongkhag, and team queries. The existing `analytics_snapshots` table remains unchanged.
 - Applied migrations `001` and `002` to a temporary PostgreSQL database; reapplied `002` successfully to verify idempotency, then dropped the temporary database.
-- Changes are uncommitted on `feature/sonam-platform-services`. SCRUM-89 is In Progress; analytics event aggregation and service implementation remain tracked separately under SCRUM-90.
+- Committed as `115f7c1` on `feature/sonam-platform-services`; the PR passed all checks and merged to `development`. Jira SCRUM-89 is Done. Analytics event aggregation and service implementation remain tracked separately under SCRUM-90.
 
 ## 18. Progress update practice
 
