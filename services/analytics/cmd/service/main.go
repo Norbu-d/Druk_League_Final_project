@@ -1,13 +1,51 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"log"
+	"time"
 
+	"github.com/drukleague/platform/packages/eventkit"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	"github.com/drukleague/platform/services/analytics/internal/adapters/grpcclients"
+	natsadapter "github.com/drukleague/platform/services/analytics/internal/adapters/nats"
+	"github.com/drukleague/platform/services/analytics/internal/adapters/postgres"
+	"github.com/drukleague/platform/services/analytics/internal/app"
+	"github.com/nats-io/nats.go"
+	"google.golang.org/grpc"
 )
 
 func main() {
-	if err := servicekit.Run("analytics-service"); err != nil {
+	tournamentConn, err := servicekit.Dial(servicekit.Env("TOURNAMENT_SERVICE_ADDR", "tournament:50051"), servicekit.ClientOptions{
+		Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("analytics-service", servicekit.Secret(), 0), Timeout: 5 * time.Second,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tournamentConn.Close()
+	tournaments := grpcclients.NewTournaments(tournamentConn)
+
+	consumerCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var natsConn *nats.Conn
+	err = servicekit.Run("analytics-service", func(_ *grpc.Server, db *sql.DB) error {
+		service := app.New(postgres.New(db), tournaments)
+		var js nats.JetStreamContext
+		natsConn, js, err = eventkit.Connect(servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-analytics")
+		if err != nil {
+			return err
+		}
+		if err := eventkit.EnsureStreams(js); err != nil {
+			return err
+		}
+		return eventkit.StartConsumer(consumerCtx, js, natsadapter.Consumer(service))
+	})
+	cancel()
+	if natsConn != nil {
+		natsConn.Close()
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 }
