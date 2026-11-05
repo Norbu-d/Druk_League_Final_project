@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-05
 **Project root:** `D:\Druk_League_Final_project`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–18 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–20 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-05, the report, search-query and audit-log services have implementation work beyond health shells; media schema design is complete while media upload/retrieval remains open. Four CRUD modules and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -69,6 +69,7 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Namgay | Audit Log | Implementation underway under SCRUM-68 (section 18) |
 | Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65 |
 | Sonam | Search, Configuration | Search query endpoint and configuration schema merged; indexing/read-write follow-ups remain under SCRUM-87 and SCRUM-94 |
+| Sonam | Analytics | SCRUM-89 schema migration added and validated; event aggregation and service endpoints remain open under SCRUM-90 |
 | Namgay | Analytics | Shell |
 
 Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
@@ -550,18 +551,24 @@ Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (d
 - Applied the initial and metadata migrations to a temporary PostgreSQL database; reapplied the metadata migration successfully to verify idempotency, then dropped the test database.
 - Committed as `2189db9`; merged development with conflict resolution in `0ad6f41`. PR #11 passed all checks and merged to `development` on 5 Nov 2026. Jira SCRUM-83 is Done; no sprint dates changed.
 
-## 17. Progress update practice
+## 17. Sonam — Analytics-service database schema (SCRUM-89, 2026-11-05)
+
+- Added `services/analytics/migrations/002_match_facts.sql` with a finalized-match facts table, unique event and match IDs for deduplication, bounded score checks, season/dzongkhag dimensions, and indexes for tournament, season/dzongkhag, and team queries. The existing `analytics_snapshots` table remains unchanged.
+- Applied migrations `001` and `002` to a temporary PostgreSQL database; reapplied `002` successfully to verify idempotency, then dropped the temporary database.
+- Changes are uncommitted on `feature/sonam-platform-services`. SCRUM-89 is In Progress; analytics event aggregation and service implementation remain tracked separately under SCRUM-90.
+
+## 18. Progress update practice
 
 Whenever a Jira story is completed, add a dated entry here with its key, implemented behavior, test/verification evidence, commit or PR state, and Jira status. Keep unverified local runs and known requirement gaps explicit; do not mark the Jira story Done while a required child item or acceptance requirement remains open.
 
-## 18. SCRUM-68 — Audit log service (implementation underway, 4 Nov 2026)
+## 19. SCRUM-68 — Audit log service (implementation underway, 4 Nov 2026)
 
 - Jira shows SCRUM-68 in Sprint 7 (*Search & Config*), assigned to Namgay Lhamo, In Progress and due 28 Dec 2026. Its open subtasks are SCRUM-91 (database schema) and SCRUM-92 (audit event recording), both assigned to Namgay.
 - Implemented persistent audit-entry storage and idempotency for event-backed records, an authenticated gRPC record/list API, admin-only audit reads, and durable consumers for `MatchFinalized` and the `drukleague.admin.*` event family.
 - Added the audit-entry schema migration and wired the audit-log service to PostgreSQL and JetStream. The existing `RecordAuditEntry` RPC derives the actor from the authenticated identity rather than trusting the request actor field.
 - Verification is still pending; no local test or build command has been run for these changes. Generic admin-event producers do not yet publish to `drukleague.admin.*`. Keep SCRUM-68 and its subtasks open until the remaining event-producer scope is resolved and CI/acceptance checks pass.
 
-## 17. SCRUM-57 — Project charter (draft completed 5 Nov 2026)
+## 20. SCRUM-57 — Project charter (draft completed 5 Nov 2026)
 
 - Added `docs/project-charter.md` covering purpose, measurable objectives, in/out of scope, deliverables, stakeholders, governance, milestones, assumptions, constraints, risks, and acceptance/review roles for DrukLeague.
 - Kept milestone dates out of the charter because the Jira sprint dates are being corrected; Jira remains the schedule source. The document distinguishes the 20-service target from the staged implementation and does not claim unreceived approvals.
