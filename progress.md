@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-05
 **Project root:** `D:\Druk_League_Final_project`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–20 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–21 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-05, the report, search-query and audit-log services have implementation work beyond health shells; media schema design is complete while media upload/retrieval remains open. Four CRUD modules and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -69,7 +69,7 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Namgay | Audit Log | Implementation underway under SCRUM-68 (section 18) |
 | Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65 |
 | Sonam | Search, Configuration | Search query endpoint and configuration schema merged; indexing/read-write follow-ups remain under SCRUM-87 and SCRUM-94 |
-| Sonam | Analytics | SCRUM-89 schema migration added and validated; event aggregation and service endpoints remain open under SCRUM-90 |
+| Sonam | Analytics | SCRUM-89 schema is Done; SCRUM-90 MatchFinalized consumer is underway; query/service endpoints remain open |
 | Namgay | Analytics | Shell |
 
 Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
@@ -572,6 +572,11 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added `docs/project-charter.md` covering purpose, measurable objectives, in/out of scope, deliverables, stakeholders, governance, milestones, assumptions, constraints, risks, and acceptance/review roles for DrukLeague.
 - Kept milestone dates out of the charter because the Jira sprint dates are being corrected; Jira remains the schedule source. The document distinguishes the 20-service target from the staged implementation and does not claim unreceived approvals.
+
+## 21. Sonam — Analytics event aggregation (SCRUM-90, implementation underway)
+
+- Added a durable `MatchFinalized` consumer that validates event IDs, match/team IDs, score bounds, and finalization time; it looks up tournament season and dzongkhag using the Analytics service identity and writes each finalized match to `analytics_match_facts` idempotently.
+- Added Analytics Compose settings for NATS and Tournament service addresses. Go module tidy, `go build ./...`, and the Analytics Docker image build succeeded. Analytics, NATS, and Tournament are running; the analytics database contains 4 match facts with 4 unique event IDs and match IDs after the consumer processed existing finalized-match events. CI/PR review remains pending; Jira SCRUM-90 is In Progress.
 - This is a documentation deliverable; no software tests apply. Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview; `git diff --cached --check` passed before commit. The charter was committed as `4afa7b6`, documented in `83f955a`, and merged by PR #14 into `development` at merge commit `0dac320` on 5 Nov 2026. All 11 PR checks passed. SCRUM-57 was transitioned to Done in Jira on 5 Nov 2026 after the merge. SCRUM-25 was also transitioned to Done after confirming both subtasks (SCRUM-57 and SCRUM-58) are Done and the architecture documentation exists. SCRUM-68 remains paused and untouched.
 
 ## 18. SCRUM-49 — Role-based component visibility (merged, 5 Nov 2026)
