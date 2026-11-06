@@ -193,3 +193,27 @@ jobs:
       - name: Stop the test stack
         if: always()
         run: docker compose --file deploy/docker-compose.yml down --volumes --remove-orphans
+
+  audit-event-e2e:
+    name: API admin action reaches the audit log
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: drukleague-audit-e2e
+      POSTGRES_PASSWORD: ci-only-audit-postgres-password
+      JWT_SECRET: ci-only-audit-jwt-secret
+      BOOTSTRAP_ADMIN_USER: ci-audit-admin
+      BOOTSTRAP_ADMIN_PASSWORD: ci-only-audit-admin-password
+      API_BASE_URL: http://127.0.0.1:8080
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Start API, NATS, and Audit Log
+        run: docker compose --file deploy/docker-compose.yml up -d postgres nats db-init api audit-log
+
+      - name: Verify admin action is persisted by Audit Log
+        run: bash tests/integration/audit-event-e2e.sh
+
+      - name: Stop the test stack
+        if: always()
+        run: docker compose --file deploy/docker-compose.yml down --volumes --remove-orphans
