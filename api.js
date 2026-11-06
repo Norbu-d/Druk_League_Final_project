@@ -25,16 +25,18 @@
   const initials = (name) => name.split(/\s+/).map(part=>part[0]||'').join('').slice(0,2).toUpperCase();
   function syncRoleIdentity() {
     const signedIn = Boolean(token());
-    const username = signedIn ? (sessionStorage.getItem(usernameKey) || tokenUsername(token()) || 'Signed-in user') : 'Public viewer';
-    const role = signedIn ? currentRole() : 'viewer';
-    const badge = initials(username) || 'PV';
-    document.getElementById('profile-avatar').textContent = badge;
-    document.getElementById('profile-name').textContent = username;
-    document.getElementById('profile-role').textContent = roleLabel(role);
+    const identity = roleIdentity(
+      signedIn ? (sessionStorage.getItem(usernameKey) || tokenUsername(token())) : '',
+      signedIn ? currentRole() : 'viewer',
+      signedIn
+    );
+    document.getElementById('profile-avatar').textContent = identity.badge;
+    document.getElementById('profile-name').textContent = identity.displayName;
+    document.getElementById('profile-role').textContent = identity.roleLabel;
     const authButton = document.getElementById('auth-button');
-    authButton.textContent = badge;
-    authButton.setAttribute('aria-label', signedIn ? `Sign out ${username}` : 'Sign in to DrukLeague');
-    document.getElementById('profile-button').setAttribute('aria-label', signedIn ? `${username}, ${roleLabel(role)}. Sign out.` : 'Public viewer, Viewer role. Sign in.');
+    authButton.textContent = identity.badge;
+    authButton.setAttribute('aria-label', signedIn ? `Sign out ${identity.displayName}` : 'Sign in to DrukLeague');
+    document.getElementById('profile-button').setAttribute('aria-label', signedIn ? `${identity.displayName}, ${identity.roleLabel}. Sign out.` : 'Public viewer, Viewer role. Sign in.');
   }
   async function refresh() {
     if (!token()) return;

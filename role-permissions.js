@@ -36,6 +36,13 @@ function roleLabel(role = currentRole()) {
   return roleLabels[role] || roleLabels.viewer;
 }
 
-const permissions = Object.freeze({rolePages, roleActions, roleLabels, currentRole, canRoleAction, roleLabel});
+function roleIdentity(username, role, signedIn = true) {
+  const displayName = signedIn ? (username || 'Signed-in user') : 'Public viewer';
+  const safeRole = signedIn && Object.prototype.hasOwnProperty.call(roleLabels, role) ? role : 'viewer';
+  const badge = displayName.split(/\s+/).map(part => part[0] || '').join('').slice(0, 2).toUpperCase() || 'PV';
+  return Object.freeze({displayName, role: safeRole, roleLabel: roleLabels[safeRole], badge});
+}
+
+const permissions = Object.freeze({rolePages, roleActions, roleLabels, currentRole, canRoleAction, roleLabel, roleIdentity});
 if (typeof module !== 'undefined' && module.exports) module.exports = permissions;
 if (typeof window !== 'undefined') window.DrukLeaguePermissions = permissions;
