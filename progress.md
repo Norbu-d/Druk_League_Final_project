@@ -480,7 +480,7 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 - **Compose health.** Separate liveness from readiness (can it reach its DB and NATS?) and use `depends_on: condition: service_healthy` for PostgreSQL, NATS and `db-init`, to stop startup races.
 - **Backups.** A `pg_dump` script covering every service database, run before demos, instead of relying on "never run `down -v`".
 - **Standings rebuild.** A replay command that recomputes standings from finalised results in Score. Also makes the correction flow simpler.
-- **Dead-letter stream is write-only.** Add a way to list and replay `DRUKLEAGUE_DLQ` (admin tool or runbook).
+- **Dead-letter stream inspection/replay.** Implemented in `tools/event-admin`; entries remain retained for 30 days after replay.
 - **Retention.** Clean up published outbox rows and set retention limits on the JetStream streams.
 - **Double-submit protection.** Idempotency keys or natural-key unique constraints on create calls (register team, finalise).
 - **Test data.** The e2e run leaves rows behind. Prefix test data and add a cleanup path, or run e2e against a throwaway database.
@@ -598,3 +598,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added login and public-standings rate limits, baseline security headers, and a local-origin CORS allowlist to the Nginx edge; removed the unused `web-preview/` duplicate. The API gateway no longer emits a wildcard CORS origin.
 - `docker compose config --quiet` passed. `nginx -t` passed in `nginx:1.27-alpine` using temporary `api` and `report` hostname aliases. Docker Desktop was unavailable for an end-to-end Compose run at the first implementation pass.
 - Moved the API JWT out of `sessionStorage` into an HttpOnly, SameSite=Strict cookie; added session restore and logout endpoints and changed the frontend to use same-origin requests. The API gateway build, `node --check` for the frontend scripts, `docker compose config --quiet`, and containerized `nginx -t` passed. End-to-end browser/session verification was not run; no rotating refresh-token flow exists. Keep SCRUM-103 In Progress pending acceptance review.
+
+## 23. SCRUM-102 — Dead-letter inspection and replay (implementation, 6 Nov 2026)
+
+- Added `tools/event-admin inspect` to list retained DLQ metadata and `replay <sequence>` to republish a message to its recorded original subject. `--dry-run` validates the target; replay retains the source DLQ record.
+- The tool build succeeded. The shared DLQ stream already has a 30-day retention policy. Live replay against a running NATS service remains to be verified before closing the Jira issue.

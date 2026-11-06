@@ -54,6 +54,19 @@ Shared packages:
 - `packages/eventkit`: JetStream streams, durable consumers with bounded redelivery, dead-letter stream `DRUKLEAGUE_DLQ`, de-duplicated publisher.
 - `packages/contracts`: generated Go code from `proto/` (Buf).
 
+### Inspecting and replaying dead-letter events
+
+The `tools/event-admin` command inspects recent entries in `DRUKLEAGUE_DLQ` and replays an entry to its recorded original subject. Configure `NATS_URL` if NATS is not at `nats://localhost:4222`:
+
+```powershell
+$env:NATS_URL = "nats://localhost:4222"
+go run ./tools/event-admin inspect --limit 50
+go run ./tools/event-admin replay --dry-run 123
+go run ./tools/event-admin replay 123
+```
+
+Replay retains the original dead-letter entry for audit. The DLQ stream keeps entries for 30 days.
+
 Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,adapters}`, with `cmd/service/main.go` doing wiring only.
 
 ### Not built yet
