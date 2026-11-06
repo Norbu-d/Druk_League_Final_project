@@ -4,13 +4,6 @@ set -euo pipefail
 compose=(docker compose --file deploy/docker-compose.yml)
 api_url=${API_BASE_URL:-http://127.0.0.1:8080}
 
-cleanup() {
-  "${compose[@]}" down --volumes --remove-orphans
-}
-trap cleanup EXIT
-
-"${compose[@]}" up --detach postgres nats db-init api audit-log
-
 for attempt in {1..60}; do
   if curl --fail --silent "$api_url/healthz" >/dev/null; then
     break
@@ -22,13 +15,13 @@ for attempt in {1..60}; do
   sleep 2
 done
 
-login=$(curl --fail --silent "$api_url/api/auth/login" \
+login=$(curl --fail --silent --show-error "$api_url/api/auth/login" \
   -H 'Content-Type: application/json' \
   --data "{\"username\":\"${BOOTSTRAP_ADMIN_USER}\",\"password\":\"${BOOTSTRAP_ADMIN_PASSWORD}\"}")
 token=$(jq -er '.token' <<<"$login")
-actor_id=$(jq -er '.user.id' <<<"$login")
+actor_id=$(jq -er '.user.sub' <<<"$login")
 
-tournament=$(curl --fail --silent "$api_url/api/tournaments" \
+tournament=$(curl --fail --silent --show-error "$api_url/api/tournaments" \
   -H "Authorization: Bearer $token" \
   -H 'Content-Type: application/json' \
   --data '{"name":"Audit E2E Verification","sport":"Football","season":"CI","dzongkhag":"Thimphu"}')
