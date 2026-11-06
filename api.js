@@ -11,7 +11,10 @@
   }
   const tokenRole = (value) => tokenClaims(value).role || 'viewer';
   const tokenUsername = (value) => tokenClaims(value).username || '';
-  const apiRoot = window.DRUKLEAGUE_API_BASE || `${location.protocol}//${location.hostname}:8080/api`;
+  const defaultApiRoot = location.protocol === 'file:'
+    ? 'http://127.0.0.1:8080/api'
+    : `${location.protocol}//${location.hostname}:8080/api`;
+  const apiRoot = window.DRUKLEAGUE_API_BASE || defaultApiRoot;
   const headers = () => ({'Content-Type':'application/json', ...(token() ? {Authorization:`Bearer ${token()}`} : {})});
   async function request(path, options={}) {
     const response = await fetch(`${apiRoot}${path}`, {...options, headers:{...headers(), ...(options.headers||{})}});
@@ -60,7 +63,21 @@
     if (form.id==='login-form') {
       event.preventDefault();
       try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(tokenKey,result.token);sessionStorage.setItem(roleKey,result.user.role||tokenRole(result.token));sessionStorage.setItem(usernameKey,result.user.username||tokenUsername(result.token));syncRoleIdentity();document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${result.user.username}.`);await refresh(); }
-      catch(error){toast(error.message);}
+      catch(error){
+        toast(error.message);
+        const modal=document.querySelector('#login-form .modal-body');
+        if (modal) {
+          let message=document.getElementById('login-error');
+          if (!message) {
+            message=document.createElement('p');
+            message.id='login-error';
+            message.setAttribute('role','alert');
+            message.style.color='#a34f3f';
+            modal.prepend(message);
+          }
+          message.textContent=`Could not sign in: ${error.message}`;
+        }
+      }
       return;
     }
     const formAction={'tournament-form':'new-tournament','team-form':'new-team','score-form':'update-score'}[form.id];
