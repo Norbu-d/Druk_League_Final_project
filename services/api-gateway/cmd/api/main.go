@@ -704,7 +704,6 @@ func serverError(w http.ResponseWriter, e error) {
 func methodNotAllowed(w http.ResponseWriter) { writeError(w, 405, "Method not allowed") }
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", env("CORS_ORIGIN", "*"))
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 		if r.Method == http.MethodOptions {

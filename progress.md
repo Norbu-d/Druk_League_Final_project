@@ -90,7 +90,7 @@ Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and cov
 
 ## 4. File guide
 
-- **Frontend:** root `index.html`, `styles.css`, `app.js`, `api.js` are the source of truth; `web-preview/` is a copy, do not edit it.
+- **Frontend:** root `index.html`, `styles.css`, `app.js`, `api.js` are the source of truth. The unused `web-preview/` duplicate was removed on 6 Nov 2026.
 - **Monolith:** `services/api-gateway/cmd/api/main.go` (HTTP, auth, tournaments, teams, matches, fixtures, scoring, finalisation), `admin_matches.go` (accounts, official assignment, match creation), `events.go` (outbox → JetStream), `migrations/001_init.sql` (schema + trigger blocking edits to finalised results).
 - **Contracts and shared code:** `proto/` (layout: `proto/drukleague/v1/` holds events, match, score, team, tournament, user; every other service has `proto/drukleague/<name>/v1/<name>.proto`), `packages/contracts/` (generated Go), `packages/servicekit/` (migration, bearer-token check, gRPC runtime), `services/_template/` (hexagonal example), `services/<service>/` (one per service).
 - **Deploy:** `deploy/docker-compose.yml`, `build-services.ps1`, `init-databases.sh`, `nginx.conf`, `.env.example` (variables: `POSTGRES_PASSWORD`, `JWT_SECRET`, `BOOTSTRAP_ADMIN_USER`, `BOOTSTRAP_ADMIN_PASSWORD`). `deploy/.env` is private: never print, copy or commit it. `.gitignore` and `.gitattributes` exist (secrets ignored; shell scripts, Go, SQL, proto, YAML, Dockerfile and nginx config forced to LF).
@@ -230,7 +230,8 @@ D:\druk-league\
 │   ├── build-services.ps1
 │   ├── docker-compose.yml
 │   ├── init-databases.sh
-│   └── nginx.conf
+│   ├── nginx.conf
+│   └── nginx-security.conf
 ├── docs/
 │   ├── architecture-decision-mvp.md
 │   ├── change-control.md
@@ -292,7 +293,6 @@ D:\druk-league\
 │       ├── cmd/service/main.go   #   cmd/service/main.go, Dockerfile, go.mod, go.sum
 │       └── internal/adapters/grpc/server.go   # present for match, official, player,
 │                                              # registration, team, tournament, user, venue
-├── web-preview/                  # copy of the frontend for the local preview; do not edit
 │   ├── api.js
 │   ├── app.js
 │   ├── index.html
@@ -490,7 +490,7 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 
 - **nginx:** rate limits on login and public viewer reads, CORS, basic security headers.
 - **Token storage.** Check where the plain-JS frontend keeps the JWT. Prefer the access token in memory and the refresh token in an httpOnly cookie if the gateway can set it; otherwise document it as a limitation.
-- **`web-preview/`** is a copy that must not be edited. Delete it or generate it by script so it cannot drift.
+- **Browser token storage.** The frontend keeps its access token in `sessionStorage`; a secure refresh-cookie flow remains open.
 - **List endpoints.** Make sure every List RPC (tournaments, teams, matches, standings) uses `Page` and supports filters.
 - **SWE302:** a performance test (k6 or `hey`) against the gateway for login and the public standings read; traceability from each requirement to a test and a sprint.
 - **Audit Log** is the first shell worth building for real: admin actions, role changes and result corrections.
