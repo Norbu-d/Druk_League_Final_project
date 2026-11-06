@@ -33,3 +33,5 @@ body{font-size:16px}.breadcrumb,.searchbox input,.season-button{font-size:13px}.
 @media(max-width:740px){.heading-actions .button:not(.button-primary){display:none}.heading-actions .button-primary{padding-inline:12px}.page-heading{gap:16px}}
 .brand{height:auto;min-height:66px;gap:10px;padding:0 4px;margin-bottom:27px}.brand-logo-wrap{width:66px;height:66px;flex:0 0 66px;display:grid;place-items:center;overflow:hidden;border-radius:12px;background:#f1f4e8}.brand-logo{display:block;width:64px;height:64px;object-fit:contain}.brand-type{font-size:18px;letter-spacing:-.7px;white-space:nowrap}.brand-type small{font-size:7px;letter-spacing:1px}
 .auth-button{border:0;cursor:pointer;font-family:inherit}.auth-button:focus-visible{outline:3px solid #d5e6a8;outline-offset:2px}
+/* Keep role-hidden navigation and actions hidden despite component display rules. */
+[hidden] { display: none !important; }

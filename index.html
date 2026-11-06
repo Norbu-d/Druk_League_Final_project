@@ -35,7 +35,7 @@
         </nav>
         <div class="sidebar-bottom">
           <div class="help-card"><span class="help-spark">✳</span><strong>Need a hand?</strong><p>Explore the quick guide to get your tournament moving.</p><button class="text-button" id="help-button">Open quick guide <span>↗</span></button></div>
-          <button class="profile-button"><span class="avatar avatar-gold">PD</span><span class="profile-copy"><strong>Pema Dorji</strong><small>League administrator</small></span><span class="profile-more">···</span></button>
+          <button class="profile-button" id="profile-button" type="button" aria-label="Signed-out public viewer"><span class="avatar avatar-gold" id="profile-avatar">PV</span><span class="profile-copy"><strong id="profile-name">Public viewer</strong><small id="profile-role">Viewer</small></span><span class="profile-more" aria-hidden="true">···</span></button>
         </div>
       </aside>
       <main class="main-area">
@@ -46,7 +46,7 @@
             <label class="searchbox"><span data-icon="search"></span><input id="global-search" type="search" placeholder="Search anything..." aria-label="Search anything" /><kbd>⌘ K</kbd></label>
             <button class="season-button" id="season-button"><span class="season-dot"></span>2025 season<span class="chevron">⌄</span></button>
             <button class="icon-button notification-button" id="notifications-button" aria-label="Notifications"><span data-icon="bell"></span><i></i></button>
-            <button class="avatar avatar-gold top-avatar auth-button" id="auth-button" type="button" aria-label="Sign in to DrukLeague">PD</button>
+            <button class="avatar avatar-gold top-avatar auth-button" id="auth-button" type="button" aria-label="Sign in to DrukLeague">PV</button>
           </div>
         </header>
         <section class="page-content" id="page-content" aria-live="polite"></section>

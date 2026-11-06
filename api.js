@@ -1,14 +1,20 @@
 (() => {
   const tokenKey = 'drukleague-session';
   const roleKey = 'drukleague-role';
+  const usernameKey = 'drukleague-username';
   const token = () => sessionStorage.getItem(tokenKey);
-  function tokenRole(value) {
+  function tokenClaims(value) {
     try {
       const payload = value.split('.')[1].replaceAll('-', '+').replaceAll('_', '/');
-      return JSON.parse(atob(payload)).role || 'viewer';
-    } catch { return 'viewer'; }
+      return JSON.parse(atob(payload));
+    } catch { return {}; }
   }
-  const apiRoot = window.DRUKLEAGUE_API_BASE || `${location.protocol}//${location.hostname}:8080/api`;
+  const tokenRole = (value) => tokenClaims(value).role || 'viewer';
+  const tokenUsername = (value) => tokenClaims(value).username || '';
+  const defaultApiRoot = location.protocol === 'file:'
+    ? 'http://127.0.0.1:8080/api'
+    : `${location.protocol}//${location.hostname}:8080/api`;
+  const apiRoot = window.DRUKLEAGUE_API_BASE || defaultApiRoot;
   const headers = () => ({'Content-Type':'application/json', ...(token() ? {Authorization:`Bearer ${token()}`} : {})});
   async function request(path, options={}) {
     const response = await fetch(`${apiRoot}${path}`, {...options, headers:{...headers(), ...(options.headers||{})}});
@@ -17,6 +23,21 @@
     return data;
   }
   const initials = (name) => name.split(/\s+/).map(part=>part[0]||'').join('').slice(0,2).toUpperCase();
+  function syncRoleIdentity() {
+    const signedIn = Boolean(token());
+    const identity = roleIdentity(
+      signedIn ? (sessionStorage.getItem(usernameKey) || tokenUsername(token())) : '',
+      signedIn ? currentRole() : 'viewer',
+      signedIn
+    );
+    document.getElementById('profile-avatar').textContent = identity.badge;
+    document.getElementById('profile-name').textContent = identity.displayName;
+    document.getElementById('profile-role').textContent = identity.roleLabel;
+    const authButton = document.getElementById('auth-button');
+    authButton.textContent = identity.badge;
+    authButton.setAttribute('aria-label', signedIn ? `Sign out ${identity.displayName}` : 'Sign in to DrukLeague');
+    document.getElementById('profile-button').setAttribute('aria-label', signedIn ? `${identity.displayName}, ${identity.roleLabel}. Sign out.` : 'Public viewer, Viewer role. Sign in.');
+  }
   async function refresh() {
     if (!token()) return;
     try {
@@ -31,19 +52,34 @@
   }
   function showLogin() {
     if (token()) {
-      sessionStorage.removeItem(tokenKey); sessionStorage.removeItem(roleKey); document.getElementById('auth-button').textContent='PD'; render('dashboard');
+      sessionStorage.removeItem(tokenKey); sessionStorage.removeItem(roleKey); sessionStorage.removeItem(usernameKey); syncRoleIdentity(); render('dashboard');
       toast('Signed out.'); return;
     }
     document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title"><header class="modal-head"><div><h2 id="login-title">Sign in to DrukLeague</h2><p>Connect to your saved tournaments and match data.</p></div><button class="modal-close" type="button" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="login-form"><div class="modal-body"><div class="form-grid"><div class="form-field full"><label for="login-user">Username</label><input id="login-user" name="username" autocomplete="username" required></div><div class="form-field full"><label for="login-password">Password</label><input id="login-password" name="password" type="password" autocomplete="current-password" required></div></div></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" class="button button-primary">Sign in</button></footer></form></section></div>`;
     document.getElementById('login-user').focus();
   }
   document.getElementById('auth-button').addEventListener('click',showLogin);
+  document.getElementById('profile-button').addEventListener('click',showLogin);
   document.addEventListener('submit', async (event) => {
     const form=event.target;
     if (form.id==='login-form') {
       event.preventDefault();
-      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(tokenKey,result.token);sessionStorage.setItem(roleKey,result.user.role||tokenRole(result.token));document.getElementById('auth-button').textContent=initials(result.user.username);document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${result.user.username}.`);await refresh(); }
-      catch(error){toast(error.message);}
+      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(tokenKey,result.token);sessionStorage.setItem(roleKey,result.user.role||tokenRole(result.token));sessionStorage.setItem(usernameKey,result.user.username||tokenUsername(result.token));syncRoleIdentity();document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${result.user.username}.`);await refresh(); }
+      catch(error){
+        toast(error.message);
+        const modal=document.querySelector('#login-form .modal-body');
+        if (modal) {
+          let message=document.getElementById('login-error');
+          if (!message) {
+            message=document.createElement('p');
+            message.id='login-error';
+            message.setAttribute('role','alert');
+            message.style.color='#a34f3f';
+            modal.prepend(message);
+          }
+          message.textContent=`Could not sign in: ${error.message}`;
+        }
+      }
       return;
     }
     const formAction={'tournament-form':'new-tournament','team-form':'new-team','score-form':'update-score'}[form.id];
@@ -78,11 +114,13 @@
     if (!sessionStorage.getItem(roleKey)) {
       sessionStorage.setItem(roleKey, tokenRole(token()));
     }
-    document.getElementById('auth-button').textContent = '✓';
+    syncRoleIdentity();
     render(activePage);
     void refresh();
   } else {
     sessionStorage.setItem(roleKey, 'viewer');
+    sessionStorage.removeItem(usernameKey);
+    syncRoleIdentity();
     render(activePage);
   }
 })();
