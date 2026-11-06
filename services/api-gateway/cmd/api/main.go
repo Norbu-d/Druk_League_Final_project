@@ -160,6 +160,13 @@ func (s *server) api(w http.ResponseWriter, r *http.Request) {
 				methodNotAllowed(w)
 			}
 			return
+		case "correct-result":
+			if r.Method == http.MethodPost {
+				s.correctResult(w, r, p, parts[1])
+			} else {
+				methodNotAllowed(w)
+			}
+			return
 		}
 	}
 	if len(parts) == 3 && parts[0] == "tournaments" && parts[2] == "fixtures" && r.Method == http.MethodPost {
@@ -242,9 +249,23 @@ func (s *server) createTournament(w http.ResponseWriter, r *http.Request, p prin
 		writeError(w, 400, "dzongkhag must be one of the 20 Bhutanese districts")
 		return
 	}
-	var id string
-	e := s.db.QueryRowContext(r.Context(), `INSERT INTO tournaments(name,sport,season,venue,starts_at,created_by,dzongkhag) VALUES($1,$2,$3,$4,NULLIF($5,'')::date,NULLIF($6,'')::uuid,$7) RETURNING id::text`, in.Name, in.Sport, in.Season, in.Venue, in.StartsAt, p.ID, in.Dzongkhag).Scan(&id)
+	tx, e := s.db.BeginTx(r.Context(), nil)
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	var id string
+	e = tx.QueryRowContext(r.Context(), `INSERT INTO tournaments(name,sport,season,venue,starts_at,created_by,dzongkhag) VALUES($1,$2,$3,$4,NULLIF($5,'')::date,NULLIF($6,'')::uuid,$7) RETURNING id::text`, in.Name, in.Sport, in.Season, in.Venue, in.StartsAt, p.ID, in.Dzongkhag).Scan(&id)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "tournament.created", "tournament", id, ""); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -310,8 +331,22 @@ func (s *server) createTeam(w http.ResponseWriter, r *http.Request, p principal)
 		return
 	}
 	var id string
-	e := s.db.QueryRowContext(r.Context(), `INSERT INTO teams(name,short_code,dzongkhag,tournament_id) VALUES($1,$2,$3,NULLIF($4,'')::uuid) RETURNING id::text`, in.Name, in.Short, in.Dzongkhag, in.TournamentID).Scan(&id)
+	tx, e := s.db.BeginTx(r.Context(), nil)
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	e = tx.QueryRowContext(r.Context(), `INSERT INTO teams(name,short_code,dzongkhag,tournament_id) VALUES($1,$2,$3,NULLIF($4,'')::uuid) RETURNING id::text`, in.Name, in.Short, in.Dzongkhag, in.TournamentID).Scan(&id)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "team.created", "team", id, ""); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -429,7 +464,7 @@ func (s *server) finalize(w http.ResponseWriter, r *http.Request, p principal, i
 		serverError(w, e)
 		return
 	}
-	if _, e = tx.ExecContext(r.Context(), `INSERT INTO event_outbox(subject,payload) VALUES('MatchFinalized',$1::jsonb)`, string(payload)); e != nil {
+	if _, e = tx.ExecContext(r.Context(), `INSERT INTO event_outbox(subject,payload) VALUES('drukleague.match.finalized',$1::jsonb)`, string(payload)); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -549,6 +584,10 @@ func (s *server) generateFixtures(w http.ResponseWriter, r *http.Request, p prin
 		last := ids[len(ids)-1]
 		copy(ids[2:], ids[1:len(ids)-1])
 		ids[1] = last
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "tournament.fixtures.generated", "tournament", id, ""); e != nil {
+		serverError(w, e)
+		return
 	}
 	if e = tx.Commit(); e != nil {
 		serverError(w, e)
