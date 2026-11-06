@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/drukleague/platform/services/api-gateway/internal/auditoutbox"
+	"github.com/drukleague/platform/internal/auditoutbox"
 	"github.com/nats-io/nats.go"
 )
 
