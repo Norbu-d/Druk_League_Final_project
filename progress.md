@@ -603,3 +603,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added `tools/event-admin inspect` to list retained DLQ metadata and `replay <sequence>` to republish a message to its recorded original subject. `--dry-run` validates the target; replay retains the source DLQ record.
 - The tool build succeeded. The shared DLQ stream already has a 30-day retention policy. Live replay against a running NATS service remains to be verified before closing the Jira issue.
+
+## 24. SCRUM-87 — Search index and synchronization design (6 Nov 2026)
+
+- Documented the source-of-truth boundary, entity document shape, versioned outbox events, idempotent consumers, snapshot-plus-stream rebuild procedure, eventual consistency, query limits, and operational metrics in `docs/search-index-design.md`.
+- Confirmed the Search gRPC query service and migration already exist. Entity event producers, snapshot APIs, and index population are rollout dependencies and are not claimed complete by this design task.
