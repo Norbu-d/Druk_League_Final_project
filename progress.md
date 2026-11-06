@@ -585,3 +585,10 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Extended the frontend's existing role-aware navigation to hide controls by role: tournament and fixture management for Super Admin, score updates for Match Officials, team registration for Team Managers, and read-only behavior for Viewers. Administrative official/venue controls are hidden from non-admin roles. Export and read-only match details remain available to the four roles.
 - Added role checks to UI click and form submission paths so manually invoked hidden actions are rejected with a user-facing message. The authenticated API/server remains the security boundary; these browser checks are presentation behavior only.
 - Updated `app.js` and `api.js`. No local tests or build checks were run. Committed as `55dc688` and `22210cc`, then merged to `development` in PR [#16](https://github.com/Norbu-d/Druk_League_Final_project/pull/16) at merge commit `666d197` on 5 Nov 2026. All 11 CI checks passed. Jira was initially To Do and Namgay confirmed it was changed to Done on 5 Nov 2026.
+
+## 21. SCRUM-24 — Testing pyramid (Namgay contribution in progress, 5 Nov 2026)
+
+- Jira shows the parent assigned to Namgay in Sprint 8, In Progress, with two of three children Done. SCRUM-55, integration and contract tests, remains In Progress and assigned to Norbu; this work avoids duplicating that subtask.
+- Extracted the four-role page/action permission policy into `role-permissions.js`, added four Node unit tests for page access, fallback roles, mutation permissions and read-only export, and added a CI job to run them. Updated `docs/swe302-test-plan.md` with case T-17 and its evidence.
+- Local verification: 4/4 Node tests passed; `node --check` passed for the permission module, `app.js` and `api.js`; `git diff --check` passed. The Go coverage script could not run because the Go executable is unavailable in the Bash environment; Docker is unavailable here, so full Compose E2E remains pending.
+- SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 remains paused.
