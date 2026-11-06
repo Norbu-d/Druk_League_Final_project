@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const {after, test} = require('node:test');
-const {canRoleAction, currentRole, roleActions, rolePages} = require('../../role-permissions.js');
+const {canRoleAction, currentRole, roleActions, roleLabels, rolePages, roleLabel} = require('../../role-permissions.js');
 
 const originalSessionStorage = globalThis.sessionStorage;
 after(() => {
@@ -27,6 +27,20 @@ test('unknown and removed roles fall back to Viewer', () => {
   assert.equal(currentRole(), 'viewer');
   useRole('unexpected');
   assert.equal(currentRole(), 'viewer');
+});
+
+test('the active role has a clear user-facing label', () => {
+  assert.deepEqual(roleLabels, {
+    super_admin: 'Super Admin',
+    match_official: 'Match Official',
+    team_manager: 'Team Manager',
+    viewer: 'Viewer'
+  });
+  for (const [role, label] of Object.entries(roleLabels)) {
+    useRole(role);
+    assert.equal(roleLabel(), label);
+  }
+  assert.equal(roleLabel('unknown'), 'Viewer');
 });
 
 test('admin, team manager, and match official controls are limited to their roles', () => {

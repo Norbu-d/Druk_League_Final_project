@@ -593,3 +593,10 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added Audit Log unit tests for event validation and conversion, authorization and pagination, JetStream message handling, and gRPC request/response mapping. Added PostgreSQL repository tests for event idempotency, filtered/paginated reads, and database errors; these run automatically in CI's PostgreSQL-backed test job.
 - Local verification on 6 Nov: the audit-log Go packages pass, and combined `internal/...` coverage is 80.6% against the 80% gate. PostgreSQL integration cases were skipped locally because `TEST_DATABASE_URL` is unset. The previously added four Node permission tests and syntax checks passed. The full Compose E2E remains assigned to SCRUM-56 (Done); cross-service integration and contract tests remain in Norbu's open SCRUM-55.
 - SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 remains paused.
+
+## 22. SCRUM-21 — Role-based UI (Namgay contribution in progress, 6 Nov 2026)
+
+- SCRUM-21 is assigned to Namgay and was To Do on the last assigned-work view. Its stated scope is a role-aware UI for Super Admin, Match Official, Team Manager, and Viewer. Jira could not be refreshed during this update because the available browser session requested Atlassian account access; no Jira status was changed.
+- Existing role-based page and action visibility from SCRUM-49 is retained. Fixed the signed-in profile so the sidebar and header show the current username and role label; signing out resets both to Public viewer / Viewer. Role names are centralized in `role-permissions.js`, including the safe Viewer fallback.
+- Verification: all 5 Node role-permission tests passed; `node --check` passed for `role-permissions.js`, `app.js`, and `api.js`; `git diff --check` passed. Backend authorization remains the security boundary.
+- SCRUM-21 is not marked Done pending review of the full Jira acceptance criteria and Jira status reconciliation. SCRUM-24 was left open and untouched while work moved here.

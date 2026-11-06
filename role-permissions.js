@@ -16,6 +16,13 @@ const roleActions = Object.freeze({
   export: Object.freeze(['super_admin','match_official','team_manager','viewer'])
 });
 
+const roleLabels = Object.freeze({
+  super_admin: 'Super Admin',
+  match_official: 'Match Official',
+  team_manager: 'Team Manager',
+  viewer: 'Viewer'
+});
+
 function currentRole() {
   const role = globalThis.sessionStorage?.getItem('drukleague-role') || 'viewer';
   return Object.prototype.hasOwnProperty.call(rolePages, role) ? role : 'viewer';
@@ -25,6 +32,10 @@ function canRoleAction(action) {
   return (roleActions[action] || []).includes(currentRole());
 }
 
-const permissions = Object.freeze({rolePages, roleActions, currentRole, canRoleAction});
+function roleLabel(role = currentRole()) {
+  return roleLabels[role] || roleLabels.viewer;
+}
+
+const permissions = Object.freeze({rolePages, roleActions, roleLabels, currentRole, canRoleAction, roleLabel});
 if (typeof module !== 'undefined' && module.exports) module.exports = permissions;
 if (typeof window !== 'undefined') window.DrukLeaguePermissions = permissions;
