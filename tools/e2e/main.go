@@ -250,7 +250,7 @@ func main() {
 	standingsReport := must(reports.CreateReport(as(admin), &reportv1.CreateReportRequest{ReportType: "standings", TournamentId: tournament.GetId(), Format: "csv"})).GetReport()
 	check("standings report is generated and downloadable", standingsReport.GetStatus() == "complete" && standingsReport.GetDownloadUrl() != "", standingsReport)
 	standingsCSV := downloadReport(standingsReport.GetDownloadUrl(), admin)
-	check("standings CSV contains the tournament teams and table headers", strings.Contains(standingsCSV, "team_name") && strings.Contains(standingsCSV, "Thimphu E2E "+run) && strings.Contains(standingsCSV, "Paro E2E "+run), standingsCSV)
+	check("standings CSV contains the table headers and finalized match participants", strings.Contains(standingsCSV, "team_name") && strings.Contains(standingsCSV, homeTeam.name) && strings.Contains(standingsCSV, awayTeam.name), standingsCSV)
 	fixtureReport := must(reports.CreateReport(as(admin), &reportv1.CreateReportRequest{ReportType: "fixtures", TournamentId: tournament.GetId(), Format: "json"})).GetReport()
 	fixtureJSON := downloadReport(fixtureReport.GetDownloadUrl(), admin)
 	check("fixture JSON export includes every generated fixture", fixtureReport.GetStatus() == "complete" && strings.Count(fixtureJSON, `"tournament_id"`) == 6 && strings.Contains(fixtureJSON, `"home_team_id"`), fixtureJSON)
