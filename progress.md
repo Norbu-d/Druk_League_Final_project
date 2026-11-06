@@ -592,3 +592,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Extracted the four-role page/action permission policy into `role-permissions.js`, added four Node unit tests for page access, fallback roles, mutation permissions and read-only export, and added a CI job to run them. Updated `docs/swe302-test-plan.md` with case T-17 and its evidence.
 - Local verification: 4/4 Node tests passed; `node --check` passed for the permission module, `app.js` and `api.js`; `git diff --check` passed. The Go coverage script could not run because the Go executable is unavailable in the Bash environment; Docker is unavailable here, so full Compose E2E remains pending.
 - SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 remains paused.
+
+## 22. SCRUM-103 — Nginx hardening (in progress, 6 Nov 2026)
+
+- Added login and public-standings rate limits, baseline security headers, and a local-origin CORS allowlist to the Nginx edge; removed the unused `web-preview/` duplicate. The API gateway no longer emits a wildcard CORS origin.
+- `docker compose config --quiet` passed. `nginx -t` passed in `nginx:1.27-alpine` using temporary `api` and `report` hostname aliases. Docker Desktop was unavailable for an end-to-end Compose run at the first implementation pass.
+- Browser token storage in `sessionStorage` still needs a secure refresh-cookie design. Keep SCRUM-103 In Progress until that design is implemented and reviewed.
