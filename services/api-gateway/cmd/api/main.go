@@ -160,6 +160,13 @@ func (s *server) api(w http.ResponseWriter, r *http.Request) {
 				methodNotAllowed(w)
 			}
 			return
+		case "correct-result":
+			if r.Method == http.MethodPost {
+				s.correctResult(w, r, p, parts[1])
+			} else {
+				methodNotAllowed(w)
+			}
+			return
 		}
 	}
 	if len(parts) == 3 && parts[0] == "tournaments" && parts[2] == "fixtures" && r.Method == http.MethodPost {
@@ -429,7 +436,7 @@ func (s *server) finalize(w http.ResponseWriter, r *http.Request, p principal, i
 		serverError(w, e)
 		return
 	}
-	if _, e = tx.ExecContext(r.Context(), `INSERT INTO event_outbox(subject,payload) VALUES('MatchFinalized',$1::jsonb)`, string(payload)); e != nil {
+	if _, e = tx.ExecContext(r.Context(), `INSERT INTO event_outbox(subject,payload) VALUES('drukleague.match.finalized',$1::jsonb)`, string(payload)); e != nil {
 		serverError(w, e)
 		return
 	}

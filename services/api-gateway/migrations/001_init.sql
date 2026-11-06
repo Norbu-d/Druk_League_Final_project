@@ -55,7 +55,7 @@ BEGIN
     NEW.result_home IS DISTINCT FROM OLD.result_home OR
     NEW.result_away IS DISTINCT FROM OLD.result_away OR
     NEW.finalized_at IS DISTINCT FROM OLD.finalized_at
-  ) THEN
+  ) AND current_setting('drukleague.allow_result_correction', true) IS DISTINCT FROM 'on' THEN
     RAISE EXCEPTION 'finalized match results are immutable';
   END IF;
   RETURN NEW;
@@ -64,3 +64,18 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS matches_result_immutable ON matches;
 CREATE TRIGGER matches_result_immutable BEFORE UPDATE ON matches
 FOR EACH ROW EXECUTE FUNCTION protect_finalized_match_result();
+
+CREATE TABLE IF NOT EXISTS match_result_corrections (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id uuid NOT NULL UNIQUE,
+  match_id uuid NOT NULL REFERENCES matches(id),
+  actor_id uuid NOT NULL REFERENCES users(id),
+  old_home_score integer NOT NULL CHECK (old_home_score BETWEEN 0 AND 99),
+  old_away_score integer NOT NULL CHECK (old_away_score BETWEEN 0 AND 99),
+  new_home_score integer NOT NULL CHECK (new_home_score BETWEEN 0 AND 99),
+  new_away_score integer NOT NULL CHECK (new_away_score BETWEEN 0 AND 99),
+  reason text NOT NULL CHECK (length(trim(reason)) BETWEEN 1 AND 2000),
+  corrected_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS match_result_corrections_match_time_idx
+  ON match_result_corrections(match_id, corrected_at DESC);

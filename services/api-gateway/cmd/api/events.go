@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -19,13 +21,46 @@ func connectEvents(ctx context.Context, db *sql.DB, url string) (*nats.Conn, err
 		nc.Close()
 		return nil, err
 	}
-	_, err = js.AddStream(&nats.StreamConfig{Name: "DRUKLEAGUE_EVENTS", Subjects: []string{"drukleague.match.finalized"}, Storage: nats.FileStorage, Retention: nats.LimitsPolicy})
-	if err != nil && err != nats.ErrStreamNameAlreadyInUse {
+	if err = ensureEventStream(js); err != nil {
 		nc.Close()
 		return nil, err
 	}
 	go publishOutbox(ctx, db, js)
 	return nc, nil
+}
+
+func ensureEventStream(js nats.JetStreamContext) error {
+	wanted := []string{"drukleague.match.finalized", "drukleague.fixtures.generated", "drukleague.admin.>"}
+	info, err := js.StreamInfo("DRUKLEAGUE_EVENTS")
+	if errors.Is(err, nats.ErrStreamNotFound) {
+		_, err = js.AddStream(&nats.StreamConfig{
+			Name: "DRUKLEAGUE_EVENTS", Subjects: wanted,
+			Storage: nats.FileStorage, Retention: nats.LimitsPolicy,
+		})
+		if errors.Is(err, nats.ErrStreamNameAlreadyInUse) {
+			return ensureEventStream(js)
+		}
+		return err
+	}
+	if err != nil {
+		return err
+	}
+
+	config := info.Config
+	for _, subject := range wanted {
+		found := false
+		for _, existing := range config.Subjects {
+			if existing == subject {
+				found = true
+				break
+			}
+		}
+		if !found {
+			config.Subjects = append(config.Subjects, subject)
+		}
+	}
+	_, err = js.UpdateStream(&config)
+	return err
 }
 
 func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
@@ -36,20 +71,21 @@ func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			rows, err := db.QueryContext(ctx, `SELECT id,payload::text FROM event_outbox WHERE published_at IS NULL ORDER BY id LIMIT 50`)
+			rows, err := db.QueryContext(ctx, `SELECT id,subject,payload::text FROM event_outbox WHERE published_at IS NULL ORDER BY id LIMIT 50`)
 			if err != nil {
 				log.Printf("event outbox read: %v", err)
 				continue
 			}
 			type entry struct {
 				id      int64
+				subject string
 				payload string
 			}
 			batch := []entry{}
 			var scanErr error
 			for rows.Next() {
 				var item entry
-				if scanErr = rows.Scan(&item.id, &item.payload); scanErr != nil {
+				if scanErr = rows.Scan(&item.id, &item.subject, &item.payload); scanErr != nil {
 					break
 				}
 				batch = append(batch, item)
@@ -65,7 +101,12 @@ func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
 				continue
 			}
 			for _, item := range batch {
-				_, err = js.Publish("drukleague.match.finalized", []byte(item.payload), nats.MsgId("event-outbox-"+decimal(item.id)))
+				subject, subjectErr := eventSubject(item.subject)
+				if subjectErr != nil {
+					log.Printf("event outbox subject %d: %v", item.id, subjectErr)
+					continue
+				}
+				_, err = js.Publish(subject, []byte(item.payload), nats.MsgId("event-outbox-"+decimal(item.id)))
 				if err != nil {
 					log.Printf("event publish %d: %v", item.id, err)
 					break
@@ -79,6 +120,20 @@ func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
 		}
 	}
 }
+
+func eventSubject(subject string) (string, error) {
+	// Rows written before the outbox began storing NATS subjects used this label.
+	if subject == "MatchFinalized" {
+		return "drukleague.match.finalized", nil
+	}
+	if subject == "drukleague.match.finalized" || subject == "drukleague.fixtures.generated" ||
+		subject == "drukleague.admin.match.result.corrected" ||
+		(strings.HasPrefix(subject, "drukleague.admin.") && !strings.ContainsAny(subject, "* >")) {
+		return subject, nil
+	}
+	return "", errors.New("unsupported event subject")
+}
+
 func decimal(v int64) string {
 	if v == 0 {
 		return "0"
