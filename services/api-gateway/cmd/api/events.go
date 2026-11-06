@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"log"
-	"strings"
 	"time"
 
+	"github.com/drukleague/platform/services/api-gateway/internal/auditoutbox"
 	"github.com/nats-io/nats.go"
 )
 
@@ -122,16 +122,7 @@ func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
 }
 
 func eventSubject(subject string) (string, error) {
-	// Rows written before the outbox began storing NATS subjects used this label.
-	if subject == "MatchFinalized" {
-		return "drukleague.match.finalized", nil
-	}
-	if subject == "drukleague.match.finalized" || subject == "drukleague.fixtures.generated" ||
-		subject == "drukleague.admin.match.result.corrected" ||
-		(strings.HasPrefix(subject, "drukleague.admin.") && !strings.ContainsAny(subject, "* >")) {
-		return subject, nil
-	}
-	return "", errors.New("unsupported event subject")
+	return auditoutbox.Subject(subject)
 }
 
 func decimal(v int64) string {
