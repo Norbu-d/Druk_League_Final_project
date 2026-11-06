@@ -139,9 +139,11 @@ func main() {
 	// --- Tournament + teams
 	tournament := must(tournaments.CreateTournament(as(admin), &v1.CreateTournamentRequest{Name: "E2E Cup " + run, Sport: "football", Season: "2026", Dzongkhag: "Thimphu"})).GetTournament()
 	teamIDs := []string{}
+	teamDetails := make(map[string]struct{ name, dzongkhag string }, 4)
 	for i, name := range []string{"Thimphu", "Paro", "Punakha", "Haa"} {
 		team := must(teams.CreateTeam(as(managerTokens[i]), &v1.CreateTeamRequest{Name: name + " E2E " + run, ShortCode: fmt.Sprintf("E%d%s", i, run[len(run)-3:]), Dzongkhag: name, TournamentId: tournament.GetId()})).GetTeam()
 		teamIDs = append(teamIDs, team.GetId())
+		teamDetails[team.GetId()] = struct{ name, dzongkhag string }{name: team.GetName(), dzongkhag: team.GetDzongkhag()}
 		check("team is owned by its creator", team.GetManagerId() == managerIDs[i], team.GetManagerId())
 	}
 
@@ -221,12 +223,15 @@ func main() {
 	check("Match consumed MatchFinalized (status completed)", completed)
 	check("Standings consumed MatchFinalized (2 rows)", len(table) == 2, len(table))
 	managersNotified, unrelatedManagersQuiet := true, true
+	homeTeam, awayTeam := teamDetails[match.GetHomeTeamId()], teamDetails[match.GetAwayTeamId()]
+	expectedResult := fmt.Sprintf("%s 3–1 %s", homeTeam.name, awayTeam.name)
+	expectedDistricts := fmt.Sprintf("Dzongkhags: %s and %s.", homeTeam.dzongkhag, awayTeam.dzongkhag)
 	for _, managerID := range managerIDs {
 		items := managerNotices[managerID]
 		if expectedManagers[managerID] {
 			found := false
 			for _, item := range items {
-				if item.GetSubject() == "Match result finalized" && strings.Contains(item.GetBody(), "3–1") {
+				if item.GetSubject() == "Match result finalized" && strings.Contains(item.GetBody(), expectedResult) && strings.Contains(item.GetBody(), expectedDistricts) {
 					found = true
 				}
 			}
@@ -237,7 +242,7 @@ func main() {
 			unrelatedManagersQuiet = false
 		}
 	}
-	check("participating team managers receive MatchFinalized notice", managersNotified)
+	check("participating team managers receive the result and affected dzongkhags", managersNotified)
 	check("other team managers receive no notice for this match", unrelatedManagersQuiet)
 	if len(table) == 2 {
 		check("winner has 3 points, played 1, team name from Team service", table[0].GetPoints() == 3 && table[0].GetPlayed() == 1 && table[0].GetTeamName() != "" && table[1].GetLost() == 1, table[0])

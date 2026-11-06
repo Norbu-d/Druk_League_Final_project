@@ -235,3 +235,40 @@ jobs:
       - name: Stop the test stack
         if: always()
         run: docker compose --file deploy/docker-compose.yml down --volumes --remove-orphans
+
+  notification-e2e:
+    name: MatchFinalized reaches team managers as notifications
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: drukleague-notification-e2e
+      POSTGRES_PASSWORD: ci-only-notification-postgres-password
+      JWT_SECRET: ci-only-notification-jwt-secret
+      BOOTSTRAP_ADMIN_USER: ci-notification-admin
+      BOOTSTRAP_ADMIN_PASSWORD: ci-only-notification-admin-password
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build shared service builder image
+        run: docker build --tag drukleague-service-builder:local --file services/service-builder/Dockerfile .
+
+      - name: Start the notification end-to-end service stack
+        run: >-
+          docker compose --file deploy/docker-compose.yml up -d
+          postgres nats db-init auth user team tournament venue fixture official
+          match score standings notification report
+
+      - name: Wait for the split services to finish starting
+        run: sleep 20
+
+      - name: Verify MatchFinalized notifications end to end
+        run: >-
+          docker run --rm --network "${COMPOSE_PROJECT_NAME}_default"
+          -v "$GITHUB_WORKSPACE:/src" -w /src/tools/e2e
+          -e E2E_ADMIN_USER="$BOOTSTRAP_ADMIN_USER"
+          -e E2E_ADMIN_PASSWORD="$BOOTSTRAP_ADMIN_PASSWORD"
+          drukleague-service-builder:local go run .
+
+      - name: Stop the test stack
+        if: always()
+        run: docker compose --file deploy/docker-compose.yml down --volumes --remove-orphans
