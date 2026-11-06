@@ -208,6 +208,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Build shared service builder image
+        run: docker build --tag drukleague-service-builder:local --file services/service-builder/Dockerfile .
+
       - name: Start API, NATS, and Audit Log
         run: docker compose --file deploy/docker-compose.yml up -d postgres nats db-init api audit-log
 
