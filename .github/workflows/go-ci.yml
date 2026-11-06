@@ -255,7 +255,7 @@ jobs:
       - name: Start the notification end-to-end service stack
         run: >-
           docker compose --file deploy/docker-compose.yml up -d
-          postgres nats db-init auth user team tournament venue fixture official
+          postgres nats db-init auth user team tournament venue dzongkhag fixture official
           match score standings notification report
 
       - name: Wait for the split services to finish starting
