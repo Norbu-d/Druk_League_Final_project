@@ -78,6 +78,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("POST /api/auth/login", s.login)
+	mux.Handle("GET /api/auth/session", s.authenticate(http.HandlerFunc(s.session)))
+	mux.HandleFunc("POST /api/auth/logout", s.logout)
 	// Standings are public so viewers can read published results without signing in.
 	mux.HandleFunc("GET /api/standings", s.listStandings)
 	mux.Handle("/api/", s.authenticate(http.HandlerFunc(s.api)))
@@ -197,7 +199,25 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Could not create session")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"token": token, "user": claim})
+	setSessionCookie(w, token)
+	writeJSON(w, 200, map[string]any{"user": map[string]string{"id": claim.ID, "username": claim.Username, "role": claim.Role}})
+}
+
+func (s *server) session(w http.ResponseWriter, r *http.Request) {
+	p := r.Context().Value("principal").(principal)
+	writeJSON(w, http.StatusOK, map[string]string{"id": p.ID, "username": p.Username, "role": p.Role})
+}
+
+func (s *server) logout(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: "", Path: "/", HttpOnly: true,
+		Secure: env("APP_ENV", "development") == "production", SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "signed_out"})
+}
+
+func setSessionCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: token, Path: "/", HttpOnly: true,
+		Secure: env("APP_ENV", "development") == "production", SameSite: http.SameSiteStrictMode,
+		MaxAge: 12 * 60 * 60})
 }
 func (s *server) listTournaments(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, e := s.db.QueryContext(r.Context(), `SELECT id,name,sport,season,status,venue,starts_at,COALESCE(dzongkhag,'') FROM tournaments ORDER BY created_at DESC`)
@@ -567,6 +587,11 @@ func (s *server) generateFixtures(w http.ResponseWriter, r *http.Request, p prin
 func (s *server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		a := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if a == "" {
+			if cookie, err := r.Cookie("drukleague-session"); err == nil {
+				a = cookie.Value
+			}
+		}
 		p, e := s.verify(a)
 		if e != nil {
 			writeError(w, 401, "Sign in to continue")

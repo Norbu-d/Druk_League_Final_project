@@ -490,7 +490,7 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 
 - **nginx:** rate limits on login and public viewer reads, CORS, basic security headers.
 - **Token storage.** Check where the plain-JS frontend keeps the JWT. Prefer the access token in memory and the refresh token in an httpOnly cookie if the gateway can set it; otherwise document it as a limitation.
-- **Browser token storage.** The frontend keeps its access token in `sessionStorage`; a secure refresh-cookie flow remains open.
+- **Session lifetime.** The browser session uses an HttpOnly, SameSite=Strict cookie with a 12-hour lifetime. A rotating refresh-token flow remains open.
 - **List endpoints.** Make sure every List RPC (tournaments, teams, matches, standings) uses `Page` and supports filters.
 - **SWE302:** a performance test (k6 or `hey`) against the gateway for login and the public standings read; traceability from each requirement to a test and a sprint.
 - **Audit Log** is the first shell worth building for real: admin actions, role changes and result corrections.
@@ -597,4 +597,4 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added login and public-standings rate limits, baseline security headers, and a local-origin CORS allowlist to the Nginx edge; removed the unused `web-preview/` duplicate. The API gateway no longer emits a wildcard CORS origin.
 - `docker compose config --quiet` passed. `nginx -t` passed in `nginx:1.27-alpine` using temporary `api` and `report` hostname aliases. Docker Desktop was unavailable for an end-to-end Compose run at the first implementation pass.
-- Browser token storage in `sessionStorage` still needs a secure refresh-cookie design. Keep SCRUM-103 In Progress until that design is implemented and reviewed.
+- Moved the API JWT out of `sessionStorage` into an HttpOnly, SameSite=Strict cookie; added session restore and logout endpoints and changed the frontend to use same-origin requests. The API gateway build, `node --check` for the frontend scripts, `docker compose config --quiet`, and containerized `nginx -t` passed. End-to-end browser/session verification was not run; no rotating refresh-token flow exists. Keep SCRUM-103 In Progress pending acceptance review.
