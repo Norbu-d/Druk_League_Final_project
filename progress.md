@@ -603,6 +603,7 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added `tools/event-admin inspect` to list retained DLQ metadata and `replay <sequence>` to republish a message to its recorded original subject. `--dry-run` validates the target; replay retains the source DLQ record.
 - The tool build succeeded. The shared DLQ stream already has a 30-day retention policy. Live replay against a running NATS service remains to be verified before closing the Jira issue.
+- Added daily cleanup of published transactional outbox rows older than 30 days in API Gateway, Score, and Fixture; pending rows are never deleted. Live verification remains pending.
 
 ## 24. SCRUM-87 — Search index and synchronization design (6 Nov 2026)
 

@@ -32,6 +32,8 @@ func RelayOnce(ctx context.Context, outbox ports.Outbox, js eventkit.Publisher) 
 func RunRelay(ctx context.Context, outbox ports.Outbox, js eventkit.Publisher, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
+	pruneTicker := time.NewTicker(24 * time.Hour)
+	defer pruneTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -39,6 +41,12 @@ func RunRelay(ctx context.Context, outbox ports.Outbox, js eventkit.Publisher, i
 		case <-ticker.C:
 			if _, err := RelayOnce(ctx, outbox, js); err != nil {
 				log.Printf("fixture outbox relay: %v", err)
+			}
+		case <-pruneTicker.C:
+			if count, err := outbox.PrunePublished(ctx, time.Now().Add(-30*24*time.Hour)); err != nil {
+				log.Printf("fixture outbox retention cleanup: %v", err)
+			} else if count > 0 {
+				log.Printf("fixture outbox retention cleanup removed %d rows", count)
 			}
 		}
 	}
