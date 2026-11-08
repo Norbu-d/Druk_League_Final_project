@@ -67,6 +67,17 @@ go run ./tools/event-admin replay 123
 
 Replay retains the original dead-letter entry for audit. The DLQ stream keeps entries for 30 days.
 
+### Rebuilding standings
+
+With the Compose services already running, rebuild the standings projection from the retained `MatchFinalized` event history:
+
+```powershell
+docker compose -f deploy/docker-compose.yml build standings
+docker compose -f deploy/docker-compose.yml run --rm --no-deps --entrypoint /app/rebuild standings
+```
+
+The command refuses to rebuild if the event stream is empty or its first sequence is no longer present. It pauses the live standings consumer while replacing its projection and processed-event IDs in one database transaction.
+
 Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,adapters}`, with `cmd/service/main.go` doing wiring only.
 
 ### Not built yet

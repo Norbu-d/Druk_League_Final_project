@@ -614,3 +614,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added authenticated `GetConfiguration` and super-admin-only `SetConfiguration` RPC handlers backed by the configuration service database. Keys are validated and values are bounded to 64 KiB; current contract stores values as strings, matching the existing proto key/value shape.
 - Wired the service into the shared gRPC server. Build and runtime verification are pending.
+
+## 26. SCRUM-101 — Standings rebuild from finalized events (implementation, 9 Nov 2026)
+
+- Added `services/standings/cmd/rebuild`, which replays retained `MatchFinalized` events, reloads Team metadata, deduplicates by event ID, and replaces standings plus processed-event IDs atomically.
+- The command holds an exclusive lock on `processed_events` while capturing the JetStream tail and rebuilding, so the live consumer waits and resumes afterward. It refuses an empty or truncated event history.
+- `go mod tidy` and `go build ./...` succeeded for the Standings module. Runtime rebuild against the Compose stack remains pending.
