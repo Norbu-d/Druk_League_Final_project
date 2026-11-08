@@ -15,6 +15,10 @@
 | R11 | A correction in the monolith updates its local standings while extracted projections consume a different event stream and database | Medium / High | Define a versioned result-correction event/projection rule and rebuild projections from authoritative current results; verify audit and standings consumers together | Backend; before claiming corrected results are consistent across service boundaries |
 | R12 | Event replay and stream retention policies may remove the only recovery source | Low / High | Keep the 365-day event stream and 30-day DLQ policy explicit; ensure operational replay preserves the source entry and document when a full projection rebuild is required | Backend/operations; before incident recovery |
 
+## Review note — 9 Nov 2026
+
+R1 remains **High / High**: delivering 20 services, cross-service workflows, a browser client and the required QA evidence in one semester is both likely to exceed available time and would have major impact on the submission. This is the conservative project assessment; the proposal/deck's older Medium rating should be aligned in the next approved document revision. Sprint 4 Venue & Fixture is ordered before Sprint 5 Match & Score in Jira to respect the Venue dependency. See `sprint-evidence.md`; team review/retrospective input remains outstanding.
+
 ## Scope decision
 
 Prometheus/Grafana dashboards, full security-scanning CI, and real AWS Lambda deployment remain stretch items. OpenTelemetry remains deferred. Automated core tests, Docker fault injection, and verified local NATS recovery remain core follow-up work because they support the project's resilience and event-driven learning outcomes.
