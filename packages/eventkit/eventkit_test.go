@@ -55,7 +55,13 @@ func TestEnsureStreamsAddsMissingSubjectsToLegacyStream(t *testing.T) {
 	if err := EnsureStreams(streams); err != nil {
 		t.Fatal(err)
 	}
-	if len(streams.updated) != 1 || len(streams.streams[EventsStream].Subjects) != len(EventSubjects) {
+	updatedEvents := 0
+	for _, name := range streams.updated {
+		if name == EventsStream {
+			updatedEvents++
+		}
+	}
+	if updatedEvents != 1 || len(streams.streams[EventsStream].Subjects) != len(EventSubjects) {
 		t.Fatalf("legacy stream not updated: %+v", streams.streams[EventsStream].Subjects)
 	}
 	// Running again changes nothing.

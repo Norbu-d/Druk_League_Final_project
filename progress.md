@@ -637,10 +637,18 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 ## 29. Norbu — Analytics and Media test coverage additions (9 Nov 2026)
 
 - Added Media PostgreSQL/HTTP integration cases for authenticated upload, per-match listing, retrieval bytes, owner deletion, and invalid/unauthenticated uploads; added Analytics dashboard filter unit and PostgreSQL projection cases. Added T-18/T-19 to `docs/swe302-test-plan.md`.
-- The new tests have not been run. The integration cases require `TEST_DATABASE_URL`; retain SCRUM-55 In Progress until the broader contract/integration suite runs and its coverage gaps are reconciled. Source builds and `git diff --check` pass; these commands do not execute or compile `_test.go` files.
+- The database-backed cases were run against a temporary PostgreSQL 17 container. See section 31 for full-suite results and remaining coverage gaps.
 
 ## 30. SCRUM-99 — Fixture uses approved tournament registrations (9 Nov 2026)
 
 - Changed Fixture participant discovery from legacy `Team.tournament_id` membership to paginated Registration service queries filtered to `approved`. Fixture scheduling and knockout generation now use only approved teams; the end-to-end setup registers and approves its generated test teams before fixture creation.
 - Added Registration service startup dependencies and address wiring in Compose, and client pagination/outage coverage. `go build ./...` passed for Fixture and `tools/e2e`; Compose configuration validation and `git diff --check` passed. The Fixture container rebuilt and is running.
 - Test files were not executed. Registration withdrawal, registration deadlines/capacity, roster locking and the underlying Team/tournament model migration still require agreed product decisions; SCRUM-99 remains In Progress.
+
+## 31. SCRUM-55 — Integration and contract test verification (9 Nov 2026)
+
+- Fixed a Fixture gRPC test fake left on the old team-list port after Fixture switched to approved Registration entries. Fixed an EventKit test assertion so it checks the Events stream update without assuming the DLQ stream is not also reconciled.
+- Ran `go test -work -count=1 ./...` for every Go module using Go 1.26.5 and an isolated PostgreSQL 17 test database; every module passed. Existing service gRPC client/server tests, database-backed tests, NATS tests and the new Media/Analytics tests passed.
+- Buf 1.73.0 `lint`, `build`, and `breaking --against .git#branch=development` passed after fetching the current `origin/development` baseline. The run used Go 1.26.5; GitHub Actions pins 1.26.10.
+- The CI coverage command was attempted using Go 1.26.10. Its 80% gate remains red for Analytics (10.9%) and Media (63.7%); the API Gateway coverage attempt was blocked by `goproxy.io` returning HTTP 400 for `klauspost/compress`. Audit Log, Configuration, Search and API Gateway currently have no `_test.go` files. SCRUM-55 remains In Progress until these coverage gaps and missing test suites are addressed.
+- Focused test fixes are included in the SCRUM-55 branch update.
