@@ -183,11 +183,16 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
+	mediaID := r.PathValue("id")
+	if !core.IsUUID(mediaID) {
+		writeError(w, http.StatusBadRequest, "media id is invalid")
+		return
+	}
 	var item asset
 	var key string
 	err := s.db.QueryRowContext(r.Context(), `
 		SELECT id::text,match_id::text,owner_id::text,media_kind,caption,content_type,size_bytes,duration_seconds,created_at,object_key
-		FROM media_assets WHERE id=$1::uuid`, r.PathValue("id")).Scan(&item.ID, &item.MatchID, &item.OwnerID, &item.MediaKind, &item.Caption, &item.ContentType, &item.SizeBytes, &item.DurationSeconds, &item.CreatedAt, &key)
+		FROM media_assets WHERE id=$1::uuid`, mediaID).Scan(&item.ID, &item.MatchID, &item.OwnerID, &item.MediaKind, &item.Caption, &item.ContentType, &item.SizeBytes, &item.DurationSeconds, &item.CreatedAt, &key)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "media not found")
 		return
@@ -224,8 +229,13 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, err.Error())
 		return
 	}
+	mediaID := r.PathValue("id")
+	if !core.IsUUID(mediaID) {
+		writeError(w, http.StatusBadRequest, "media id is invalid")
+		return
+	}
 	var owner, key string
-	err = s.db.QueryRowContext(r.Context(), `SELECT owner_id::text,object_key FROM media_assets WHERE id=$1::uuid`, r.PathValue("id")).Scan(&owner, &key)
+	err = s.db.QueryRowContext(r.Context(), `SELECT owner_id::text,object_key FROM media_assets WHERE id=$1::uuid`, mediaID).Scan(&owner, &key)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "media not found")
 		return
@@ -238,7 +248,7 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "only the uploader or an administrator can delete this media")
 		return
 	}
-	result, err := s.db.ExecContext(r.Context(), `DELETE FROM media_assets WHERE id=$1::uuid AND owner_id=$2::uuid`, r.PathValue("id"), owner)
+	result, err := s.db.ExecContext(r.Context(), `DELETE FROM media_assets WHERE id=$1::uuid AND owner_id=$2::uuid`, mediaID, owner)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not delete media metadata")
 		return

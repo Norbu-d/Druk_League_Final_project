@@ -633,3 +633,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Implemented same-origin authenticated multipart upload, per-match listing, retrieval and uploader/Super Admin deletion in the Media service. The server validates Match UUID format, photo/highlight type and content sniffing, caps files at 10 MiB, and writes random-keyed blobs outside PostgreSQL.
 - Added `media-data` persistent Compose volume, Nginx routes and `docs/media-service.md`. `go build ./...`, `docker compose config --quiet`, and the single-service Docker image build passed. Media started in Compose and its `/healthz` returned `{"status":"ok"}`.
 - Authenticated upload/download/delete end-to-end, browser workflow and restore-from-backup have not been checked. Jira SCRUM-64 and SCRUM-84 remain In Progress. Commit `97acc50`.
+
+## 29. Norbu — Analytics and Media test coverage additions (9 Nov 2026)
+
+- Added Media PostgreSQL/HTTP integration cases for authenticated upload, per-match listing, retrieval bytes, owner deletion, and invalid/unauthenticated uploads; added Analytics dashboard filter unit and PostgreSQL projection cases. Added T-18/T-19 to `docs/swe302-test-plan.md`.
+- The new tests have not been run. The integration cases require `TEST_DATABASE_URL`; retain SCRUM-55 In Progress until the broader contract/integration suite runs and its coverage gaps are reconciled. Source builds and `git diff --check` pass; these commands do not execute or compile `_test.go` files.
