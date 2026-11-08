@@ -8,6 +8,7 @@ import (
 
 type Repository interface {
 	RecordFinalized(context.Context, domain.MatchFinalized, domain.Tournament) error
+	DashboardMetrics(context.Context, string, string) (domain.DashboardMetrics, error)
 }
 
 type TournamentDirectory interface {

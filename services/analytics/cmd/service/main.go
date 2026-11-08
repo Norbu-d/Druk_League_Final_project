@@ -6,8 +6,10 @@ import (
 	"log"
 	"time"
 
+	analyticsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/analytics/v1"
 	"github.com/drukleague/platform/packages/eventkit"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	grpcadapter "github.com/drukleague/platform/services/analytics/internal/adapters/grpc"
 	"github.com/drukleague/platform/services/analytics/internal/adapters/grpcclients"
 	natsadapter "github.com/drukleague/platform/services/analytics/internal/adapters/nats"
 	"github.com/drukleague/platform/services/analytics/internal/adapters/postgres"
@@ -29,8 +31,9 @@ func main() {
 	consumerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var natsConn *nats.Conn
-	err = servicekit.Run("analytics-service", func(_ *grpc.Server, db *sql.DB) error {
+	err = servicekit.Run("analytics-service", func(server *grpc.Server, db *sql.DB) error {
 		service := app.New(postgres.New(db), tournaments)
+		analyticsv1.RegisterAnalyticsServiceServer(server, grpcadapter.New(service))
 		var js nats.JetStreamContext
 		natsConn, js, err = eventkit.Connect(servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-analytics")
 		if err != nil {
