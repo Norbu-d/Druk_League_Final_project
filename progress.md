@@ -627,3 +627,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added `AnalyticsService.GetDashboardMetrics` backed by filtered finalized-match facts. The endpoint returns tournament count, distinct participating teams and completed matches. Player, venue, official and pending-registration counts are not fabricated because those source facts are not currently present in the Analytics projection. `go build ./...` and `git diff --check` passed in `services/analytics`; runtime gRPC acceptance remains pending. Commit `4c399d0`; Jira SCRUM-67 remains open.
 - Refreshed the defect log, traceability matrix and risk register to remove stale status claims and record current known gaps, cross-service correction risk, and observed Compose/Nginx/event evidence. Commit `2e58a1b`. The sprint plan/review/retrospective, R1 rating and Sprint 4/5 reorder required by SCRUM-108 remain incomplete; keep that issue In Progress.
 - These commits are local to `codex/norbu-tandin-open-work`; they have not been pushed. Do not infer that the full assigned backlog is complete from these entries.
+
+## 28. Norbu — Media upload and retrieval API (9 Nov 2026)
+
+- Implemented same-origin authenticated multipart upload, per-match listing, retrieval and uploader/Super Admin deletion in the Media service. The server validates Match UUID format, photo/highlight type and content sniffing, caps files at 10 MiB, and writes random-keyed blobs outside PostgreSQL.
+- Added `media-data` persistent Compose volume, Nginx routes and `docs/media-service.md`. `go build ./...`, `docker compose config --quiet`, and the single-service Docker image build passed. Media started in Compose and its `/healthz` returned `{"status":"ok"}`.
+- Authenticated upload/download/delete end-to-end, browser workflow and restore-from-backup have not been checked. Jira SCRUM-64 and SCRUM-84 remain In Progress. Commit `97acc50`.
