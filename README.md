@@ -25,7 +25,7 @@ docker compose up -d
 - Monolith API: http://localhost:8080
 - Log in with the `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` you set. The admin is created only on first start, so changing the password in `.env` later does not change an existing admin.
 
-The microservices listen on gRPC port 50051 inside the Compose network only. Report downloads use an authenticated HTTP route through the web container on port 4173.
+The gRPC microservices listen on port 50051 inside the Compose network only. Report downloads and media upload/retrieval use authenticated same-origin HTTP routes through the web container on port 4173. Media bytes live in the persistent `media-data` volume; PostgreSQL stores only metadata.
 
 **Docker tips:** on a low-resource machine, build one service at a time (`$env:COMPOSE_PARALLEL_LIMIT = 1`, then `docker compose build <service>`) and start with `docker compose up -d --no-build`. Never run `docker volume prune`, `docker system prune --volumes` or `docker compose down -v`; they delete the database and NATS volumes.
 
@@ -48,7 +48,7 @@ The microservices listen on gRPC port 50051 inside the Compose network only. Rep
 | Audit Log | Persistent PostgreSQL audit entries, admin-only paginated reads, authenticated recording RPC, and durable MatchFinalized/admin-action consumers |
 | Analytics | Persists finalized-match facts idempotently and serves filtered tournament, participating-team and completed-match dashboard counts; runtime RPC acceptance remains pending |
 | Configuration | Authenticated read and super-admin-only write gRPC endpoints backed by PostgreSQL; runtime RPC acceptance remains pending |
-| Media | Schema only; upload/retrieval RPCs and binary storage remain open |
+| Media | Authenticated same-origin upload, match media listing, retrieval and owner/admin deletion; metadata in PostgreSQL and binary assets in the persistent Compose `media-data` volume. Supports JPEG/PNG/WebP photos and MP4 highlights up to 10 MiB. |
 
 Shared packages:
 
