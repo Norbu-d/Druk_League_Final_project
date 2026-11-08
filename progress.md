@@ -638,3 +638,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added Media PostgreSQL/HTTP integration cases for authenticated upload, per-match listing, retrieval bytes, owner deletion, and invalid/unauthenticated uploads; added Analytics dashboard filter unit and PostgreSQL projection cases. Added T-18/T-19 to `docs/swe302-test-plan.md`.
 - The new tests have not been run. The integration cases require `TEST_DATABASE_URL`; retain SCRUM-55 In Progress until the broader contract/integration suite runs and its coverage gaps are reconciled. Source builds and `git diff --check` pass; these commands do not execute or compile `_test.go` files.
+
+## 30. SCRUM-99 — Fixture uses approved tournament registrations (9 Nov 2026)
+
+- Changed Fixture participant discovery from legacy `Team.tournament_id` membership to paginated Registration service queries filtered to `approved`. Fixture scheduling and knockout generation now use only approved teams; the end-to-end setup registers and approves its generated test teams before fixture creation.
+- Added Registration service startup dependencies and address wiring in Compose, and client pagination/outage coverage. `go build ./...` passed for Fixture and `tools/e2e`; Compose configuration validation and `git diff --check` passed. The Fixture container rebuilt and is running.
+- Test files were not executed. Registration withdrawal, registration deadlines/capacity, roster locking and the underlying Team/tournament model migration still require agreed product decisions; SCRUM-99 remains In Progress.

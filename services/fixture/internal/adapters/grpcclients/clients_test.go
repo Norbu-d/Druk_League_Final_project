@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	registrationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	venuev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
@@ -31,18 +32,20 @@ func (tournamentServer) GetTournament(_ context.Context, req *v1.GetTournamentRe
 	return &v1.GetTournamentResponse{Tournament: &v1.Tournament{Id: req.GetId(), Dzongkhag: "Paro"}}, nil
 }
 
-type teamServer struct {
-	v1.UnimplementedTeamServiceServer
+type registrationServer struct {
+	registrationv1.UnimplementedRegistrationServiceServer
 }
 
-func (teamServer) ListTeams(_ context.Context, req *v1.ListTeamsRequest) (*v1.ListTeamsResponse, error) {
+func (registrationServer) ListRegistrations(_ context.Context, req *registrationv1.ListRegistrationsRequest) (*registrationv1.ListRegistrationsResponse, error) {
 	switch {
 	case req.GetTournamentId() == "down":
 		return nil, status.Error(codes.Unavailable, "no")
+	case req.GetStatus() != "approved":
+		return nil, status.Error(codes.InvalidArgument, "status must be approved")
 	case req.GetPageToken() == "":
-		return &v1.ListTeamsResponse{Teams: []*v1.Team{{Id: "a"}, {Id: "b"}}, NextPageToken: "2"}, nil
+		return &registrationv1.ListRegistrationsResponse{Registrations: []*registrationv1.Registration{{TeamId: "a", Status: "approved"}, {TeamId: "b", Status: "approved"}}, NextPageToken: "2"}, nil
 	}
-	return &v1.ListTeamsResponse{Teams: []*v1.Team{{Id: "c"}}}, nil
+	return &registrationv1.ListRegistrationsResponse{Registrations: []*registrationv1.Registration{{TeamId: "c", Status: "approved"}}}, nil
 }
 
 type venueServer struct {
@@ -98,7 +101,7 @@ func dial(t *testing.T) *grpc.ClientConn {
 	listener := bufconn.Listen(1 << 20)
 	server := grpc.NewServer()
 	v1.RegisterTournamentServiceServer(server, tournamentServer{})
-	v1.RegisterTeamServiceServer(server, teamServer{})
+	registrationv1.RegisterRegistrationServiceServer(server, registrationServer{})
 	venuev1.RegisterVenueServiceServer(server, venueServer{})
 	v1.RegisterMatchServiceServer(server, matchServer{})
 	standingsv1.RegisterStandingsServiceServer(server, standingsServer{})
@@ -121,11 +124,11 @@ func TestClients(t *testing.T) {
 	if _, err := NewTournaments(conn).Get(ctx, "missing"); !errors.Is(err, core.ErrNotFound) {
 		t.Fatalf("missing tournament: %v", err)
 	}
-	if ids, err := NewTeams(conn).IDsInTournament(ctx, "t1"); err != nil || len(ids) != 3 {
-		t.Fatalf("teams across pages: %v %v", ids, err)
+	if ids, err := NewRegistrations(conn).ApprovedTeamIDs(ctx, "t1"); err != nil || len(ids) != 3 || ids[0] != "a" || ids[2] != "c" {
+		t.Fatalf("approved registrations across pages: %v %v", ids, err)
 	}
-	if _, err := NewTeams(conn).IDsInTournament(ctx, "down"); !errors.Is(err, core.ErrDependency) {
-		t.Fatalf("team outage: %v", err)
+	if _, err := NewRegistrations(conn).ApprovedTeamIDs(ctx, "down"); !errors.Is(err, core.ErrDependency) {
+		t.Fatalf("registration service outage: %v", err)
 	}
 	if ids, err := NewStandings(conn).TeamIDsByRank(ctx, "ranked"); err != nil || len(ids) != 2 || ids[0] != "ranked" {
 		t.Fatalf("standings order: %v %v", ids, err)

@@ -129,9 +129,15 @@ services:
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
+      TEAM_SERVICE_ADDR: team:50051
+      TOURNAMENT_SERVICE_ADDR: tournament:50051
     depends_on:
       db-init:
         condition: service_completed_successfully
+      team:
+        condition: service_started
+      tournament:
+        condition: service_started
   match:
     build:
       context: ..
@@ -173,8 +179,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
       TOURNAMENT_SERVICE_ADDR: tournament:50051
-      TEAM_SERVICE_ADDR: team:50051
       VENUE_SERVICE_ADDR: venue:50051
+      REGISTRATION_SERVICE_ADDR: registration:50051
       MATCH_SERVICE_ADDR: match:50051
       STANDINGS_SERVICE_ADDR: standings:50051
       NATS_URL: nats://nats:4222
@@ -184,6 +190,8 @@ services:
       nats:
         condition: service_started
       standings:
+        condition: service_started
+      registration:
         condition: service_started
   standings:
     build:

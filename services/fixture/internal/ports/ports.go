@@ -29,8 +29,8 @@ type Tournaments interface {
 	Get(ctx context.Context, id string) (domain.Tournament, error)
 }
 
-type Teams interface {
-	IDsInTournament(ctx context.Context, tournamentID string) ([]string, error)
+type TournamentEntries interface {
+	ApprovedTeamIDs(ctx context.Context, tournamentID string) ([]string, error)
 }
 
 type Venues interface {

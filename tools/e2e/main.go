@@ -22,6 +22,7 @@ import (
 	fixturev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
 	notificationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/notification/v1"
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
+	registrationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1"
 	reportv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/report/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
@@ -80,6 +81,7 @@ func main() {
 	users := v1.NewUserServiceClient(dial("user"))
 	tournaments := v1.NewTournamentServiceClient(dial("tournament"))
 	teams := v1.NewTeamServiceClient(dial("team"))
+	registrations := registrationv1.NewRegistrationServiceClient(dial("registration"))
 	venues := venuev1.NewVenueServiceClient(dial("venue"))
 	fixtures := fixturev1.NewFixtureServiceClient(dial("fixture"))
 	officials := officialv1.NewOfficialServiceClient(dial("official"))
@@ -144,8 +146,13 @@ func main() {
 		teamIDs = append(teamIDs, team.GetId())
 		check("team is owned by its creator", team.GetManagerId() == managerIDs[i], team.GetManagerId())
 	}
+	for i, teamID := range teamIDs {
+		registration := must(registrations.RegisterTeam(as(managerTokens[i]), &registrationv1.RegisterTeamRequest{TournamentId: tournament.GetId(), TeamId: teamID})).GetRegistration()
+		approved := must(registrations.ReviewRegistration(as(admin), &registrationv1.ReviewRegistrationRequest{RegistrationId: registration.GetId(), Approved: true})).GetRegistration()
+		check("only approved registrations enter fixture generation", approved.GetStatus() == "approved", approved.GetStatus())
+	}
 
-	// --- Fixture generation creates matches (Part 3)
+	// --- Approved registrations feed fixture generation (Part 3)
 	start := runStarted.AddDate(0, 3, 0).Truncate(time.Second)
 	generated := must(fixtures.GenerateFixtures(as(admin), &fixturev1.GenerateFixturesRequest{TournamentId: tournament.GetId(), StartsAt: timestamppb.New(start)}))
 	check("4 teams produce 6 fixtures, all linked to matches", generated.GetCreatedCount() == 6 && len(generated.GetFixtures()) == 6 && allLinked(generated.GetFixtures()), generated.GetCreatedCount())

@@ -16,7 +16,7 @@ type Caller struct{ ID, Role string }
 type Service struct {
 	repo        ports.Repository
 	tournaments ports.Tournaments
-	teams       ports.Teams
+	entries     ports.TournamentEntries
 	venues      ports.Venues
 	matches     ports.Matches
 	standings   ports.Standings
@@ -24,8 +24,8 @@ type Service struct {
 	newID       func() (string, error)
 }
 
-func New(repo ports.Repository, tournaments ports.Tournaments, teams ports.Teams, venues ports.Venues, matches ports.Matches, standings ...ports.Standings) *Service {
-	service := &Service{repo: repo, tournaments: tournaments, teams: teams, venues: venues, matches: matches, now: time.Now, newID: core.NewUUID}
+func New(repo ports.Repository, tournaments ports.Tournaments, entries ports.TournamentEntries, venues ports.Venues, matches ports.Matches, standings ...ports.Standings) *Service {
+	service := &Service{repo: repo, tournaments: tournaments, entries: entries, venues: venues, matches: matches, now: time.Now, newID: core.NewUUID}
 	if len(standings) > 0 {
 		service.standings = standings[0]
 	}
@@ -54,7 +54,7 @@ func (s *Service) Generate(ctx context.Context, caller Caller, tournamentID, for
 	if err != nil {
 		return nil, 0, err
 	}
-	teamIDs, err := s.teams.IDsInTournament(ctx, tournamentID)
+	teamIDs, err := s.entries.ApprovedTeamIDs(ctx, tournamentID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -170,7 +170,7 @@ func (s *Service) startKnockout(ctx context.Context, tournamentID string, start 
 	if err != nil {
 		return err
 	}
-	teamIDs, err := s.teams.IDsInTournament(ctx, tournamentID)
+	teamIDs, err := s.entries.ApprovedTeamIDs(ctx, tournamentID)
 	if err != nil {
 		return err
 	}
