@@ -36,6 +36,7 @@ func RunRelay(ctx context.Context, outbox ports.Outbox, js eventkit.Publisher, i
 	defer ticker.Stop()
 	pruneTicker := time.NewTicker(24 * time.Hour)
 	defer pruneTicker.Stop()
+	prunePublished(ctx, outbox)
 	for {
 		select {
 		case <-ctx.Done():
@@ -45,11 +46,15 @@ func RunRelay(ctx context.Context, outbox ports.Outbox, js eventkit.Publisher, i
 				log.Printf("score outbox relay: %v", err)
 			}
 		case <-pruneTicker.C:
-			if count, err := outbox.PrunePublished(ctx, time.Now().Add(-30*24*time.Hour)); err != nil {
-				log.Printf("score outbox retention cleanup: %v", err)
-			} else if count > 0 {
-				log.Printf("score outbox retention cleanup removed %d rows", count)
-			}
+			prunePublished(ctx, outbox)
 		}
+	}
+}
+
+func prunePublished(ctx context.Context, outbox ports.Outbox) {
+	if count, err := outbox.PrunePublished(ctx, time.Now().Add(-30*24*time.Hour)); err != nil {
+		log.Printf("score outbox retention cleanup: %v", err)
+	} else if count > 0 {
+		log.Printf("score outbox retention cleanup removed %d rows", count)
 	}
 }

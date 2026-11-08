@@ -66,7 +66,7 @@ func ensureEventStream(js nats.JetStreamContext) error {
 func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
-	pruneAt := time.Now().Add(time.Hour)
+	pruneAt := time.Now()
 	for {
 		select {
 		case <-ctx.Done():
