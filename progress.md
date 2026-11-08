@@ -608,3 +608,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Documented the source-of-truth boundary, entity document shape, versioned outbox events, idempotent consumers, snapshot-plus-stream rebuild procedure, eventual consistency, query limits, and operational metrics in `docs/search-index-design.md`.
 - Confirmed the Search gRPC query service and migration already exist. Entity event producers, snapshot APIs, and index population are rollout dependencies and are not claimed complete by this design task.
+
+## 25. SCRUM-94 — Configuration read/write gRPC endpoints (implementation, 9 Nov 2026)
+
+- Added authenticated `GetConfiguration` and super-admin-only `SetConfiguration` RPC handlers backed by the configuration service database. Keys are validated and values are bounded to 64 KiB; current contract stores values as strings, matching the existing proto key/value shape.
+- Wired the service into the shared gRPC server. Build and runtime verification are pending.
