@@ -5,7 +5,7 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag comp
 The repository holds two things that are not yet connected:
 
 1. **An MVP monolith** (`services/api-gateway`) with a plain HTML/CSS/JS frontend. Most browser API calls still go here; report creation and downloads are proxied to the Report service.
-2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 15 have real logic; 5 are still health-only shells.
+2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. Several modules are still incomplete or health-only; see the service table and [progress.md](progress.md) for current boundaries.
 
 For detailed status and the handoff notes, see [progress.md](progress.md); planned design changes from the 22 Oct review are in its section 11. For the target architecture, see [servicedesign.md](servicedesign.md).
 
@@ -46,7 +46,9 @@ The microservices listen on gRPC port 50051 inside the Compose network only. Rep
 | Notification | Consumes `MatchFinalized` and stores idempotent in-app result notices for participating team managers |
 | Report | Generates persistent tournament standings and fixture reports as CSV/JSON; authenticated same-origin downloads |
 | Audit Log | Persistent PostgreSQL audit entries, admin-only paginated reads, authenticated recording RPC, and durable MatchFinalized/admin-action consumers |
-| Media, Analytics, Configuration | Shells (gRPC health only) |
+| Analytics | Persists finalized-match facts idempotently and serves filtered tournament, participating-team and completed-match dashboard counts; runtime RPC acceptance remains pending |
+| Configuration | Authenticated read and super-admin-only write gRPC endpoints backed by PostgreSQL; runtime RPC acceptance remains pending |
+| Media | Schema only; upload/retrieval RPCs and binary storage remain open |
 
 Shared packages:
 

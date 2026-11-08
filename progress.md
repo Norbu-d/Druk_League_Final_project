@@ -1,10 +1,10 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-05
+**Last updated:** 2026-11-09
 **Project root:** `D:\Druk_League_Final_project`
 **Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–21 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
-> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-05, the report, search-query and audit-log services have implementation work beyond health shells; media schema design is complete while media upload/retrieval remains open. Four CRUD modules and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
+> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query and Configuration RPCs have implementation beyond health shells; media schema exists while upload/retrieval remains open. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
 ---
 
@@ -70,7 +70,7 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65; Sonam's SCRUM-85 schema subtask is Done |
 | Sonam | Search, Configuration | Search query endpoint and configuration schema merged; indexing/read-write follow-ups remain under SCRUM-87 and SCRUM-94 |
 | Sonam | Analytics | SCRUM-89 schema and SCRUM-90 MatchFinalized consumer are Done; query/service endpoints remain open |
-| Namgay | Analytics | Shell |
+| Sonam/Norbu | Analytics | Sonam's SCRUM-90 consumer persists finalized-match facts; Norbu added filtered dashboard counts (SCRUM-67). Broader service-owned totals and current runtime RPC acceptance remain open. |
 
 Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
 
@@ -188,7 +188,7 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 5. **Part 3:** code, tests and container checks done (19 Oct). **Part 4:** User + Auth, same. **Part 5 (next to write; section 11.1 step 4 proposes a minimal version first):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
 6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream), Fixture outbox and Notification consumer are done. Still to do: Audit Log consumer and OpenFaaS/faasd function.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
-8. **Part 8:** media schema design is complete; upload/retrieval (SCRUM-84), search indexing (SCRUM-87), and configuration read/write endpoints (SCRUM-94) remain. Analytics is still a health shell; Audit Log implementation is underway. Notification and Report have service logic.
+8. **Part 8:** media upload/retrieval (SCRUM-84) and search indexing rollout remain; search synchronization design (SCRUM-87) is documented. Configuration RPCs (SCRUM-94) and Analytics match aggregation/dashboard metrics (SCRUM-67/90) are implemented, with live acceptance still pending. Audit Log implementation exists; SCRUM-68 requires an end-to-end correction event check. Notification and Report have service logic.
 9. **Part 9 (SWE302):** unit tests with port fakes and PostgreSQL integration tests exist for 8 services plus the shared packages (section 10). GitHub Actions now runs Go formatting, vet, build, tests, coverage, Buf, govulncheck, gosec, Trivy and k6 checks. Remaining: tests for modules that currently have none and the monolith; ZAP; Playwright; fault-isolation tests.
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
@@ -620,4 +620,10 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added `services/standings/cmd/rebuild`, which replays retained `MatchFinalized` events, reloads Team metadata, deduplicates by event ID, and replaces standings plus processed-event IDs atomically.
 - The command holds an exclusive lock on `processed_events` while capturing the JetStream tail and rebuilding, so the live consumer waits and resumes afterward. It refuses an empty or truncated event history.
-- `go mod tidy` and `go build ./...` succeeded for the Standings module. Runtime rebuild against the Compose stack remains pending.
+- `go mod tidy` and `go build ./...` succeeded for the Standings module. The rebuild ran against the Compose stack and replayed 13 event IDs into 26 team rows; a direct database read confirmed 13 processed event IDs, 26 standings rows and 26 total appearances. Jira SCRUM-101 is Done. Rebuild input currently covers `MatchFinalized`; correction-event reconciliation remains a separate known gap.
+
+## 27. Norbu — Analytics dashboard and SWE303 evidence updates (9 Nov 2026)
+
+- Added `AnalyticsService.GetDashboardMetrics` backed by filtered finalized-match facts. The endpoint returns tournament count, distinct participating teams and completed matches. Player, venue, official and pending-registration counts are not fabricated because those source facts are not currently present in the Analytics projection. `go build ./...` and `git diff --check` passed in `services/analytics`; runtime gRPC acceptance remains pending. Commit `4c399d0`; Jira SCRUM-67 remains open.
+- Refreshed the defect log, traceability matrix and risk register to remove stale status claims and record current known gaps, cross-service correction risk, and observed Compose/Nginx/event evidence. Commit `2e58a1b`. The sprint plan/review/retrospective, R1 rating and Sprint 4/5 reorder required by SCRUM-108 remain incomplete; keep that issue In Progress.
+- These commits are local to `codex/norbu-tandin-open-work`; they have not been pushed. Do not infer that the full assigned backlog is complete from these entries.
