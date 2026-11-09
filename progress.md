@@ -1,10 +1,10 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-05
+**Last updated:** 2026-11-09
 **Project root:** `D:\Druk_League_Final_project`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–21 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–33 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
-> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. As of 2026-11-05, the report, search-query and audit-log services have implementation work beyond health shells; media schema design is complete while media upload/retrieval remains open. Four CRUD modules and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
+> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
 ---
 
@@ -70,7 +70,7 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65; Sonam's SCRUM-85 schema subtask is Done |
 | Sonam | Search, Configuration | Search query endpoint and configuration schema merged; indexing/read-write follow-ups remain under SCRUM-87 and SCRUM-94 |
 | Sonam | Analytics | SCRUM-89 schema and SCRUM-90 MatchFinalized consumer are Done; query/service endpoints remain open |
-| Namgay | Analytics | Shell |
+| Sonam/Norbu | Analytics | Sonam's SCRUM-90 consumer persists finalized-match facts; Norbu added filtered dashboard counts (SCRUM-67). Broader service-owned totals and current runtime RPC acceptance remain open. |
 
 Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and covered by the 19 Oct e2e run.
 
@@ -90,7 +90,7 @@ Part 3 (Fixture, Venue, Official) is written, unit-tested, containerised and cov
 
 ## 4. File guide
 
-- **Frontend:** root `index.html`, `styles.css`, `app.js`, `api.js` are the source of truth; `web-preview/` is a copy, do not edit it.
+- **Frontend:** root `index.html`, `styles.css`, `app.js`, `api.js` are the source of truth. The unused `web-preview/` duplicate was removed on 6 Nov 2026.
 - **Monolith:** `services/api-gateway/cmd/api/main.go` (HTTP, auth, tournaments, teams, matches, fixtures, scoring, finalisation), `admin_matches.go` (accounts, official assignment, match creation), `events.go` (outbox → JetStream), `migrations/001_init.sql` (schema + trigger blocking edits to finalised results).
 - **Contracts and shared code:** `proto/` (layout: `proto/drukleague/v1/` holds events, match, score, team, tournament, user; every other service has `proto/drukleague/<name>/v1/<name>.proto`), `packages/contracts/` (generated Go), `packages/servicekit/` (migration, bearer-token check, gRPC runtime), `services/_template/` (hexagonal example), `services/<service>/` (one per service).
 - **Deploy:** `deploy/docker-compose.yml`, `build-services.ps1`, `init-databases.sh`, `nginx.conf`, `.env.example` (variables: `POSTGRES_PASSWORD`, `JWT_SECRET`, `BOOTSTRAP_ADMIN_USER`, `BOOTSTRAP_ADMIN_PASSWORD`). `deploy/.env` is private: never print, copy or commit it. `.gitignore` and `.gitattributes` exist (secrets ignored; shell scripts, Go, SQL, proto, YAML, Dockerfile and nginx config forced to LF).
@@ -188,7 +188,7 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 5. **Part 3:** code, tests and container checks done (19 Oct). **Part 4:** User + Auth, same. **Part 5 (next to write; section 11.1 step 4 proposes a minimal version first):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
 6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream), Fixture outbox and Notification consumer are done. Still to do: Audit Log consumer and OpenFaaS/faasd function.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
-8. **Part 8:** media schema design is complete; upload/retrieval (SCRUM-84), search indexing (SCRUM-87), and configuration read/write endpoints (SCRUM-94) remain. Analytics is still a health shell; Audit Log implementation is underway. Notification and Report have service logic.
+8. **Part 8:** Media upload/retrieval (SCRUM-84) and Search indexing rollout remain; Search synchronization design (SCRUM-87) is documented. Configuration RPCs (SCRUM-94) and Analytics match aggregation/dashboard metrics (SCRUM-67/90) are implemented, with live acceptance still pending. Audit Log admin-action publishing and its end-to-end flow passed CI; SCRUM-68 is Done. Notification and Report have service logic.
 9. **Part 9 (SWE302):** unit tests with port fakes and PostgreSQL integration tests exist for 8 services plus the shared packages (section 10). GitHub Actions now runs Go formatting, vet, build, tests, coverage, Buf, govulncheck, gosec, Trivy and k6 checks. Remaining: tests for modules that currently have none and the monolith; ZAP; Playwright; fault-isolation tests.
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
@@ -230,7 +230,8 @@ D:\druk-league\
 │   ├── build-services.ps1
 │   ├── docker-compose.yml
 │   ├── init-databases.sh
-│   └── nginx.conf
+│   ├── nginx.conf
+│   └── nginx-security.conf
 ├── docs/
 │   ├── architecture-decision-mvp.md
 │   ├── change-control.md
@@ -292,7 +293,6 @@ D:\druk-league\
 │       ├── cmd/service/main.go   #   cmd/service/main.go, Dockerfile, go.mod, go.sum
 │       └── internal/adapters/grpc/server.go   # present for match, official, player,
 │                                              # registration, team, tournament, user, venue
-├── web-preview/                  # copy of the frontend for the local preview; do not edit
 │   ├── api.js
 │   ├── app.js
 │   ├── index.html
@@ -480,7 +480,7 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 - **Compose health.** Separate liveness from readiness (can it reach its DB and NATS?) and use `depends_on: condition: service_healthy` for PostgreSQL, NATS and `db-init`, to stop startup races.
 - **Backups.** A `pg_dump` script covering every service database, run before demos, instead of relying on "never run `down -v`".
 - **Standings rebuild.** A replay command that recomputes standings from finalised results in Score. Also makes the correction flow simpler.
-- **Dead-letter stream is write-only.** Add a way to list and replay `DRUKLEAGUE_DLQ` (admin tool or runbook).
+- **Dead-letter stream inspection/replay.** Implemented in `tools/event-admin`; entries remain retained for 30 days after replay.
 - **Retention.** Clean up published outbox rows and set retention limits on the JetStream streams.
 - **Double-submit protection.** Idempotency keys or natural-key unique constraints on create calls (register team, finalise).
 - **Test data.** The e2e run leaves rows behind. Prefix test data and add a cleanup path, or run e2e against a throwaway database.
@@ -490,7 +490,7 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 
 - **nginx:** rate limits on login and public viewer reads, CORS, basic security headers.
 - **Token storage.** Check where the plain-JS frontend keeps the JWT. Prefer the access token in memory and the refresh token in an httpOnly cookie if the gateway can set it; otherwise document it as a limitation.
-- **`web-preview/`** is a copy that must not be edited. Delete it or generate it by script so it cannot drift.
+- **Session lifetime.** The browser session uses an HttpOnly, SameSite=Strict cookie with a 12-hour lifetime. A rotating refresh-token flow remains open.
 - **List endpoints.** Make sure every List RPC (tournaments, teams, matches, standings) uses `Page` and supports filters.
 - **SWE302:** a performance test (k6 or `hey`) against the gateway for login and the public standings read; traceability from each requirement to a test and a sprint.
 - **Audit Log** is the first shell worth building for real: admin actions, role changes and result corrections.
@@ -593,12 +593,99 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added Audit Log unit tests for event validation and conversion, authorization and pagination, JetStream message handling, and gRPC request/response mapping. Added PostgreSQL repository tests for event idempotency, filtered/paginated reads, and database errors; these run automatically in CI's PostgreSQL-backed test job.
 - PR [#26](https://github.com/Norbu-d/Druk_League_Final_project/pull/26) merged to `development` at `0362590` on 6 Nov. All PR checks passed, including Go lint/build/test/80% coverage, security, image scan, notification and audit E2E, frontend permissions, protobuf, and performance.
 - Local verification on 6 Nov: the audit-log Go packages pass, and combined `internal/...` coverage is 80.6% against the 80% gate. PostgreSQL integration cases were skipped locally because `TEST_DATABASE_URL` is unset. The previously added four Node permission tests and syntax checks passed. The full Compose E2E remains assigned to SCRUM-56 (Done); cross-service integration and contract tests remain in Norbu's open SCRUM-55.
-- SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 remains paused.
+- SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 is Done.
 
-## 22. SCRUM-21 — Role-based UI (implementation complete, 6 Nov 2026)
+## 22. SCRUM-103 — Nginx hardening (in progress, 6 Nov 2026)
 
-- SCRUM-21 is assigned to Namgay and was To Do on the last assigned-work view. Its stated scope is a role-aware UI for Super Admin, Match Official, Team Manager, and Viewer. Jira could not be refreshed during this update because the available browser session requested Atlassian account access; no Jira status was changed.
-- Existing role-based page and action visibility from SCRUM-49 is retained. The sidebar and header show the signed-in username and role label; signing out resets both to Public viewer / Viewer. Role names and profile identity formatting are centralized in `role-permissions.js`, including the safe Viewer fallback. Role-hidden links/actions honor the HTML `hidden` state.
-- The local `file:///` launch uses the local API default at `127.0.0.1:8080`; failed sign-ins show an inline error. The recommended full-app launch remains Docker Compose at `http://localhost:4173`.
-- Verification: all 6 Node role-permission/profile tests pass; `node --check` passes for `role-permissions.js`, `app.js`, and `api.js`; `git diff --check` passes. Browser reproduction remains unavailable in this session, so the original screenshot still needs a browser recheck. Backend authorization remains the security boundary.
-- PR #28 is open against `development`; implementation is complete in the feature branch, pending PR review/merge. The last recorded Jira status was To Do; Jira could not be accessed to refresh its full acceptance criteria or update its status. SCRUM-24 remains open and paused separately.
+- Added login and public-standings rate limits, baseline security headers, and a local-origin CORS allowlist to the Nginx edge; removed the unused `web-preview/` duplicate. The API gateway no longer emits a wildcard CORS origin.
+- `docker compose config --quiet` passed. `nginx -t` passed in `nginx:1.27-alpine` using temporary `api` and `report` hostname aliases. Docker Desktop was unavailable for an end-to-end Compose run at the first implementation pass.
+- Moved the API JWT out of `sessionStorage` into an HttpOnly, SameSite=Strict cookie; added session restore and logout endpoints and changed the frontend to use same-origin requests. The API gateway build, `node --check` for the frontend scripts, `docker compose config --quiet`, and containerized `nginx -t` passed. End-to-end browser/session verification was not run; no rotating refresh-token flow exists. Keep SCRUM-103 In Progress pending acceptance review.
+
+## 23. SCRUM-102 — Dead-letter inspection and replay (implementation, 6 Nov 2026)
+
+- Added `tools/event-admin inspect` to list retained DLQ metadata and `replay <sequence>` to republish a message to its recorded original subject. `--dry-run` validates the target; replay retains the source DLQ record.
+- The tool build succeeded. The shared DLQ stream already has a 30-day retention policy. Live replay against a running NATS service remains to be verified before closing the Jira issue.
+- Added daily cleanup of published transactional outbox rows older than 30 days in API Gateway, Score, and Fixture; pending rows are never deleted. Live verification remains pending.
+- The JetStream event stream now has 365-day retention (DLQ remains 30 days), and startup reconciles existing streams to those limits as well as adding missing subjects.
+
+## 24. SCRUM-87 — Search index and synchronization design (6 Nov 2026)
+
+- Documented the source-of-truth boundary, entity document shape, versioned outbox events, idempotent consumers, snapshot-plus-stream rebuild procedure, eventual consistency, query limits, and operational metrics in `docs/search-index-design.md`.
+- Confirmed the Search gRPC query service and migration already exist. Entity event producers, snapshot APIs, and index population are rollout dependencies and are not claimed complete by this design task.
+
+## 25. SCRUM-94 — Configuration read/write gRPC endpoints (implementation, 9 Nov 2026)
+
+- Added authenticated `GetConfiguration` and super-admin-only `SetConfiguration` RPC handlers backed by the configuration service database. Keys are validated and values are bounded to 64 KiB; current contract stores values as strings, matching the existing proto key/value shape.
+- Wired the service into the shared gRPC server. Build and runtime verification are pending.
+
+## 26. SCRUM-101 — Standings rebuild from finalized events (implementation, 9 Nov 2026)
+
+- Added `services/standings/cmd/rebuild`, which replays retained `MatchFinalized` events, reloads Team metadata, deduplicates by event ID, and replaces standings plus processed-event IDs atomically.
+- The command holds an exclusive lock on `processed_events` while capturing the JetStream tail and rebuilding, so the live consumer waits and resumes afterward. It refuses an empty or truncated event history.
+- `go mod tidy` and `go build ./...` succeeded for the Standings module. The rebuild ran against the Compose stack and replayed 13 event IDs into 26 team rows; a direct database read confirmed 13 processed event IDs, 26 standings rows and 26 total appearances. Jira SCRUM-101 is Done. Rebuild input currently covers `MatchFinalized`; correction-event reconciliation remains a separate known gap.
+
+## 27. Norbu — Analytics dashboard and SWE303 evidence updates (9 Nov 2026)
+
+- Added `AnalyticsService.GetDashboardMetrics` backed by filtered finalized-match facts. The endpoint returns tournament count, distinct participating teams and completed matches. Player, venue, official and pending-registration counts are not fabricated because those source facts are not currently present in the Analytics projection. `go build ./...` and `git diff --check` passed in `services/analytics`; runtime gRPC acceptance remains pending. Commit `4c399d0`; Jira SCRUM-67 remains open.
+- Refreshed the defect log, traceability matrix and risk register to remove stale status claims and record current known gaps, cross-service correction risk, and observed Compose/Nginx/event evidence. Commit `2e58a1b`. The sprint plan/review/retrospective, R1 rating and Sprint 4/5 reorder required by SCRUM-108 remain incomplete; keep that issue In Progress.
+- These commits are on `codex/norbu-tandin-open-work`, which has been pushed to `origin`. Do not infer that the full assigned backlog is complete from these entries.
+
+## 28. Norbu — Media upload and retrieval API (9 Nov 2026)
+
+- Implemented same-origin authenticated multipart upload, per-match listing, retrieval and uploader/Super Admin deletion in the Media service. The server validates Match UUID format, photo/highlight type and content sniffing, caps files at 10 MiB, and writes random-keyed blobs outside PostgreSQL.
+- Added `media-data` persistent Compose volume, Nginx routes and `docs/media-service.md`. `go build ./...`, `docker compose config --quiet`, and the single-service Docker image build passed. Media started in Compose and its `/healthz` returned `{"status":"ok"}`.
+- Authenticated upload/download/delete end-to-end, browser workflow and restore-from-backup have not been checked. Jira SCRUM-64 and SCRUM-84 remain In Progress. Commit `97acc50`.
+
+## 29. Norbu — Analytics and Media test coverage additions (9 Nov 2026)
+
+- Added Media PostgreSQL/HTTP integration cases for authenticated upload, per-match listing, retrieval bytes, owner deletion, and invalid/unauthenticated uploads; added Analytics dashboard filter unit and PostgreSQL projection cases. Added T-18/T-19 to `docs/swe302-test-plan.md`.
+- The database-backed cases were run against a temporary PostgreSQL 17 container. See section 31 for full-suite results and remaining coverage gaps.
+
+## 30. SCRUM-99 — Fixture uses approved tournament registrations (9 Nov 2026)
+
+- Changed Fixture participant discovery from legacy `Team.tournament_id` membership to paginated Registration service queries filtered to `approved`. Fixture scheduling and knockout generation now use only approved teams; the end-to-end setup registers and approves its generated test teams before fixture creation.
+- Added Registration service startup dependencies and address wiring in Compose, and client pagination/outage coverage. `go build ./...` passed for Fixture and `tools/e2e`; Compose configuration validation and `git diff --check` passed. The Fixture container rebuilt and is running.
+- Fixture gRPC, app, adapter and client tests passed in the full Go module test run recorded in section 31. Registration withdrawal, registration deadlines/capacity, roster locking and the underlying Team/tournament model migration still require agreed product decisions; SCRUM-99 remains In Progress.
+
+## 31. SCRUM-55 — Integration and contract test verification (9 Nov 2026)
+
+- Fixed a Fixture gRPC test fake left on the old team-list port after Fixture switched to approved Registration entries. Fixed an EventKit test assertion so it checks the Events stream update without assuming the DLQ stream is not also reconciled.
+- Ran `go test -work -count=1 ./...` for every Go module using Go 1.26.5 and an isolated PostgreSQL 17 test database; every module passed. Existing service gRPC client/server tests, database-backed tests, NATS tests and the new Media/Analytics tests passed.
+- Buf 1.73.0 `lint`, `build`, and `breaking --against .git#branch=development` passed after fetching the current `origin/development` baseline. The run used Go 1.26.5; GitHub Actions pins 1.26.10.
+- The CI coverage command was attempted using Go 1.26.10. Its 80% gate remains red for Analytics (10.9%) and Media (63.7%); the API Gateway coverage attempt was blocked by `goproxy.io` returning HTTP 400 for `klauspost/compress`. Audit Log, Configuration, Search and API Gateway currently have no `_test.go` files. SCRUM-55 remains In Progress until these coverage gaps and missing test suites are addressed.
+- Focused test fixes are included in the SCRUM-55 branch update.
+
+## 32. SCRUM-21 — Role-based UI (implementation complete, 6 Nov 2026)
+
+- SCRUM-21 is assigned to Namgay. Existing role-based page and action visibility is retained; the sidebar and header show signed-in username and role, and signing out restores Public viewer / Viewer. `role-permissions.js` centralizes role labels, profile formatting, and Viewer fallback.
+- The local `file:///` launch uses the API at `127.0.0.1:8080`; failed sign-ins show an inline error. The recommended full-app launch remains Docker Compose at `http://localhost:4173`.
+- Verification recorded on the feature branch: all 6 Node role-permission/profile tests passed; `node --check` passed for `role-permissions.js`, `app.js`, and `api.js`; `git diff --check` passed. Browser reproduction remains pending, and backend authorization remains the security boundary.
+- PR #28 merged into `development` at `db8e8db`. The last recorded Jira status was To Do; refresh its acceptance criteria and status. SCRUM-24 remains open.
+
+## 33. Sync with `development` (9 Nov 2026)
+
+- Merged the fetched `origin/development` into `codex/norbu-tandin-open-work`. Resolved conflicts in `api.js`, `progress.md`, and API Gateway `events.go`, retaining the HttpOnly cookie session, role-aware profile behavior, stored-subject validation, outbox retention, and both branches' progress records.
+- Updated the admin audit end-to-end script to use the HttpOnly session cookie returned by login; the API no longer returns a bearer token. `bash -n`, `node --check api.js`, six role-permission/profile Node tests, Compose config validation, and `git diff --check` passed.
+- `go test -work -count=1 ./...` passed across all Go modules; `services/api-gateway` tests also passed. Docker Desktop's Linux engine was unavailable for the isolated PostgreSQL test database, so DB-backed tests were skipped in this combined-tree run. Earlier DB-backed results are recorded in section 31.
+- This sync is a local merge commit on the Codex branch; it is not yet merged into `development`. PR/review and CI checks for the combined branch remain required before integrating into the shared branch.
+
+## 34. CI failures on combined branch (9 Nov 2026)
+
+- Reviewed the failed checks for merge commit `3f7b76c`. The Media module-manifest check found `github.com/jackc/pgx/v5` was imported directly but declared indirect; `services/media/go.mod` now declares it directly.
+- Gosec reported G124 on the session and logout cookies because `Secure` is disabled for local HTTP development. Added narrow G124 suppressions documenting that production sets `Secure`.
+- The Trivy setup action selected `latest` and exited during binary installation without a diagnostic. A pinned binary version also failed silently, so the image scan is being switched to the pinned `aquasec/trivy:0.68.2` container.
+- Buf and k6 setup did not reach lint/tests: GitHub release downloads returned HTTP 504 after retries. These failures need a fresh CI run to determine whether they were transient.
+- Local `go test ./...` passed for Media and API Gateway, and `git diff --check` passed. Docker-backed tests and the full CI run remain pending.
+
+## 35. Follow-up to CI run on `7cdf494` (9 Nov 2026)
+
+- CI confirmed that the cookie findings are resolved. The security scan then found three Media issues: multipart size parsing, path use from the media metadata key, and file permissions. Media storage now uses `os.Root` operations to confine file access, validates generated hex storage keys, and writes files as owner-only. The request body remains capped at 10 MiB; the narrow G120 suppression documents that bound.
+- The pinned Trivy binary download still exited without a diagnostic, so `.github/workflows/go-ci.yml` now runs a pinned Trivy container to scan the built local Docker images.
+- The same CI run still reports Analytics coverage at 10.9% and Media at 63.7%, below the existing 80% gate. The Buf and k6 release downloads again returned HTTP 504. Media tests passed after the storage changes; gosec and the updated image scan need a new CI run.
+
+## 36. Coverage gate follow-up (9 Nov 2026)
+
+- Added Analytics tests for finalized-event normalization/validation, service dependency and persistence behavior, gRPC request/response and errors, tournament gRPC client mapping, NATS handling/retry classification, and database idempotency.
+- Added Media tests for authentication and cookie fallback, malformed and invalid uploads, content-type validation, invalid resource IDs, storage setup failures, and storage-key helpers.
+- Analytics package tests pass locally and its non-database coverage profile is 89.1%. Media tests pass locally; database-backed Media tests are skipped because Docker Desktop's engine is unavailable, so only 40.2% local coverage was measured. Check the CI module coverage result on the pushed branch before claiming the 80% gate is resolved.
+- The first CI run with the new Analytics tests reported Analytics at 100%; Go vet caught and then the follow-up commit fixed a protobuf lock copy in the new gRPC client test. The next run showed Media at 71.1%, so additional DB-backed cases now cover missing records/files, invalid storage keys, admin deletion, empty results, and upload cleanup after metadata failure.

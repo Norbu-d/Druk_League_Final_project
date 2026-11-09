@@ -66,11 +66,19 @@ func ensureEventStream(js nats.JetStreamContext) error {
 func publishOutbox(ctx context.Context, db *sql.DB, js nats.JetStreamContext) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+	var pruneAt time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if time.Now().After(pruneAt) {
+				if _, err := db.ExecContext(ctx, `DELETE FROM event_outbox WHERE published_at < now() - interval '30 days'`); err != nil {
+					log.Printf("event outbox retention cleanup: %v", err)
+				} else {
+					pruneAt = time.Now().Add(time.Hour)
+				}
+			}
 			rows, err := db.QueryContext(ctx, `SELECT id,subject,payload::text FROM event_outbox WHERE published_at IS NULL ORDER BY id LIMIT 50`)
 			if err != nil {
 				log.Printf("event outbox read: %v", err)

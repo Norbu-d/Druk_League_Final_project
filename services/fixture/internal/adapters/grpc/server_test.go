@@ -43,9 +43,9 @@ func (tournaments) Get(context.Context, string) (domain.Tournament, error) {
 	return domain.Tournament{ID: tournament}, nil
 }
 
-type teams struct{}
+type entries struct{}
 
-func (teams) IDsInTournament(context.Context, string) ([]string, error) {
+func (entries) ApprovedTeamIDs(context.Context, string) ([]string, error) {
 	return []string{"a", "b"}, nil
 }
 
@@ -58,7 +58,7 @@ type matches struct{}
 func (matches) Create(context.Context, domain.Fixture) (string, error) { return "m", nil }
 
 func server() *Server {
-	return New(app.New(repo{}, tournaments{}, teams{}, venues{}, matches{}))
+	return New(app.New(repo{}, tournaments{}, entries{}, venues{}, matches{}))
 }
 
 func admin() context.Context {

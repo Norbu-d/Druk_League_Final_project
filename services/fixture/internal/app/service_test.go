@@ -85,7 +85,7 @@ type fakeTeams struct {
 	err error
 }
 
-func (f fakeTeams) IDsInTournament(context.Context, string) ([]string, error) { return f.ids, f.err }
+func (f fakeTeams) ApprovedTeamIDs(context.Context, string) ([]string, error) { return f.ids, f.err }
 
 type fakeVenues struct{ dzongkhag *string }
 

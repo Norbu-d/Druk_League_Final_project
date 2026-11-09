@@ -135,8 +135,8 @@ jobs:
             api auth user team player tournament registration match score fixture standings \
             venue official dzongkhag notification media report search analytics audit-log configuration
 
-      - name: Install Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+      - name: Pull Trivy scanner image
+        run: docker pull aquasec/trivy:0.68.2
 
       - name: Scan every built image for critical vulnerabilities
         shell: bash
@@ -149,7 +149,11 @@ jobs:
           fi
           for image in "${images[@]}"; do
             echo "Scanning $image"
-            trivy image --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$image"
+            docker run --rm \
+              --volume /var/run/docker.sock:/var/run/docker.sock \
+              --volume "${RUNNER_TEMP}/trivy-cache:/root/.cache/" \
+              aquasec/trivy:0.68.2 \
+              image --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$image"
           done
 
   frontend-quality:

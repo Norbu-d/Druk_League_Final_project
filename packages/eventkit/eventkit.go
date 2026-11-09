@@ -57,7 +57,7 @@ type StreamManager interface {
 // EnsureStreams creates the events and dead-letter streams, adding any missing subjects to an
 // existing events stream (older services created it with only the MatchFinalized subject).
 func EnsureStreams(js StreamManager) error {
-	if err := ensureStream(js, &nats.StreamConfig{Name: EventsStream, Subjects: EventSubjects, Storage: nats.FileStorage, Retention: nats.LimitsPolicy, Duplicates: 2 * time.Minute}); err != nil {
+	if err := ensureStream(js, &nats.StreamConfig{Name: EventsStream, Subjects: EventSubjects, Storage: nats.FileStorage, Retention: nats.LimitsPolicy, MaxAge: 365 * 24 * time.Hour, Duplicates: 2 * time.Minute}); err != nil {
 		return err
 	}
 	// Dead letters are kept for 30 days for inspection and manual replay.
@@ -75,12 +75,18 @@ func ensureStream(js StreamManager, want *nats.StreamConfig) error {
 	if err != nil {
 		return fmt.Errorf("read stream %s: %w", want.Name, err)
 	}
-	missing := missingSubjects(info.Config.Subjects, want.Subjects)
-	if len(missing) == 0 {
+	config := info.Config
+	missing := missingSubjects(config.Subjects, want.Subjects)
+	if len(missing) > 0 {
+		config.Subjects = append(append([]string{}, config.Subjects...), missing...)
+	}
+	if config.Retention == want.Retention && config.MaxAge == want.MaxAge && config.Storage == want.Storage && config.Duplicates == want.Duplicates && len(missing) == 0 {
 		return nil
 	}
-	config := info.Config
-	config.Subjects = append(append([]string{}, config.Subjects...), missing...)
+	config.Retention = want.Retention
+	config.MaxAge = want.MaxAge
+	config.Storage = want.Storage
+	config.Duplicates = want.Duplicates
 	if _, err = js.UpdateStream(&config); err != nil {
 		return fmt.Errorf("update stream %s subjects: %w", want.Name, err)
 	}

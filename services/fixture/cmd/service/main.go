@@ -30,11 +30,11 @@ func dial(name, fallback string) *grpc.ClientConn {
 
 func main() {
 	tournamentConn := dial("TOURNAMENT_SERVICE_ADDR", "tournament:50051")
-	teamConn := dial("TEAM_SERVICE_ADDR", "team:50051")
+	registrationConn := dial("REGISTRATION_SERVICE_ADDR", "registration:50051")
 	venueConn := dial("VENUE_SERVICE_ADDR", "venue:50051")
 	matchConn := dial("MATCH_SERVICE_ADDR", "match:50051")
 	standingsConn := dial("STANDINGS_SERVICE_ADDR", "standings:50051")
-	for _, conn := range []*grpc.ClientConn{tournamentConn, teamConn, venueConn, matchConn, standingsConn} {
+	for _, conn := range []*grpc.ClientConn{tournamentConn, registrationConn, venueConn, matchConn, standingsConn} {
 		defer conn.Close()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -44,7 +44,7 @@ func main() {
 	var natsErr error
 	register := func(server *grpc.Server, db *sql.DB) error {
 		repository := postgres.New(db)
-		service := app.New(repository, grpcclients.NewTournaments(tournamentConn), grpcclients.NewTeams(teamConn), grpcclients.NewVenues(venueConn), grpcclients.NewMatches(matchConn), grpcclients.NewStandings(standingsConn))
+		service := app.New(repository, grpcclients.NewTournaments(tournamentConn), grpcclients.NewRegistrations(registrationConn), grpcclients.NewVenues(venueConn), grpcclients.NewMatches(matchConn), grpcclients.NewStandings(standingsConn))
 		once.Do(func() {
 			var js nats.JetStreamContext
 			natsConn, js, natsErr = eventkit.Connect(servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-fixture")

@@ -30,6 +30,13 @@ type Tournament struct {
 	Dzongkhag string
 }
 
+// DashboardMetrics contains counts derived from finalized-match facts.
+type DashboardMetrics struct {
+	Tournaments int32
+	Teams       int32
+	Matches     int32
+}
+
 func (e *MatchFinalized) NormalizeAndValidate() error {
 	e.EventID = strings.TrimSpace(e.EventID)
 	e.MatchID = strings.TrimSpace(e.MatchID)

@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/drukleague/platform/services/fixture/internal/domain"
 )
@@ -21,14 +22,15 @@ type Repository interface {
 type Outbox interface {
 	PendingEvents(ctx context.Context, limit int) ([]domain.OutboxEvent, error)
 	MarkPublished(ctx context.Context, eventID string) error
+	PrunePublished(ctx context.Context, before time.Time) (int64, error)
 }
 
 type Tournaments interface {
 	Get(ctx context.Context, id string) (domain.Tournament, error)
 }
 
-type Teams interface {
-	IDsInTournament(ctx context.Context, tournamentID string) ([]string, error)
+type TournamentEntries interface {
+	ApprovedTeamIDs(ctx context.Context, tournamentID string) ([]string, error)
 }
 
 type Venues interface {

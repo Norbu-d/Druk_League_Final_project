@@ -5,7 +5,7 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag comp
 The repository holds two things that are not yet connected:
 
 1. **An MVP monolith** (`services/api-gateway`) with a plain HTML/CSS/JS frontend. Most browser API calls still go here; report creation and downloads are proxied to the Report service.
-2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. 15 have real logic; 5 are still health-only shells.
+2. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events) that are replacing the monolith. Several modules are still incomplete or health-only; see the service table and [progress.md](progress.md) for current boundaries.
 
 For detailed status and the handoff notes, see [progress.md](progress.md); planned design changes from the 22 Oct review are in its section 11. For the target architecture, see [servicedesign.md](servicedesign.md).
 
@@ -25,7 +25,7 @@ docker compose up -d
 - Monolith API: http://localhost:8080
 - Log in with the `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` you set. The admin is created only on first start, so changing the password in `.env` later does not change an existing admin.
 
-The microservices listen on gRPC port 50051 inside the Compose network only. Report downloads use an authenticated HTTP route through the web container on port 4173.
+The gRPC microservices listen on port 50051 inside the Compose network only. Report downloads and media upload/retrieval use authenticated same-origin HTTP routes through the web container on port 4173. Media bytes live in the persistent `media-data` volume; PostgreSQL stores only metadata.
 
 **Docker tips:** on a low-resource machine, build one service at a time (`$env:COMPOSE_PARALLEL_LIMIT = 1`, then `docker compose build <service>`) and start with `docker compose up -d --no-build`. Never run `docker volume prune`, `docker system prune --volumes` or `docker compose down -v`; they delete the database and NATS volumes.
 
@@ -46,13 +46,39 @@ The microservices listen on gRPC port 50051 inside the Compose network only. Rep
 | Notification | Consumes `MatchFinalized` and stores idempotent in-app result notices for participating team managers |
 | Report | Generates persistent tournament standings and fixture reports as CSV/JSON; authenticated same-origin downloads |
 | Audit Log | Persistent PostgreSQL audit entries, admin-only paginated reads, authenticated recording RPC, and durable MatchFinalized/admin-action consumers |
-| Media, Analytics, Configuration | Shells (gRPC health only) |
+| Analytics | Persists finalized-match facts idempotently and serves filtered tournament, participating-team and completed-match dashboard counts; runtime RPC acceptance remains pending |
+| Configuration | Authenticated read and super-admin-only write gRPC endpoints backed by PostgreSQL; runtime RPC acceptance remains pending |
+| Media | Authenticated same-origin upload, match media listing, retrieval and owner/admin deletion; metadata in PostgreSQL and binary assets in the persistent Compose `media-data` volume. Supports JPEG/PNG/WebP photos and MP4 highlights up to 10 MiB. |
 
 Shared packages:
 
 - `packages/servicekit`: JWT auth (`golang-jwt/v5`), gRPC client with per-call deadlines, retries on safe reads and a circuit breaker; request-id logging, panic recovery, error mapping, migrations.
 - `packages/eventkit`: JetStream streams, durable consumers with bounded redelivery, dead-letter stream `DRUKLEAGUE_DLQ`, de-duplicated publisher.
 - `packages/contracts`: generated Go code from `proto/` (Buf).
+
+### Inspecting and replaying dead-letter events
+
+The `tools/event-admin` command inspects recent entries in `DRUKLEAGUE_DLQ` and replays an entry to its recorded original subject. Configure `NATS_URL` if NATS is not at `nats://localhost:4222`:
+
+```powershell
+$env:NATS_URL = "nats://localhost:4222"
+go run ./tools/event-admin inspect --limit 50
+go run ./tools/event-admin replay --dry-run 123
+go run ./tools/event-admin replay 123
+```
+
+Replay retains the original dead-letter entry for audit. The DLQ stream keeps entries for 30 days.
+
+### Rebuilding standings
+
+With the Compose services already running, rebuild the standings projection from the retained `MatchFinalized` event history:
+
+```powershell
+docker compose -f deploy/docker-compose.yml build standings
+docker compose -f deploy/docker-compose.yml run --rm --no-deps --entrypoint /app/rebuild standings
+```
+
+The command refuses to rebuild if the event stream is empty or its first sequence is no longer present. It pauses the live standings consumer while replacing its projection and processed-event IDs in one database transaction.
 
 Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,adapters}`, with `cmd/service/main.go` doing wiring only.
 
@@ -74,7 +100,7 @@ Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details a
 - **Registration:** the tournament link should move from Team to Registration (with `pending`/`approved`/`rejected`/`withdrawn` status) and Fixture should read approved registrations; deadline, capacity and roster-lock rules are undefined.
 - **Matches and fixtures:** no correction path for a wrongly finalised result; finalise uses the last saved live score, not a submitted one; only `scheduled`/`completed` states; byes, withdrawals and late teams not handled; no official-overlap check; tie-breakers undefined; `starts_at` should be stored in UTC (Bhutan is UTC+6).
 - **Operations:** Standings cannot be rebuilt, the dead-letter stream cannot be inspected or replayed, no backup script, no outbox or stream retention, no idempotency on create calls, no readiness checks in Compose.
-- **Edge and frontend:** rate limiting, CORS and security headers at nginx; JWT storage in the frontend; the `web-preview/` duplicate copy.
+- **Edge and frontend:** Nginx rate limits and baseline security headers are configured; cross-origin access is limited to the local web origin. The API JWT is stored in an HttpOnly, SameSite=Strict cookie; a refresh-token flow is not implemented.
 - **CI and evidence:** GitHub Actions now runs Go formatting, vet, build, tests and an 80% coverage gate for modules with tests, plus Buf compatibility checks, govulncheck, gosec, Trivy image scans, and a k6 login/public-standings performance test. Test coverage for modules without tests remains outstanding.
 - **Deployment:** Compose stays. Proposed serverless runtime is faasd (OpenFaaS on one machine), not Kubernetes; confirm with the module tutor.
 

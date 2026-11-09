@@ -15,14 +15,17 @@ for attempt in {1..60}; do
   sleep 2
 done
 
-login=$(curl --fail --silent --show-error "$api_url/api/auth/login" \
-  -H 'Content-Type: application/json' \
-  --data "{\"username\":\"${BOOTSTRAP_ADMIN_USER}\",\"password\":\"${BOOTSTRAP_ADMIN_PASSWORD}\"}")
-token=$(jq -er '.token' <<<"$login")
-actor_id=$(jq -er '.user.sub' <<<"$login")
+cookie_jar=$(mktemp)
+trap 'rm -f "$cookie_jar"' EXIT
 
-tournament=$(curl --fail --silent --show-error "$api_url/api/tournaments" \
-  -H "Authorization: Bearer $token" \
+curl --fail --silent --show-error --cookie-jar "$cookie_jar" --cookie "$cookie_jar" \
+  "$api_url/api/auth/login" \
+  -H 'Content-Type: application/json' \
+  --data "{\"username\":\"${BOOTSTRAP_ADMIN_USER}\",\"password\":\"${BOOTSTRAP_ADMIN_PASSWORD}\"}" >/dev/null
+session=$(curl --fail --silent --show-error --cookie "$cookie_jar" "$api_url/api/auth/session")
+actor_id=$(jq -er '.id' <<<"$session")
+
+tournament=$(curl --fail --silent --show-error --cookie "$cookie_jar" "$api_url/api/tournaments" \
   -H 'Content-Type: application/json' \
   --data '{"name":"Audit E2E Verification","sport":"Football","season":"CI","dzongkhag":"Thimphu"}')
 tournament_id=$(jq -er '.id' <<<"$tournament")

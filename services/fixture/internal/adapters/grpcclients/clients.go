@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 
+	registrationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	venuev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
@@ -33,28 +34,30 @@ func (t *Tournaments) Get(ctx context.Context, id string) (domain.Tournament, er
 	return domain.Tournament{ID: response.GetTournament().GetId(), Dzongkhag: response.GetTournament().GetDzongkhag()}, nil
 }
 
-type Teams struct{ client v1.TeamServiceClient }
-
-func NewTeams(conn grpc.ClientConnInterface) *Teams {
-	return &Teams{client: v1.NewTeamServiceClient(conn)}
+type Registrations struct {
+	client registrationv1.RegistrationServiceClient
 }
 
-func (t *Teams) IDsInTournament(ctx context.Context, tournamentID string) ([]string, error) {
+func NewRegistrations(conn grpc.ClientConnInterface) *Registrations {
+	return &Registrations{client: registrationv1.NewRegistrationServiceClient(conn)}
+}
+
+func (r *Registrations) ApprovedTeamIDs(ctx context.Context, tournamentID string) ([]string, error) {
 	ids := []string{}
 	token := ""
 	for page := 0; page < maxPages; page++ {
-		response, err := t.client.ListTeams(ctx, &v1.ListTeamsRequest{TournamentId: tournamentID, PageSize: 100, PageToken: token})
+		response, err := r.client.ListRegistrations(ctx, &registrationv1.ListRegistrationsRequest{TournamentId: tournamentID, Status: "approved", PageSize: 100, PageToken: token})
 		if err != nil {
-			return nil, servicekit.FromStatus(err, "teams")
+			return nil, servicekit.FromStatus(err, "approved registrations")
 		}
-		for _, team := range response.GetTeams() {
-			ids = append(ids, team.GetId())
+		for _, registration := range response.GetRegistrations() {
+			ids = append(ids, registration.GetTeamId())
 		}
 		if token = response.GetNextPageToken(); token == "" {
-			break
+			return ids, nil
 		}
 	}
-	return ids, nil
+	return nil, core.Dependency("approved registration listing exceeded pagination limit")
 }
 
 type Venues struct{ client venuev1.VenueServiceClient }

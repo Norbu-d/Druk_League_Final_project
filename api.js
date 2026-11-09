@@ -1,23 +1,12 @@
 (() => {
-  const tokenKey = 'drukleague-session';
+  const authKey = 'drukleague-authenticated';
   const roleKey = 'drukleague-role';
   const usernameKey = 'drukleague-username';
-  const token = () => sessionStorage.getItem(tokenKey);
-  function tokenClaims(value) {
-    try {
-      const payload = value.split('.')[1].replaceAll('-', '+').replaceAll('_', '/');
-      return JSON.parse(atob(payload));
-    } catch { return {}; }
-  }
-  const tokenRole = (value) => tokenClaims(value).role || 'viewer';
-  const tokenUsername = (value) => tokenClaims(value).username || '';
-  const defaultApiRoot = location.protocol === 'file:'
-    ? 'http://127.0.0.1:8080/api'
-    : `${location.protocol}//${location.hostname}:8080/api`;
-  const apiRoot = window.DRUKLEAGUE_API_BASE || defaultApiRoot;
-  const headers = () => ({'Content-Type':'application/json', ...(token() ? {Authorization:`Bearer ${token()}`} : {})});
+  const token = () => sessionStorage.getItem(authKey) === 'true';
+  const apiRoot = window.DRUKLEAGUE_API_BASE || `${location.origin}/api`;
+  const headers = () => ({'Content-Type':'application/json'});
   async function request(path, options={}) {
-    const response = await fetch(`${apiRoot}${path}`, {...options, headers:{...headers(), ...(options.headers||{})}});
+    const response = await fetch(`${apiRoot}${path}`, {...options, credentials:'same-origin', headers:{...headers(), ...(options.headers||{})}});
     const data = await response.json().catch(()=>({}));
     if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
     return data;
@@ -26,7 +15,7 @@
   function syncRoleIdentity() {
     const signedIn = Boolean(token());
     const identity = roleIdentity(
-      signedIn ? (sessionStorage.getItem(usernameKey) || tokenUsername(token())) : '',
+      signedIn ? (sessionStorage.getItem(usernameKey) || '') : '',
       signedIn ? currentRole() : 'viewer',
       signedIn
     );
@@ -50,9 +39,10 @@
       render(activePage);
     } catch (error) { toast(`Could not load saved project data: ${error.message}`); }
   }
-  function showLogin() {
+  async function showLogin() {
     if (token()) {
-      sessionStorage.removeItem(tokenKey); sessionStorage.removeItem(roleKey); sessionStorage.removeItem(usernameKey); syncRoleIdentity(); render('dashboard');
+      try { await request('/auth/logout',{method:'POST'}); } catch (error) { toast(error.message); return; }
+      sessionStorage.removeItem(authKey); sessionStorage.removeItem(roleKey); sessionStorage.removeItem(usernameKey); syncRoleIdentity(); render('dashboard');
       toast('Signed out.'); return;
     }
     document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title"><header class="modal-head"><div><h2 id="login-title">Sign in to DrukLeague</h2><p>Connect to your saved tournaments and match data.</p></div><button class="modal-close" type="button" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="login-form"><div class="modal-body"><div class="form-grid"><div class="form-field full"><label for="login-user">Username</label><input id="login-user" name="username" autocomplete="username" required></div><div class="form-field full"><label for="login-password">Password</label><input id="login-password" name="password" type="password" autocomplete="current-password" required></div></div></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" class="button button-primary">Sign in</button></footer></form></section></div>`;
@@ -64,7 +54,7 @@
     const form=event.target;
     if (form.id==='login-form') {
       event.preventDefault();
-      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(tokenKey,result.token);sessionStorage.setItem(roleKey,result.user.role||tokenRole(result.token));sessionStorage.setItem(usernameKey,result.user.username||tokenUsername(result.token));syncRoleIdentity();document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${result.user.username}.`);await refresh(); }
+      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(authKey,'true');sessionStorage.setItem(roleKey,result.user.role||'viewer');sessionStorage.setItem(usernameKey,result.user.username||'');syncRoleIdentity();document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${result.user.username}.`);await refresh(); }
       catch(error){
         toast(error.message);
         const modal=document.querySelector('#login-form .modal-body');
@@ -110,17 +100,20 @@
     }
   });
   document.querySelector('.top-avatar').classList.add('auth-button');
-  if (token()) {
-    if (!sessionStorage.getItem(roleKey)) {
-      sessionStorage.setItem(roleKey, tokenRole(token()));
-    }
+  // Clear legacy bearer tokens and restore the HttpOnly cookie session from the API.
+  sessionStorage.removeItem('drukleague-session');
+  void request('/auth/session').then(user => {
+    sessionStorage.setItem(authKey,'true');
+    sessionStorage.setItem(roleKey,user.role||'viewer');
+    sessionStorage.setItem(usernameKey,user.username||'');
     syncRoleIdentity();
     render(activePage);
-    void refresh();
-  } else {
-    sessionStorage.setItem(roleKey, 'viewer');
+    return refresh();
+  }).catch(() => {
+    sessionStorage.removeItem(authKey);
+    sessionStorage.setItem(roleKey,'viewer');
     sessionStorage.removeItem(usernameKey);
     syncRoleIdentity();
     render(activePage);
-  }
+  });
 })();

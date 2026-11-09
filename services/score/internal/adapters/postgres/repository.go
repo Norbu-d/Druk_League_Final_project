@@ -86,3 +86,11 @@ func (r *Repository) MarkPublished(ctx context.Context, eventID string) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE event_outbox SET published_at=now() WHERE event_id=$1 AND published_at IS NULL`, eventID)
 	return err
 }
+
+func (r *Repository) PrunePublished(ctx context.Context, before time.Time) (int64, error) {
+	result, err := r.db.ExecContext(ctx, `DELETE FROM event_outbox WHERE published_at IS NOT NULL AND published_at < $1`, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
