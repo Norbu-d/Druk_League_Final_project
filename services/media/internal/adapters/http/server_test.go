@@ -2,6 +2,8 @@ package httpadapter
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -197,6 +199,136 @@ func TestMediaStorageHelpers(t *testing.T) {
 	}
 	if !validStorageKey(first) || first == second {
 		t.Fatalf("random keys invalid or reused: %q %q", first, second)
+	}
+}
+
+func TestMediaNotFoundAndInvalidStorageMetadata(t *testing.T) {
+	db := testdb.New(t, "../../../migrations")
+	secret := []byte("media-metadata-test-secret")
+	token := mediaTestToken(t, secret, mediaTestOwner, servicekit.RoleTeamManager)
+	handler := New(db, secret, t.TempDir()).Handler()
+	missing := httptest.NewRecorder()
+	missingGet := httptest.NewRequest(http.MethodGet, "/api/media/66666666-6666-4666-8666-666666666666", nil)
+	missingGet.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(missing, missingGet)
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing get status=%d body=%s", missing.Code, missing.Body)
+	}
+	missingDelete := httptest.NewRecorder()
+	missingDeleteRequest := httptest.NewRequest(http.MethodDelete, "/api/media/66666666-6666-4666-8666-666666666666", nil)
+	missingDeleteRequest.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(missingDelete, missingDeleteRequest)
+	if missingDelete.Code != http.StatusNotFound {
+		t.Fatalf("missing delete status=%d body=%s", missingDelete.Code, missingDelete.Body)
+	}
+
+	unsafeDownloadID := "77777777-7777-4777-8777-777777777771"
+	unsafeDeleteID := "77777777-7777-4777-8777-777777777772"
+	seedMediaAsset(t, db, unsafeDownloadID, mediaTestOwner, "../outside")
+	seedMediaAsset(t, db, unsafeDeleteID, mediaTestOwner, "../outside-too")
+	unsafeGet := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/media/"+unsafeDownloadID, nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(unsafeGet, request)
+	if unsafeGet.Code != http.StatusInternalServerError {
+		t.Fatalf("unsafe key get status=%d", unsafeGet.Code)
+	}
+	unsafeDelete := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodDelete, "/api/media/"+unsafeDeleteID, nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(unsafeDelete, request)
+	if unsafeDelete.Code != http.StatusInternalServerError {
+		t.Fatalf("unsafe key delete status=%d", unsafeDelete.Code)
+	}
+
+	missingFileID := "88888888-8888-4888-8888-888888888881"
+	seedMediaAsset(t, db, missingFileID, mediaTestOwner, strings.Repeat("a", 32))
+	missingFileGet := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet, "/api/media/"+missingFileID, nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(missingFileGet, request)
+	if missingFileGet.Code != http.StatusNotFound {
+		t.Fatalf("missing file get status=%d", missingFileGet.Code)
+	}
+	missingFileDelete := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodDelete, "/api/media/"+missingFileID, nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(missingFileDelete, request)
+	if missingFileDelete.Code != http.StatusNoContent {
+		t.Fatalf("missing file delete status=%d body=%s", missingFileDelete.Code, missingFileDelete.Body)
+	}
+}
+
+func TestMediaAdminCanDeleteAndEmptyMatchListsAreArrays(t *testing.T) {
+	db := testdb.New(t, "../../../migrations")
+	secret := []byte("media-admin-test-secret")
+	root := t.TempDir()
+	handler := New(db, secret, root).Handler()
+	list := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/matches/"+mediaTestMatch+"/media", nil)
+	request.Header.Set("Authorization", "Bearer "+mediaTestToken(t, secret, mediaTestOwner, servicekit.RoleTeamManager))
+	handler.ServeHTTP(list, request)
+	if list.Code != http.StatusOK || list.Body.String() != "[]\n" {
+		t.Fatalf("empty list status=%d body=%s", list.Code, list.Body)
+	}
+
+	adminID := "99999999-9999-4999-8999-999999999991"
+	assetID := "99999999-9999-4999-8999-999999999992"
+	key := strings.Repeat("b", 32)
+	seedMediaAsset(t, db, assetID, mediaTestOwner, key)
+	adminToken := mediaTestToken(t, secret, adminID, servicekit.RoleSuperAdmin)
+	delete := httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodDelete, "/api/media/"+assetID, nil)
+	request.Header.Set("Authorization", "Bearer "+adminToken)
+	handler.ServeHTTP(delete, request)
+	if delete.Code != http.StatusNoContent {
+		t.Fatalf("admin delete status=%d body=%s", delete.Code, delete.Body)
+	}
+}
+
+func TestMediaUploadCleansUpWhenMetadataSaveFails(t *testing.T) {
+	db := testdb.New(t, "../../../migrations")
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	secret := []byte("media-db-failure-test-secret")
+	root := t.TempDir()
+	handler := New(db, secret, root).Handler()
+	request := mediaUploadRequest(t, mediaTestToken(t, secret, mediaTestOwner, servicekit.RoleTeamManager), tinyPNG)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("upload status=%d body=%s", response.Code, response.Body)
+	}
+	files, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("uploaded object left behind after database failure: %v", files)
+	}
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/matches/" + mediaTestMatch + "/media"},
+		{http.MethodGet, "/api/media/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"},
+		{http.MethodDelete, "/api/media/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"},
+	} {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(tc.method, tc.path, nil)
+		request.Header.Set("Authorization", "Bearer "+mediaTestToken(t, secret, mediaTestOwner, servicekit.RoleTeamManager))
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("%s %s status=%d body=%s", tc.method, tc.path, response.Code, response.Body)
+		}
+	}
+}
+
+func seedMediaAsset(t *testing.T, db *sql.DB, id, owner, key string) {
+	t.Helper()
+	_, err := db.ExecContext(context.Background(), `INSERT INTO media_assets
+		(id,owner_id,object_key,content_type,size_bytes,match_id,media_kind,caption)
+		VALUES($1::uuid,$2::uuid,$3,'image/png',8,$4::uuid,'photo','test')`, id, owner, key, mediaTestMatch)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
