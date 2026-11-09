@@ -45,3 +45,28 @@ func TestDashboardMetricsApplySeasonAndDzongkhagFilters(t *testing.T) {
 		t.Fatalf("unfiltered metrics=%+v", all)
 	}
 }
+
+func TestRecordFinalizedIsIdempotent(t *testing.T) {
+	db := testdb.New(t, "../../../migrations")
+	repo := New(db)
+	event := domain.MatchFinalized{
+		EventID: "11111111-1111-4111-8111-111111111121", MatchID: "22222222-2222-4222-8222-222222222221",
+		TournamentID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21", HomeTeamID: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbb121",
+		AwayTeamID: "cccccccc-cccc-4ccc-8ccc-cccccccccc21", HomeScore: 3, AwayScore: 2,
+		FinalizedAt: time.Date(2026, time.February, 1, 12, 0, 0, 0, time.UTC),
+	}
+	tournament := domain.Tournament{Season: "2026", Dzongkhag: "Thimphu"}
+	if err := repo.RecordFinalized(context.Background(), event, tournament); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.RecordFinalized(context.Background(), event, tournament); err != nil {
+		t.Fatal(err)
+	}
+	metrics, err := repo.DashboardMetrics(context.Background(), "2026", "Thimphu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metrics != (domain.DashboardMetrics{Tournaments: 1, Teams: 2, Matches: 1}) {
+		t.Fatalf("metrics=%+v", metrics)
+	}
+}

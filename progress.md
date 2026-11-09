@@ -682,3 +682,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - CI confirmed that the cookie findings are resolved. The security scan then found three Media issues: multipart size parsing, path use from the media metadata key, and file permissions. Media storage now uses `os.Root` operations to confine file access, validates generated hex storage keys, and writes files as owner-only. The request body remains capped at 10 MiB; the narrow G120 suppression documents that bound.
 - The pinned Trivy binary download still exited without a diagnostic, so `.github/workflows/go-ci.yml` now runs a pinned Trivy container to scan the built local Docker images.
 - The same CI run still reports Analytics coverage at 10.9% and Media at 63.7%, below the existing 80% gate. The Buf and k6 release downloads again returned HTTP 504. Media tests passed after the storage changes; gosec and the updated image scan need a new CI run.
+
+## 36. Coverage gate follow-up (9 Nov 2026)
+
+- Added Analytics tests for finalized-event normalization/validation, service dependency and persistence behavior, gRPC request/response and errors, tournament gRPC client mapping, NATS handling/retry classification, and database idempotency.
+- Added Media tests for authentication and cookie fallback, malformed and invalid uploads, content-type validation, invalid resource IDs, storage setup failures, and storage-key helpers.
+- Analytics package tests pass locally and its non-database coverage profile is 89.1%. Media tests pass locally; database-backed Media tests are skipped because Docker Desktop's engine is unavailable, so only 40.2% local coverage was measured. Check the CI module coverage result on the pushed branch before claiming the 80% gate is resolved.
