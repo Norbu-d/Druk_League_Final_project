@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const {after, test} = require('node:test');
-const {canRoleAction, currentRole, roleActions, roleLabels, rolePages, roleLabel, roleIdentity} = require('../../role-permissions.js');
+const {canRoleAction, currentRole, roleActions, roleLabels, rolePages, roleLabel, roleIdentity, sanitizeRole, sanitizeUsername, sanitizeUUID, safeAPIURL} = require('../../role-permissions.js');
 
 const originalSessionStorage = globalThis.sessionStorage;
 after(() => {
@@ -27,6 +27,27 @@ test('unknown and removed roles fall back to Viewer', () => {
   assert.equal(currentRole(), 'viewer');
   useRole('unexpected');
   assert.equal(currentRole(), 'viewer');
+});
+
+test('API identity values are normalized before reaching browser storage', () => {
+  assert.equal(sanitizeRole('team_manager'), 'team_manager');
+  assert.equal(sanitizeRole('administrator<script>'), 'viewer');
+  assert.equal(sanitizeUsername('norbu.dhendup-1'), 'norbu.dhendup-1');
+  assert.equal(sanitizeUsername('<img src=x onerror=alert(1)>'), '');
+  assert.equal(sanitizeUUID('22222222-2222-4222-8222-222222222222'), '22222222-2222-4222-8222-222222222222');
+  assert.equal(sanitizeUUID('../admin'), '');
+});
+
+test('API requests are confined to known same-origin routes and methods', () => {
+  const root = 'http://localhost/api';
+  assert.equal(safeAPIURL(root, '/teams'), 'http://localhost/api/teams');
+  assert.equal(safeAPIURL(root, '/matches/22222222-2222-4222-8222-222222222222/finalize', 'POST'), 'http://localhost/api/matches/22222222-2222-4222-8222-222222222222/finalize');
+  assert.equal(safeAPIURL(root, '/standings?tournament_id=22222222-2222-4222-8222-222222222222'), 'http://localhost/api/standings?tournament_id=22222222-2222-4222-8222-222222222222');
+  assert.equal(safeAPIURL(root, '//attacker.example/collect'), '');
+  assert.equal(safeAPIURL(root, '/../admin'), '');
+  assert.equal(safeAPIURL(root, '/matches/not-a-uuid/live', 'PATCH'), '');
+  assert.equal(safeAPIURL(root, '/auth/login'), '');
+  assert.equal(safeAPIURL(root, '/standings?tournament_id=invalid&next=/admin'), '');
 });
 
 test('the active role has a clear user-facing label', () => {

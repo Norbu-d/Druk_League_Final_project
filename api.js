@@ -2,11 +2,26 @@
   const authKey = 'drukleague-authenticated';
   const roleKey = 'drukleague-role';
   const usernameKey = 'drukleague-username';
+  const safeRole = sanitizeRole;
+  const safeUsername = sanitizeUsername;
+  const safeUUID = sanitizeUUID;
   const token = () => sessionStorage.getItem(authKey) === 'true';
-  const apiRoot = window.DRUKLEAGUE_API_BASE || `${location.origin}/api`;
+  const defaultApiRoot = location.protocol === 'file:' ? 'http://127.0.0.1:8080/api' : `${location.origin}/api`;
+  const configuredApiRoot = (() => {
+    try {
+      const candidate = new URL(window.DRUKLEAGUE_API_BASE || defaultApiRoot, location.href);
+      const sameOrigin = candidate.origin === location.origin && location.origin !== 'null';
+      const localDevelopmentOrigin = ['http://127.0.0.1:8080','http://localhost:8080'].includes(candidate.origin);
+      if ((!sameOrigin && !localDevelopmentOrigin) || candidate.pathname.replace(/\/+$/, '') !== '/api' || candidate.search || candidate.hash) return new URL(defaultApiRoot);
+      return candidate;
+    } catch (_) { return new URL(defaultApiRoot); }
+  })();
+  const apiRoot = configuredApiRoot.href.replace(/\/+$/, '');
   const headers = () => ({'Content-Type':'application/json'});
   async function request(path, options={}) {
-    const response = await fetch(`${apiRoot}${path}`, {...options, credentials:'same-origin', headers:{...headers(), ...(options.headers||{})}});
+    const safeURL = safeAPIURL(apiRoot, path, options.method);
+    if (!safeURL) throw new Error('Invalid API request path.');
+    const response = await fetch(safeURL, {...options, credentials:'same-origin', headers:{...headers(), ...(options.headers||{})}});
     const data = await response.json().catch(()=>({}));
     if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
     return data;
@@ -31,7 +46,8 @@
     if (!token()) return;
     try {
       const [remoteTeams, remoteTournaments, remoteMatches] = await Promise.all([request('/teams'),request('/tournaments'),request('/matches')]);
-      const table=remoteTournaments[0]?await request(`/standings?tournament_id=${encodeURIComponent(remoteTournaments[0].id)}`):[];
+      const standingsTournamentID=safeUUID(remoteTournaments[0]?.id);
+      const table=standingsTournamentID?await request(`/standings?tournament_id=${encodeURIComponent(standingsTournamentID)}`):[];
       const byTeam=new Map(table.map(row=>[row.team_id,row]));
       teams.splice(0,teams.length,...remoteTeams.map(t=>{const row=byTeam.get(t.id)||{};return {id:t.id,name:t.name,short:t.short_code||initials(t.name),color:'',dz:t.dzongkhag,played:row.played||0,w:row.won||0,d:row.drawn||0,l:row.lost||0,gf:row.goals_for||0,ga:row.goals_against||0,gd:row.goal_difference===undefined?'0':String(row.goal_difference),pts:row.points||0,form:[]}}));
       tournaments.splice(0,tournaments.length,...remoteTournaments.map(t=>({id:t.id,name:t.name,sport:t.sport,season:t.season,status:t.status==='completed'?'Completed':t.status==='in_progress'?'In progress':'Registration open',teams:0,fixtures:0,fill:0,theme:'',description:`${t.sport} · ${t.season}`,venue:t.venue,dz:t.dzongkhag})));
@@ -54,7 +70,7 @@
     const form=event.target;
     if (form.id==='login-form') {
       event.preventDefault();
-      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});sessionStorage.setItem(authKey,'true');sessionStorage.setItem(roleKey,result.user.role||'viewer');sessionStorage.setItem(usernameKey,result.user.username||'');syncRoleIdentity();document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${result.user.username}.`);await refresh(); }
+      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});const user=result.user||{};const username=safeUsername(user.username);sessionStorage.setItem(authKey,'true');sessionStorage.setItem(roleKey,safeRole(user.role));sessionStorage.setItem(usernameKey,username);syncRoleIdentity();document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${username||'user'}.`);await refresh(); }
       catch(error){
         toast(error.message);
         const modal=document.querySelector('#login-form .modal-body');
@@ -85,9 +101,9 @@
       try { await request('/teams',{method:'POST',body:JSON.stringify({name,short_code:initials(name),dzongkhag:dz,...(tournament?.id?{tournament_id:tournament.id}:{})})}); await refresh(); }
       catch(error){toast(`Could not save team: ${error.message}`);}
     } else if (form.id==='score-form') {
-      const match=fixtureData[Number(form.dataset.matchIndex)]; if (!match?.id) {toast('This demo fixture is not saved in the database.');return;}
+      const match=fixtureData[Number(form.dataset.matchIndex)],matchID=safeUUID(match?.id); if (!matchID) {toast('This demo fixture is not saved in the database.');return;}
       const body=JSON.stringify({home:Number(form.elements.home.value),away:Number(form.elements.away.value)}),final=event.submitter?.value==='finalize';
-      try { await request(`/matches/${match.id}/${final?'finalize':'live'}`,{method:final?'POST':'PATCH',body});await refresh(); }
+      try { await request(`/matches/${encodeURIComponent(matchID)}/${final?'finalize':'live'}`,{method:final?'POST':'PATCH',body});await refresh(); }
       catch(error){toast(`Could not save score: ${error.message}`);}
     }
   });
@@ -95,17 +111,18 @@
     if(event.target.closest('[data-action="generate-fixtures"]')) {
       if(!canRoleAction('generate-fixtures')) {toast('Only Super Admins can generate fixtures.');return;}
       if(!token()){toast('Sign in to generate saved fixtures.');return;}
-      const tournament=tournaments.find(t=>t.id);if(!tournament){toast('Create a tournament and register at least two teams first.');return;}
-      try{const result=await request(`/tournaments/${tournament.id}/fixtures`,{method:'POST'});toast(`${result.fixtures_created} fixtures created.`);await refresh();}catch(error){toast(error.message);}
+      const tournament=tournaments.find(t=>t.id),tournamentID=safeUUID(tournament?.id);if(!tournamentID){toast('Create a tournament and register at least two teams first.');return;}
+      try{const result=await request(`/tournaments/${encodeURIComponent(tournamentID)}/fixtures`,{method:'POST'});toast(`${result.fixtures_created} fixtures created.`);await refresh();}catch(error){toast(error.message);}
     }
   });
   document.querySelector('.top-avatar').classList.add('auth-button');
   // Clear legacy bearer tokens and restore the HttpOnly cookie session from the API.
   sessionStorage.removeItem('drukleague-session');
   void request('/auth/session').then(user => {
+    const username=safeUsername(user?.username);
     sessionStorage.setItem(authKey,'true');
-    sessionStorage.setItem(roleKey,user.role||'viewer');
-    sessionStorage.setItem(usernameKey,user.username||'');
+    sessionStorage.setItem(roleKey,safeRole(user?.role));
+    sessionStorage.setItem(usernameKey,username);
     syncRoleIdentity();
     render(activePage);
     return refresh();

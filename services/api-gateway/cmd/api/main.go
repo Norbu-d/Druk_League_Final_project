@@ -210,14 +210,14 @@ func (s *server) session(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) logout(w http.ResponseWriter, _ *http.Request) {
 	// #nosec G124 -- Secure is disabled only for local HTTP development; production sets it.
-	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: "", Path: "/", HttpOnly: true,
+	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: "", Path: "/", HttpOnly: true, // NOSONAR -- Secure is disabled only for local HTTP development; production sets it.
 		Secure: env("APP_ENV", "development") == "production", SameSite: http.SameSiteStrictMode, MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "signed_out"})
 }
 
 func setSessionCookie(w http.ResponseWriter, token string) {
 	// #nosec G124 -- Secure is disabled only for local HTTP development; production sets it.
-	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: token, Path: "/", HttpOnly: true,
+	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: token, Path: "/", HttpOnly: true, // NOSONAR -- Secure is disabled only for local HTTP development; production sets it.
 		Secure: env("APP_ENV", "development") == "production", SameSite: http.SameSiteStrictMode,
 		MaxAge: 12 * 60 * 60})
 }
