@@ -1,8 +1,8 @@
 # DrukLeague — Project Progress and Handoff
 
 **Last updated:** 2026-11-09
-**Project root:** `D:\Druk_League_Final_project`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–33 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Project root:** `D:\druk-league`
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and verification are recorded in sections 12–38 and the contribution summaries below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -193,7 +193,7 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
 12. **SWE303 evidence:** sprint plans, reviews, retrospectives; update the defect log, risk register (add the cross-service finding) and traceability matrix with executed results; RACI/estimation/communication plan; final report and demo script.
-13. **Housekeeping:** README quickstart covers clone/configure/start and one-at-a-time builds. The Buf breaking check uses the target branch history. Confirm teammate access and branch protection; optionally publish images to GitHub Container Registry later.
+13. **Housekeeping:** README quickstart covers clone/configure/start and one-at-a-time builds. A local PostgreSQL plus media backup script and restore guide are in place; live backup/restore acceptance remains. The Buf breaking check uses the target branch history. Confirm teammate access and branch protection; optionally publish images to GitHub Container Registry later.
 
 **Sprint mapping (proposal's 8 sprints):** S1 foundation/CI/contracts · S2 identity + gateway + BFF · S3 teams/tournaments/registration · S4 competition (match → standings) · S5 venues/officials/notifications · S6 supporting services · S7 integration, events, serverless, observability, security/performance tests · S8 QA, coverage, defects, demo.
 
@@ -430,7 +430,7 @@ docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2
 
 ## 11. Design review — 22 Oct 2026
 
-**Status: planned. Nothing in this section is implemented or tested.** The findings come from reading `README.md` and `progress.md`, not from re-reading the code, so check each one against the code before acting; some may already be handled. Items marked *group decision* touch services owned by other members. Where this section conflicts with the ordering in section 7, this section wins until the group agrees otherwise.
+**Status: partially addressed.** The original findings below were a design review, not an implementation checklist. Sections 12–38 record follow-up work and evidence. Several items are now implemented, while those marked *group decision* still need owner/tutor agreement. Do not treat a recommendation as an approved group decision. Where this section conflicts with the ordering in section 7, this section wins until the group agrees otherwise.
 
 ### 11.1 Proposed order of work
 
@@ -696,4 +696,13 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - All 8 GitHub Actions checks on `fdd5ce7` completed successfully, including protobuf, frontend, Go coverage, security, image scan, audit event, and k6 checks. The commit is pushed; no PR has been created or merged yet.
 - The Buf container change was verified by its successful GitHub check. Local Docker Desktop's Linux engine is unavailable in this session, so Docker Compose, browser, and fault-recovery acceptance could not be run here.
 - Updated the README, defect log, traceability matrix, and test-plan status to reflect implemented Media/Audit Log behavior and the current CI results. Configured the published local API and web ports to bind to loopback in Compose.
+- Added `scripts/backup.ps1` and `docs/backup-restore.md` to back up all PostgreSQL databases and uploaded media together; live backup/restore acceptance is still required.
 - Still requiring team/member action: coordinate secret rotation against the persistent database and bootstrap account; confirm faasd scope with the tutor; agree Registration, service identity/official mapping, and scope decisions with the named owners; run the live Compose/browser/fault tests; reconcile Jira and branch protection; and record actual sprint review/retrospective input. These decisions and test results must not be invented in the progress record.
+
+## 38. Docker recovery and local operations follow-up (9 Nov 2026)
+
+- Docker Desktop was initially available, but a `docker compose up -d --build` attempt began building all service images concurrently and the Linux engine stopped responding with HTTP 500. The build was interrupted; no volume prune/remove/down command was run.
+- Restart attempts left Docker Desktop's service stopped. Only the `docker-desktop` WSL distribution had been running; it was shut down. Starting `com.docker.service` from this session failed with a Windows service access error, so the engine is not currently usable. A local administrator may need to restart Docker Desktop/the service before Compose acceptance can continue.
+- Updated `deploy/build-services.ps1` to build each service image in an individual Compose invocation, preventing the full multi-image Bake build from launching at once.
+- Added `scripts/backup.ps1` and `docs/backup-restore.md` for PostgreSQL and media-volume backups, with archives stored outside the repository by default. PowerShell syntax parsing and `git diff --check` passed; the live backup/restore procedure has not been executed because Docker is unavailable.
+- No database or media volume was deleted or reset. Re-run the sequential image build, `docker compose up -d --no-build`, health checks, authenticated Media workflow, and E2E/fault scenarios after Docker is restarted.

@@ -80,6 +80,10 @@ docker compose -f deploy/docker-compose.yml run --rm --no-deps --entrypoint /app
 
 The command refuses to rebuild if the event stream is empty or its first sequence is no longer present. It pauses the live standings consumer while replacing its projection and processed-event IDs in one database transaction.
 
+### Backing up the local stack
+
+With Docker Compose running, `./scripts/backup.ps1` writes a PostgreSQL dump and a copy of uploaded media to a private folder under `%LOCALAPPDATA%`. See [docs/backup-restore.md](docs/backup-restore.md) for restore steps and the volume safety notes.
+
 Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,adapters}`, with `cmd/service/main.go` doing wiring only.
 
 ### Not built yet
