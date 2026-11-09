@@ -626,7 +626,7 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added `AnalyticsService.GetDashboardMetrics` backed by filtered finalized-match facts. The endpoint returns tournament count, distinct participating teams and completed matches. Player, venue, official and pending-registration counts are not fabricated because those source facts are not currently present in the Analytics projection. `go build ./...` and `git diff --check` passed in `services/analytics`; runtime gRPC acceptance remains pending. Commit `4c399d0`; Jira SCRUM-67 remains open.
 - Refreshed the defect log, traceability matrix and risk register to remove stale status claims and record current known gaps, cross-service correction risk, and observed Compose/Nginx/event evidence. Commit `2e58a1b`. The sprint plan/review/retrospective, R1 rating and Sprint 4/5 reorder required by SCRUM-108 remain incomplete; keep that issue In Progress.
-- These commits are local to `codex/norbu-tandin-open-work`; they have not been pushed. Do not infer that the full assigned backlog is complete from these entries.
+- These commits are on `codex/norbu-tandin-open-work`, which has been pushed to `origin`. Do not infer that the full assigned backlog is complete from these entries.
 
 ## 28. Norbu — Media upload and retrieval API (9 Nov 2026)
 
@@ -643,7 +643,7 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Changed Fixture participant discovery from legacy `Team.tournament_id` membership to paginated Registration service queries filtered to `approved`. Fixture scheduling and knockout generation now use only approved teams; the end-to-end setup registers and approves its generated test teams before fixture creation.
 - Added Registration service startup dependencies and address wiring in Compose, and client pagination/outage coverage. `go build ./...` passed for Fixture and `tools/e2e`; Compose configuration validation and `git diff --check` passed. The Fixture container rebuilt and is running.
-- Test files were not executed. Registration withdrawal, registration deadlines/capacity, roster locking and the underlying Team/tournament model migration still require agreed product decisions; SCRUM-99 remains In Progress.
+- Fixture gRPC, app, adapter and client tests passed in the full Go module test run recorded in section 31. Registration withdrawal, registration deadlines/capacity, roster locking and the underlying Team/tournament model migration still require agreed product decisions; SCRUM-99 remains In Progress.
 
 ## 31. SCRUM-55 — Integration and contract test verification (9 Nov 2026)
 
