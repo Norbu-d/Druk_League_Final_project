@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-11-09
 **Project root:** `D:\druk-league`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and verification are recorded in sections 12–38 and the contribution summaries below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and verification are recorded in sections 12–39 and the contribution summaries below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's original data disk remains on **D:** (moved by Norbu on 2026-10-19).
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -706,3 +706,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Updated `deploy/build-services.ps1` to build each service image in an individual Compose invocation, preventing the full multi-image Bake build from launching at once.
 - Added `scripts/backup.ps1` and `docs/backup-restore.md` for PostgreSQL and media-volume backups, with archives stored outside the repository by default. PowerShell syntax parsing and `git diff --check` passed; the live backup/restore procedure has not been executed because Docker is unavailable.
 - No database or media volume was deleted or reset. Re-run the sequential image build, `docker compose up -d --no-build`, health checks, authenticated Media workflow, and E2E/fault scenarios after Docker is restarted.
+
+## 39. Docker data disk reattachment required (9 Nov 2026)
+
+- Docker Desktop now responds, but its active engine lists zero volumes and uses a newly initialized disk at `C:\\Users\\DELL\\AppData\\Local\\Docker\\wsl\\disk\\docker_data.vhdx` (about 1.6 GB).
+- The original Docker data disk is still present and unchanged at `D:\\docker\\DockerDesktopWSL\\disk\\docker_data.vhdx` (about 41 GB). No Compose stack was started on the new empty disk, to avoid creating a separate empty database state.
+- In Docker Desktop, open **Settings → Resources → Advanced → Disk image location** and select the existing disk on D:. If prompted to use the existing image or replace it, choose the existing image. Verify that the prior images and volumes reappear before running Compose. Docker's settings guide documents the disk-location control and the choice when an image already exists.
