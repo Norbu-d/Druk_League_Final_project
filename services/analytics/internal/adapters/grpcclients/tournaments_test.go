@@ -22,7 +22,7 @@ func (c *fakeConn) Invoke(_ context.Context, method string, args, reply any, _ .
 	if c.err != nil {
 		return c.err
 	}
-	*reply.(*v1.GetTournamentResponse) = *c.response
+	reply.(*v1.GetTournamentResponse).Tournament = c.response.Tournament
 	return nil
 }
 func (*fakeConn) NewStream(context.Context, *grpc.StreamDesc, string, ...grpc.CallOption) (grpc.ClientStream, error) {
