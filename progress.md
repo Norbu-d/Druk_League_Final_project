@@ -2,9 +2,9 @@
 
 **Last updated:** 2026-11-09
 **Project root:** `D:\Druk_League_Final_project`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–21 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and its verification are recorded in sections 12–33 and the Sonam contribution summary below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's disk image is on **D:** (moved by Norbu on 2026-10-19).
 
-> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query and Configuration RPCs have implementation beyond health shells; media schema exists while upload/retrieval remains open. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + serverless functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
+> **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
 ---
 
@@ -66,7 +66,7 @@ Verified = checked in a running container on 12 Oct 2026 with an authenticated g
 | Sonam | Official | **Rewritten 19 Oct (tested; containerised and e2e-checked 19 Oct):** assigns through Match (source of truth), records tournament, filter by tournament now works |
 | Namgay | Notification | Persistent NATS consumer and in-app result notices implemented in SCRUM-18 |
 | Sonam | Media | SCRUM-83 schema designed and merged in PR #11; upload/retrieval remains under SCRUM-84 |
-| Namgay | Audit Log | Implementation underway under SCRUM-68 (section 18) |
+| Namgay | Audit Log | Implementation completed and merged under SCRUM-68 (section 19) |
 | Namgay | Report | Persistent standings and fixture CSV/JSON exports implemented in SCRUM-65; Sonam's SCRUM-85 schema subtask is Done |
 | Sonam | Search, Configuration | Search query endpoint and configuration schema merged; indexing/read-write follow-ups remain under SCRUM-87 and SCRUM-94 |
 | Sonam | Analytics | SCRUM-89 schema and SCRUM-90 MatchFinalized consumer are Done; query/service endpoints remain open |
@@ -188,7 +188,7 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 5. **Part 3:** code, tests and container checks done (19 Oct). **Part 4:** User + Auth, same. **Part 5 (next to write; section 11.1 step 4 proposes a minimal version first):** a BFF (REST → gRPC, same routes as the monolith so the frontend keeps working) and the gateway; point nginx at it. Also fix finalize in the BFF so it uses the score the official submits (the monolith ignores the body and finalizes the last saved live score).
 6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream), Fixture outbox and Notification consumer are done. Still to do: Audit Log consumer and OpenFaaS/faasd function.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Still to do: the Team → Tournament reference check, and running the fault-isolation scenarios in Docker.
-8. **Part 8:** media upload/retrieval (SCRUM-84) and search indexing rollout remain; search synchronization design (SCRUM-87) is documented. Configuration RPCs (SCRUM-94) and Analytics match aggregation/dashboard metrics (SCRUM-67/90) are implemented, with live acceptance still pending. Audit Log implementation exists; SCRUM-68 requires an end-to-end correction event check. Notification and Report have service logic.
+8. **Part 8:** Media upload/retrieval (SCRUM-84) and Search indexing rollout remain; Search synchronization design (SCRUM-87) is documented. Configuration RPCs (SCRUM-94) and Analytics match aggregation/dashboard metrics (SCRUM-67/90) are implemented, with live acceptance still pending. Audit Log admin-action publishing and its end-to-end flow passed CI; SCRUM-68 is Done. Notification and Report have service logic.
 9. **Part 9 (SWE302):** unit tests with port fakes and PostgreSQL integration tests exist for 8 services plus the shared packages (section 10). GitHub Actions now runs Go formatting, vet, build, tests, coverage, Buf, govulncheck, gosec, Trivy and k6 checks. Remaining: tests for modules that currently have none and the monolith; ZAP; Playwright; fault-isolation tests.
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
@@ -512,15 +512,15 @@ These are not alternatives. Kubernetes would orchestrate the 20 services; OpenFa
 - Unit coverage was added for the consumer and service flow. The end-to-end smoke program was extended to check completion after finalisation; the existing 29/29 container run predates this extension, and the extended full Compose flow has not been rerun locally because Docker Desktop is unavailable.
 - Work is in the `feature/namgay-insights-testing` history and was included in PR #3, merged to `development` on 2 Nov 2026.
 
-## 13. SCRUM-18 — Notification service (implementation on branch; Jira still In Progress)
+## 13. SCRUM-18 — Notification service (end-to-end verification follow-up, 6 Nov 2026)
 
-Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (due 14 Dec 2026). Its stated requirement is a persistent NATS subscriber that independently consumes `MatchFinalized` and sends result notifications to affected teams/dzongkhags; it must be a microservice, not a serverless function.
+Jira assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (due 14 Dec 2026), and its parent status is Done. SCRUM-42 (event listener) and SCRUM-43 (notification dispatch) are also Done. PR #25 merged to `development` on 6 Nov 2026 (merge commit `98b6e0f`); the notification smoke test passed in CI. The stated requirement is a persistent NATS subscriber that independently consumes `MatchFinalized` and sends result notifications to affected teams/dzongkhags; it must be a microservice, not a serverless function.
 
 - Added a persistent Notification gRPC service backed by PostgreSQL, with `SendNotification` and paginated `ListNotifications` RPCs. A user can list their own notices; administrators can list notices for other users.
 - Added a separate durable JetStream consumer for `drukleague.match.finalized`. It validates events, retries transient failures through `eventkit`, routes invalid events to the permanent-failure path, and deduplicates notices by event, recipient and channel.
 - On finalisation, the service looks up both teams through authenticated Team gRPC calls and creates one in-app notice for each distinct team manager. The result message includes both team names, scores, dzongkhag names and finalisation time. The existing model has no dzongkhag account identity or recipient mapping, so notices are delivered to team managers rather than directly to district accounts.
-- Added domain, application, gRPC, consumer and PostgreSQL integration tests, plus end-to-end smoke assertions for manager-only delivery and result/dzongkhag details. The latter smoke assertions were added after the 19 Oct container run and have not been rerun locally. The service work is included in PR #3, merged to `development` on 2 Nov 2026.
-- **Jira follow-up:** as of 4 Nov, the parent still shows In Progress. SCRUM-42, “Implement MatchFinalized event listener (notification),” is Done; SCRUM-43, “Implement notification dispatch logic,” remains To Do and is assigned to Norbu Dendup. Dispatch logic is present in this branch and was merged in PR #3, so SCRUM-43's Jira status appears behind the code. Do not mark the parent Done until the outstanding subtask is reconciled with its assignee. The implementation delivers to team managers and includes dzongkhag names; the project has no dzongkhag-user identities or recipient mapping for direct district-account delivery.
+- Added domain, application, gRPC, consumer and PostgreSQL integration tests, plus end-to-end smoke assertions. PR #3 merged the implementation to `development` on 2 Nov 2026. `go test ./...` in `services/notification` passes locally on 6 Nov.
+- Strengthened `tools/e2e` to check that participating team managers receive the correct final score, team names, and affected dzongkhag names, while unrelated team managers receive no notice. Added a CI job to start the Compose dependencies (including Dzongkhag) and run this smoke flow; the CI E2E passed on 6 Nov. Corrected a stale standings export assertion to check the actual finalized match participants. Local Docker verification remains unavailable because Docker Desktop's Linux engine is not running. PR #25 is merged. The current user model has no dzongkhag account identities, so delivery is to participating team managers and names both affected dzongkhags in the notice.
 
 ## 14. SCRUM-65 — Report service (implemented; Jira Done)
 
@@ -561,18 +561,18 @@ Jira currently assigns SCRUM-18 to Namgay Lhamo in Sprint 6, *Notify & Media* (d
 
 Whenever a Jira story is completed, add a dated entry here with its key, implemented behavior, test/verification evidence, commit or PR state, and Jira status. Keep unverified local runs and known requirement gaps explicit; do not mark the Jira story Done while a required child item or acceptance requirement remains open.
 
-## 19. SCRUM-68 — Audit log service (implementation underway, 4 Nov 2026)
+## 19. SCRUM-68 — Audit log service (completed 6 Nov 2026)
 
-- Jira shows SCRUM-68 in Sprint 7 (*Search & Config*), assigned to Namgay Lhamo, In Progress and due 28 Dec 2026. Its open subtasks are SCRUM-91 (database schema) and SCRUM-92 (audit event recording), both assigned to Namgay.
+- Jira shows SCRUM-68 in Sprint 7 (*Search & Config*), assigned to Namgay Lhamo and due 28 Dec 2026. SCRUM-68 and its subtasks SCRUM-91 (database schema) and SCRUM-92 (audit event recording) are Done.
 - Implemented persistent audit-entry storage and idempotency for event-backed records, an authenticated gRPC record/list API, admin-only audit reads, and durable consumers for `MatchFinalized` and the `drukleague.admin.*` event family.
 - Added the audit-entry schema migration and wired the audit-log service to PostgreSQL and JetStream. The existing `RecordAuditEntry` RPC derives the actor from the authenticated identity rather than trusting the request actor field.
-- Audit-log end-to-end verification is still pending. On 6 Nov, added the missing producer path in the API gateway: an admin-only result correction writes its correction history, standings adjustments, and a `drukleague.admin.match.result.corrected` outbox event in one transaction. The outbox publisher now publishes each row's stored subject, and the gateway ensures the shared stream includes admin subjects. The API gateway `go build ./...` succeeded; no end-to-end check against the running audit-log consumer has been run. Keep SCRUM-68 and its subtasks open until that event is observed in the audit log and CI/acceptance checks pass.
+- 6 Nov follow-up: extended the API gateway producer path to audit successful admin account, team, tournament, match, official-assignment, and fixture-generation actions, alongside Norbu's result-correction event. Each event includes event ID, authenticated actor ID, action, resource type/ID, reason or context, and UTC occurrence time; it is inserted into the existing outbox in the same transaction as the corresponding change. Added unit coverage for accepted outbox subjects and rejected wildcard/untrusted subjects. `gofmt`, `git diff --check`, and local `go test ./internal/auditoutbox` pass. All GitHub CI checks passed, including Go tests/coverage, security scans, protobuf, performance, SonarCloud, container image build/scan, and the API-to-NATS-to-Audit-Log-Postgres end-to-end test. The E2E check signed in as the bootstrapped admin, created a tournament, and confirmed its actor/action/resource audit row in PostgreSQL. PR #23 was merged into `development` at `5bffe6626d25d8eb51d95e60679d93e6c064528e`; SCRUM-91, SCRUM-92, and SCRUM-68 were then transitioned to Done in Jira.
 
 ## 20. SCRUM-57 — Project charter (draft completed 5 Nov 2026)
 
 - Added `docs/project-charter.md` covering purpose, measurable objectives, in/out of scope, deliverables, stakeholders, governance, milestones, assumptions, constraints, risks, and acceptance/review roles for DrukLeague.
 - Kept milestone dates out of the charter because the Jira sprint dates are being corrected; Jira remains the schedule source. The document distinguishes the 20-service target from the staged implementation and does not claim unreceived approvals.
-- Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview; `git diff --cached --check` passed before commit. The charter was committed as `4afa7b6`, documented in `83f955a`, and merged by PR #14 into `development` at merge commit `0dac320` on 5 Nov 2026. All 11 PR checks passed. SCRUM-57 and SCRUM-25 were transitioned to Done in Jira on 5 Nov 2026 after confirming both SCRUM-25 subtasks are Done and the architecture documentation exists. SCRUM-68 remains paused and untouched.
+- Reviewed against the existing WBS, stakeholder analysis, architecture decision, risk register, and project overview; `git diff --cached --check` passed before commit. The charter was committed as `4afa7b6`, documented in `83f955a`, and merged by PR #14 into `development` at merge commit `0dac320` on 5 Nov 2026. All 11 PR checks passed. SCRUM-57 and SCRUM-25 were transitioned to Done in Jira on 5 Nov 2026 after confirming both SCRUM-25 subtasks are Done and the architecture documentation exists. SCRUM-68 was completed on 6 Nov 2026 (see section 19).
 
 ## 21. Sonam — Analytics event aggregation (SCRUM-90, merged 5 Nov 2026)
 
@@ -586,12 +586,14 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added role checks to UI click and form submission paths so manually invoked hidden actions are rejected with a user-facing message. The authenticated API/server remains the security boundary; these browser checks are presentation behavior only.
 - Updated `app.js` and `api.js`. No local tests or build checks were run. Committed as `55dc688` and `22210cc`, then merged to `development` in PR [#16](https://github.com/Norbu-d/Druk_League_Final_project/pull/16) at merge commit `666d197` on 5 Nov 2026. All 11 CI checks passed. Jira was initially To Do and Namgay confirmed it was changed to Done on 5 Nov 2026.
 
-## 21. SCRUM-24 — Testing pyramid (Namgay contribution in progress, 5 Nov 2026)
+## 21. SCRUM-24 — Testing pyramid (Namgay contribution merged, 6 Nov 2026)
 
-- Jira shows the parent assigned to Namgay in Sprint 8, In Progress, with two of three children Done. SCRUM-55, integration and contract tests, remains In Progress and assigned to Norbu; this work avoids duplicating that subtask.
+- Jira shows the parent assigned to Namgay in Sprint 8 (*Integration & QA*), In Progress, with two of three children Done. SCRUM-55, integration and contract tests, remains In Progress and assigned to Norbu.
 - Extracted the four-role page/action permission policy into `role-permissions.js`, added four Node unit tests for page access, fallback roles, mutation permissions and read-only export, and added a CI job to run them. Updated `docs/swe302-test-plan.md` with case T-17 and its evidence.
-- Local verification: 4/4 Node tests passed; `node --check` passed for the permission module, `app.js` and `api.js`; `git diff --check` passed. The Go coverage script could not run because the Go executable is unavailable in the Bash environment; Docker is unavailable here, so full Compose E2E remains pending.
-- SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 remains paused.
+- Added Audit Log unit tests for event validation and conversion, authorization and pagination, JetStream message handling, and gRPC request/response mapping. Added PostgreSQL repository tests for event idempotency, filtered/paginated reads, and database errors; these run automatically in CI's PostgreSQL-backed test job.
+- PR [#26](https://github.com/Norbu-d/Druk_League_Final_project/pull/26) merged to `development` at `0362590` on 6 Nov. All PR checks passed, including Go lint/build/test/80% coverage, security, image scan, notification and audit E2E, frontend permissions, protobuf, and performance.
+- Local verification on 6 Nov: the audit-log Go packages pass, and combined `internal/...` coverage is 80.6% against the 80% gate. PostgreSQL integration cases were skipped locally because `TEST_DATABASE_URL` is unset. The previously added four Node permission tests and syntax checks passed. The full Compose E2E remains assigned to SCRUM-56 (Done); cross-service integration and contract tests remain in Norbu's open SCRUM-55.
+- SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 is Done.
 
 ## 22. SCRUM-103 — Nginx hardening (in progress, 6 Nov 2026)
 
@@ -652,3 +654,17 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Buf 1.73.0 `lint`, `build`, and `breaking --against .git#branch=development` passed after fetching the current `origin/development` baseline. The run used Go 1.26.5; GitHub Actions pins 1.26.10.
 - The CI coverage command was attempted using Go 1.26.10. Its 80% gate remains red for Analytics (10.9%) and Media (63.7%); the API Gateway coverage attempt was blocked by `goproxy.io` returning HTTP 400 for `klauspost/compress`. Audit Log, Configuration, Search and API Gateway currently have no `_test.go` files. SCRUM-55 remains In Progress until these coverage gaps and missing test suites are addressed.
 - Focused test fixes are included in the SCRUM-55 branch update.
+
+## 32. SCRUM-21 — Role-based UI (implementation complete, 6 Nov 2026)
+
+- SCRUM-21 is assigned to Namgay. Existing role-based page and action visibility is retained; the sidebar and header show signed-in username and role, and signing out restores Public viewer / Viewer. `role-permissions.js` centralizes role labels, profile formatting, and Viewer fallback.
+- The local `file:///` launch uses the API at `127.0.0.1:8080`; failed sign-ins show an inline error. The recommended full-app launch remains Docker Compose at `http://localhost:4173`.
+- Verification recorded on the feature branch: all 6 Node role-permission/profile tests passed; `node --check` passed for `role-permissions.js`, `app.js`, and `api.js`; `git diff --check` passed. Browser reproduction remains pending, and backend authorization remains the security boundary.
+- PR #28 merged into `development` at `db8e8db`. The last recorded Jira status was To Do; refresh its acceptance criteria and status. SCRUM-24 remains open.
+
+## 33. Sync with `development` (9 Nov 2026)
+
+- Merged the fetched `origin/development` into `codex/norbu-tandin-open-work`. Resolved conflicts in `api.js`, `progress.md`, and API Gateway `events.go`, retaining the HttpOnly cookie session, role-aware profile behavior, stored-subject validation, outbox retention, and both branches' progress records.
+- Updated the admin audit end-to-end script to use the HttpOnly session cookie returned by login; the API no longer returns a bearer token. `bash -n`, `node --check api.js`, six role-permission/profile Node tests, Compose config validation, and `git diff --check` passed.
+- `go test -work -count=1 ./...` passed across all Go modules; `services/api-gateway` tests also passed. Docker Desktop's Linux engine was unavailable for the isolated PostgreSQL test database, so DB-backed tests were skipped in this combined-tree run. Earlier DB-backed results are recorded in section 31.
+- This sync is a local merge commit on the Codex branch; it is not yet merged into `development`. PR/review and CI checks for the combined branch remain required before integrating into the shared branch.
