@@ -85,12 +85,14 @@ Services with real logic follow a hexagonal layout: `internal/{domain,app,ports,
 ### Not built yet
 
 - API gateway and BFF. nginx still routes `/api/` to the monolith, so the frontend does not use the microservices.
-- Producers for the generic `drukleague.admin.*` audit event subject family.
 - OpenFaaS/faasd serverless functions.
 - OpenTelemetry tracing.
 - Team → Tournament reference check.
-- The 5 shell services above.
-- Automated tests for the modules that currently have none.
+- Search indexing/data synchronization beyond the search query endpoint.
+- Service-wide runtime acceptance for Analytics and Configuration; authenticated browser acceptance for Media.
+- Tests for the remaining modules without `_test.go` files, plus browser E2E and Docker fault-injection scenarios.
+
+Local Compose publishes the web app and monolith API on loopback (`127.0.0.1`), rather than all network interfaces.
 
 ### Known design gaps and planned changes
 
@@ -99,14 +101,14 @@ Found in a design review on 22 Oct 2026. **Planned, not implemented.** Details a
 - **Auth:** shared HS256 secret (any verifying service can mint tokens); no distinct service identity; no explicit user → official mapping; no password change, admin reset or deactivate; lockout can be abused to lock out an account.
 - **Registration:** the tournament link should move from Team to Registration (with `pending`/`approved`/`rejected`/`withdrawn` status) and Fixture should read approved registrations; deadline, capacity and roster-lock rules are undefined.
 - **Matches and fixtures:** no correction path for a wrongly finalised result; finalise uses the last saved live score, not a submitted one; only `scheduled`/`completed` states; byes, withdrawals and late teams not handled; no official-overlap check; tie-breakers undefined; `starts_at` should be stored in UTC (Bhutan is UTC+6).
-- **Operations:** Standings cannot be rebuilt, the dead-letter stream cannot be inspected or replayed, no backup script, no outbox or stream retention, no idempotency on create calls, no readiness checks in Compose.
+- **Operations:** Standings rebuild and dead-letter inspection/replay tools are implemented; run-time recovery scenarios, database backup/restore, create-call idempotency and some readiness checks still need acceptance.
 - **Edge and frontend:** Nginx rate limits and baseline security headers are configured; cross-origin access is limited to the local web origin. The API JWT is stored in an HttpOnly, SameSite=Strict cookie; a refresh-token flow is not implemented.
 - **CI and evidence:** GitHub Actions now runs Go formatting, vet, build, tests and an 80% coverage gate for modules with tests, plus Buf compatibility checks, govulncheck, gosec, Trivy image scans, and a k6 login/public-standings performance test. Test coverage for modules without tests remains outstanding.
 - **Deployment:** Compose stays. Proposed serverless runtime is faasd (OpenFaaS on one machine), not Kubernetes; confirm with the module tutor.
 
 ## Testing
 
-Unit and PostgreSQL integration tests exist for Auth, User, Team, Match, Score, Standings, Fixture, Venue, Official, Notification, Report and the shared packages. Integration tests are skipped unless `TEST_DATABASE_URL` is set:
+Unit and PostgreSQL integration tests exist for Auth, User, Team, Match, Score, Standings, Fixture, Venue, Official, Notification, Report, Media, Analytics and shared packages. Integration tests are skipped unless `TEST_DATABASE_URL` is set:
 
 ```powershell
 docker run -d --rm --name drukleague-testdb -e POSTGRES_PASSWORD=test -p 127.0.0.1:55432:5432 --tmpfs /var/lib/postgresql/data postgres:17-alpine
@@ -124,7 +126,7 @@ Each run leaves uniquely named test rows behind, because the services have no de
 
 ## Monolith API
 
-This is what the frontend uses today. All `/api/*` routes except login require `Authorization: Bearer <token>`.
+This is the monolith API currently used by the frontend. Login establishes an HttpOnly session cookie; same-origin browser requests send it automatically. Service-to-service and command-line clients use their configured authentication headers.
 
 - `POST /api/auth/login`: `{ "username", "password" }`
 - `GET|POST /api/users`: super admin lists accounts or creates one `{ "username", "password", "role" }`
