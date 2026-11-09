@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -82,7 +81,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+	if err := r.ParseMultipartForm(maxUploadBytes); err != nil { // #nosec G120 -- MaxBytesReader above caps the complete request body.
 		writeError(w, http.StatusBadRequest, "upload must be a valid multipart form under 10 MiB")
 		return
 	}
@@ -123,8 +122,25 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "media storage is unavailable")
 		return
 	}
-	path := filepath.Join(s.dataRoot, key)
-	if err := os.WriteFile(path, content, 0o640); err != nil {
+	storage, err := os.OpenRoot(s.dataRoot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "media storage is unavailable")
+		return
+	}
+	defer storage.Close()
+	storedFile, err := storage.OpenFile(key, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not store media file")
+		return
+	}
+	if _, err = storedFile.Write(content); err != nil {
+		_ = storedFile.Close()
+		_ = storage.Remove(key)
+		writeError(w, http.StatusInternalServerError, "could not store media file")
+		return
+	}
+	if err := storedFile.Close(); err != nil {
+		_ = storage.Remove(key)
 		writeError(w, http.StatusInternalServerError, "could not store media file")
 		return
 	}
@@ -136,7 +152,7 @@ func (s *Server) upload(w http.ResponseWriter, r *http.Request) {
 		identity.ID, key, contentType, len(content), matchID, kind, caption,
 	).Scan(&saved.ID, &saved.MatchID, &saved.OwnerID, &saved.MediaKind, &saved.Caption, &saved.ContentType, &saved.SizeBytes, &saved.DurationSeconds, &saved.CreatedAt)
 	if err != nil {
-		_ = os.Remove(path)
+		_ = storage.Remove(key)
 		writeError(w, http.StatusInternalServerError, "could not save media metadata")
 		return
 	}
@@ -201,16 +217,28 @@ func (s *Server) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not read media metadata")
 		return
 	}
-	if filepath.Base(key) != key {
+	if !validStorageKey(key) {
 		writeError(w, http.StatusInternalServerError, "media storage key is invalid")
 		return
 	}
-	data, err := os.ReadFile(filepath.Join(s.dataRoot, key))
+	storage, err := os.OpenRoot(s.dataRoot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "media storage is unavailable")
+		return
+	}
+	defer storage.Close()
+	file, err := storage.Open(key)
 	if errors.Is(err, os.ErrNotExist) {
 		writeError(w, http.StatusNotFound, "media file is missing")
 		return
 	}
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not read media file")
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxUploadBytes+1))
+	if err != nil || len(data) > maxUploadBytes {
 		writeError(w, http.StatusInternalServerError, "could not read media file")
 		return
 	}
@@ -258,11 +286,19 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "media changed during deletion")
 		return
 	}
-	if filepath.Base(key) == key {
-		if err := os.Remove(filepath.Join(s.dataRoot, key)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			writeError(w, http.StatusInternalServerError, "media metadata was deleted but stored file cleanup failed")
-			return
-		}
+	if !validStorageKey(key) {
+		writeError(w, http.StatusInternalServerError, "media storage key is invalid")
+		return
+	}
+	storage, err := os.OpenRoot(s.dataRoot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "media storage is unavailable")
+		return
+	}
+	defer storage.Close()
+	if err := storage.Remove(key); err != nil && !errors.Is(err, os.ErrNotExist) {
+		writeError(w, http.StatusInternalServerError, "media metadata was deleted but stored file cleanup failed")
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -280,6 +316,11 @@ func randomKey() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(id[:]), nil
+}
+
+func validStorageKey(key string) bool {
+	decoded, err := hex.DecodeString(key)
+	return err == nil && len(decoded) == 16
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

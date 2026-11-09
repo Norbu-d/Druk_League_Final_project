@@ -673,6 +673,12 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Reviewed the failed checks for merge commit `3f7b76c`. The Media module-manifest check found `github.com/jackc/pgx/v5` was imported directly but declared indirect; `services/media/go.mod` now declares it directly.
 - Gosec reported G124 on the session and logout cookies because `Secure` is disabled for local HTTP development. Added narrow G124 suppressions documenting that production sets `Secure`.
-- The Trivy setup action selected `latest` and exited during binary installation without a diagnostic. Pinned setup-trivy to v0.4.0 and Trivy to v0.68.2.
+- The Trivy setup action selected `latest` and exited during binary installation without a diagnostic. A pinned binary version also failed silently, so the image scan is being switched to the pinned `aquasec/trivy:0.68.2` container.
 - Buf and k6 setup did not reach lint/tests: GitHub release downloads returned HTTP 504 after retries. These failures need a fresh CI run to determine whether they were transient.
 - Local `go test ./...` passed for Media and API Gateway, and `git diff --check` passed. Docker-backed tests and the full CI run remain pending.
+
+## 35. Follow-up to CI run on `7cdf494` (9 Nov 2026)
+
+- CI confirmed that the cookie findings are resolved. The security scan then found three Media issues: multipart size parsing, path use from the media metadata key, and file permissions. Media storage now uses `os.Root` operations to confine file access, validates generated hex storage keys, and writes files as owner-only. The request body remains capped at 10 MiB; the narrow G120 suppression documents that bound.
+- The pinned Trivy binary download still exited without a diagnostic, so `.github/workflows/go-ci.yml` now runs a pinned Trivy container to scan the built local Docker images.
+- The same CI run still reports Analytics coverage at 10.9% and Media at 63.7%, below the existing 80% gate. The Buf and k6 release downloads again returned HTTP 504. Media tests passed after the storage changes; gosec and the updated image scan need a new CI run.
