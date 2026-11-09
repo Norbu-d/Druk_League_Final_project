@@ -136,7 +136,9 @@ jobs:
             venue official dzongkhag notification media report search analytics audit-log configuration
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        uses: aquasecurity/setup-trivy@e07451d2e059ed86c2870430ea286b3a9e0bf241 # v0.4.0
+        with:
+          version: v0.68.2
 
       - name: Scan every built image for critical vulnerabilities
         shell: bash
