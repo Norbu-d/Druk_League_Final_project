@@ -30,11 +30,16 @@ type Tournament struct {
 	Dzongkhag string
 }
 
-// DashboardMetrics contains counts derived from finalized-match facts.
+// DashboardMetrics contains dashboard totals from the owning services.
 type DashboardMetrics struct {
-	Tournaments int32
-	Teams       int32
-	Matches     int32
+	Tournaments          int32
+	Teams                int32
+	Players              int32
+	Matches              int32
+	CompletedMatches     int32
+	Venues               int32
+	Officials            int32
+	PendingRegistrations int32
 }
 
 func (e *MatchFinalized) NormalizeAndValidate() error {

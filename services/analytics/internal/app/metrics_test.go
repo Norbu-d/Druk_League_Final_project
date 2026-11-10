@@ -27,6 +27,16 @@ func (metricsTournamentDirectory) GetTournament(context.Context, string) (domain
 	return domain.Tournament{}, nil
 }
 
+type dashboardMetricsSource struct {
+	season, dzongkhag string
+	metrics           domain.DashboardMetrics
+}
+
+func (s *dashboardMetricsSource) DashboardMetrics(_ context.Context, season, dzongkhag string) (domain.DashboardMetrics, error) {
+	s.season, s.dzongkhag = season, dzongkhag
+	return s.metrics, nil
+}
+
 func TestDashboardMetricsTrimsFiltersAndReturnsProjection(t *testing.T) {
 	repository := &metricsRepository{metrics: domain.DashboardMetrics{Tournaments: 2, Teams: 7, Matches: 12}}
 	service := New(repository, metricsTournamentDirectory{})
@@ -39,5 +49,23 @@ func TestDashboardMetricsTrimsFiltersAndReturnsProjection(t *testing.T) {
 	}
 	if got != repository.metrics {
 		t.Fatalf("metrics=%+v want %+v", got, repository.metrics)
+	}
+}
+
+func TestDashboardMetricsUsesCurrentServiceSource(t *testing.T) {
+	source := &dashboardMetricsSource{metrics: domain.DashboardMetrics{
+		Tournaments: 1, Teams: 2, Players: 3, Matches: 4, CompletedMatches: 2,
+		Venues: 1, Officials: 2, PendingRegistrations: 1,
+	}}
+	service := New(&metricsRepository{}, metricsTournamentDirectory{}, source)
+	got, err := service.DashboardMetrics(context.Background(), " 2026 ", " Thimphu ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.season != "2026" || source.dzongkhag != "Thimphu" {
+		t.Fatalf("filters were not normalized: season=%q dzongkhag=%q", source.season, source.dzongkhag)
+	}
+	if got != source.metrics {
+		t.Fatalf("metrics=%+v want %+v", got, source.metrics)
 	}
 }

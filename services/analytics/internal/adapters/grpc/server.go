@@ -25,5 +25,9 @@ func (s *Server) GetDashboardMetrics(ctx context.Context, request *v1.GetDashboa
 	if err != nil {
 		return nil, servicekit.ToStatus(err)
 	}
-	return &v1.GetDashboardMetricsResponse{Tournaments: metrics.Tournaments, Teams: metrics.Teams, Matches: metrics.Matches, CompletedMatches: metrics.Matches}, nil
+	return &v1.GetDashboardMetricsResponse{
+		Tournaments: metrics.Tournaments, Teams: metrics.Teams, Players: metrics.Players,
+		Matches: metrics.Matches, CompletedMatches: metrics.CompletedMatches,
+		Venues: metrics.Venues, Officials: metrics.Officials, PendingRegistrations: metrics.PendingRegistrations,
+	}, nil
 }
