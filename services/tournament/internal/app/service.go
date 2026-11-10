@@ -11,10 +11,10 @@ import (
 
 type Service struct {
 	repo       ports.Repository
-	dzongkhags ports.Dzongkhags
+	dzongkhags ports.DzongkhagResolver
 }
 
-func New(repo ports.Repository, dzongkhags ports.Dzongkhags) *Service {
+func New(repo ports.Repository, dzongkhags ports.DzongkhagResolver) *Service {
 	return &Service{repo: repo, dzongkhags: dzongkhags}
 }
 

@@ -36,7 +36,7 @@ func main() {
 		Fixtures:    fixturev1.NewFixtureServiceClient(dial("FIXTURE_SERVICE_ADDR", "fixture:50051")),
 		Officials:   officialv1.NewOfficialServiceClient(dial("OFFICIAL_SERVICE_ADDR", "official:50051")),
 	}
-	server := httpapi.New(clients, servicekit.Secret(), servicekit.Env("CORS_ORIGIN", "*"))
+	server := httpapi.New(clients, servicekit.Secret(), servicekit.Env("CORS_ORIGIN", "http://localhost:4173"))
 	addr := servicekit.Env("BFF_ADDR", ":8080")
 	log.Printf("bff listening on %s", addr)
 	log.Fatal((&http.Server{Addr: addr, Handler: server.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}).ListenAndServe())

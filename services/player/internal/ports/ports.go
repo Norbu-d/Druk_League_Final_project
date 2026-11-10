@@ -13,7 +13,7 @@ type Repository interface {
 	Update(context.Context, domain.Player) (domain.Player, error)
 }
 
-// Teams reads the team a player belongs to, to confirm it exists and who manages it.
-type Teams interface {
+// TeamGetter reads the team a player belongs to, to confirm it exists and who manages it.
+type TeamGetter interface {
 	Get(context.Context, string) (domain.TeamRef, error)
 }

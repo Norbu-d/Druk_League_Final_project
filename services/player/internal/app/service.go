@@ -14,10 +14,10 @@ type Caller struct{ ID, Role string }
 
 type Service struct {
 	repo  ports.Repository
-	teams ports.Teams
+	teams ports.TeamGetter
 }
 
-func New(repo ports.Repository, teams ports.Teams) *Service {
+func New(repo ports.Repository, teams ports.TeamGetter) *Service {
 	return &Service{repo: repo, teams: teams}
 }
 

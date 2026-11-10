@@ -14,11 +14,11 @@ type Caller struct{ ID, Role string }
 
 type Service struct {
 	repo        ports.Repository
-	tournaments ports.Tournaments
-	dzongkhags  ports.Dzongkhags
+	tournaments ports.TournamentGetter
+	dzongkhags  ports.DzongkhagResolver
 }
 
-func New(repo ports.Repository, tournaments ports.Tournaments, dzongkhags ports.Dzongkhags) *Service {
+func New(repo ports.Repository, tournaments ports.TournamentGetter, dzongkhags ports.DzongkhagResolver) *Service {
 	return &Service{repo: repo, tournaments: tournaments, dzongkhags: dzongkhags}
 }
 

@@ -5,9 +5,9 @@ $failures = 0
 function Check($name, $ok, $detail) { if ($ok) { "PASS  $name" } else { $script:failures++; "FAIL  $name $detail" } }
 function Call($method, $path, $token, $body) {
   $headers = @{}; if ($token) { $headers.Authorization = "Bearer $token" }
-  $args = @{ Method = $method; Uri = "$Base$path"; Headers = $headers; ContentType = 'application/json' }
-  if ($null -ne $body) { $args.Body = ($body | ConvertTo-Json -Compress) }
-  Invoke-RestMethod @args
+  $requestOptions = @{ Method = $method; Uri = "$Base$path"; Headers = $headers; ContentType = 'application/json' }
+  if ($null -ne $body) { $requestOptions.Body = ($body | ConvertTo-Json -Compress) }
+  Invoke-RestMethod @requestOptions
 }
 function List($path, $token) { foreach ($item in (Call GET $path $token $null)) { $item } }
 function Code($method, $path, $token, $body) {
@@ -48,9 +48,9 @@ $second = @(List "/matches?tournament_id=$($rival.id)" $admin)[0]
 $moved = ($first.venue -ne $second.venue) -or ([math]::Abs(([datetime]$first.kickoff - [datetime]$second.kickoff).TotalHours) -ge 2)
 Check 'same-day tournament in the same dzongkhag is rescheduled, not refused' ($rivalFixtures.fixtures_created -eq 1 -and $moved) "$($first.venue) $($first.kickoff) / $($second.venue) $($second.kickoff)"
 
-$matches = @(List "/matches?tournament_id=$($cup.id)" $admin)
-$match = $matches[0]
-Check 'match row has team names from Team service' ($matches.Count -eq 1 -and @($match.home, $match.away) -contains "Paro$run" -and $match.status -eq 'scheduled') ($matches | ConvertTo-Json -Compress)
+$matchRows = @(List "/matches?tournament_id=$($cup.id)" $admin)
+$match = $matchRows[0]
+Check 'match row has team names from Team service' ($matchRows.Count -eq 1 -and @($match.home, $match.away) -contains "Paro$run" -and $match.status -eq 'scheduled') ($matchRows | ConvertTo-Json -Compress)
 
 $officialName = "bff-official-$run"
 $official = Call POST '/users' $admin @{ username = $officialName; password = 'official-password-1'; role = 'match_official' }

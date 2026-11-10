@@ -5,7 +5,7 @@ DrukLeague is a tournament operations platform for Bhutan's inter-dzongkhag comp
 The repository holds:
 
 1. **A plain HTML/CSS/JS frontend** that talks to a REST API.
-2. **A backend-for-frontend** (`services/bff`) that serves that REST API by calling the microservices. It validates the JWT once and forwards the caller's token, so each service still applies its own role checks.
+2. **A backend-for-frontend** (`services/bff`) that serves that REST API by calling the microservices. It validates the JWT once and forwards the caller's token, so each service still applies its own role checks. Browser sessions use HttpOnly cookies; the web app reaches the BFF through nginx's same-origin `/api/` route.
 3. **20 Go microservices** (gRPC, PostgreSQL database per service, NATS JetStream events). 13 have real logic; 7 are still health-only shells.
 4. **The original MVP monolith** (`services/api-gateway`), kept as a fallback on port 8079. It has its own database, so data created through one is not visible through the other.
 
@@ -24,7 +24,7 @@ docker compose up -d
 ```
 
 - Web app: http://localhost:4173
-- Web API (bff → microservices): http://localhost:8080
+- BFF direct endpoint for local smoke checks: http://localhost:8080
 - Monolith fallback API: http://localhost:8079. To switch the web app back to it, swap the two ports in `docker-compose.yml` and point nginx's `/api/` at `api:8080`.
 - Log in with the `BOOTSTRAP_ADMIN_USER` / `BOOTSTRAP_ADMIN_PASSWORD` you set. The admin is created only on first start, so changing the password in `.env` later does not change an existing admin.
 

@@ -55,14 +55,14 @@ func (f fakeAuth) Login(ctx context.Context, in *authv1.LoginRequest, _ ...grpc.
 	if in.GetPassword() != "right" {
 		return nil, status.Error(codes.Unauthenticated, "authentication required: invalid username or password")
 	}
-	return &authv1.LoginResponse{AccessToken: "access", RefreshToken: "refresh", ExpiresAt: timestamppb.New(time.Unix(1900000000, 0)), User: &v1.User{Id: "u1", Username: in.GetUsername(), Role: "super_admin"}}, nil
+	return &authv1.LoginResponse{AccessToken: signedTestToken("login"), RefreshToken: "refresh", ExpiresAt: timestamppb.New(time.Unix(1900000000, 0)), User: &v1.User{Id: "u1", Username: in.GetUsername(), Role: "super_admin"}}, nil
 }
 func (f fakeAuth) RefreshToken(ctx context.Context, in *authv1.RefreshTokenRequest, _ ...grpc.CallOption) (*authv1.RefreshTokenResponse, error) {
 	f.log.add(ctx, "RefreshToken")
 	if in.GetRefreshToken() != "refresh" {
 		return nil, status.Error(codes.Unauthenticated, "authentication required")
 	}
-	return &authv1.RefreshTokenResponse{AccessToken: "access2", RefreshToken: "refresh2"}, nil
+	return &authv1.RefreshTokenResponse{AccessToken: signedTestToken("refresh"), RefreshToken: "refresh2", ExpiresAt: timestamppb.New(time.Unix(1900000000, 0))}, nil
 }
 func (f fakeAuth) RevokeSession(ctx context.Context, _ *authv1.RevokeSessionRequest, _ ...grpc.CallOption) (*authv1.RevokeSessionResponse, error) {
 	f.log.add(ctx, "RevokeSession")
@@ -245,6 +245,11 @@ func newServer(t *testing.T) (http.Handler, *calls, string) {
 	return New(clients, secret, "").Handler(), log, token
 }
 
+func signedTestToken(sessionID string) string {
+	token, _, _ := servicekit.SignToken(secret, servicekit.Identity{ID: "u1", Username: "admin", Role: "super_admin", SessionID: sessionID}, time.Hour)
+	return token
+}
+
 func do(t *testing.T, h http.Handler, method, path, token, body string) (int, any) {
 	t.Helper()
 	var reader io.Reader
@@ -262,6 +267,22 @@ func do(t *testing.T, h http.Handler, method, path, token, body string) (int, an
 	return rec.Code, out
 }
 
+func doWithCookie(h http.Handler, method, path, name, value, body string) (*httptest.ResponseRecorder, any) {
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	}
+	req := httptest.NewRequest(method, path, reader)
+	if name != "" {
+		req.AddCookie(&http.Cookie{Name: name, Value: value})
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var out any
+	_ = json.Unmarshal(rec.Body.Bytes(), &out)
+	return rec, out
+}
+
 func field(v any, key string) any { return v.(map[string]any)[key] }
 
 func TestHealthAndCORS(t *testing.T) {
@@ -270,9 +291,10 @@ func TestHealthAndCORS(t *testing.T) {
 		t.Fatalf("healthz: %d %v", code, body)
 	}
 	req := httptest.NewRequest("OPTIONS", "/api/teams", nil)
+	req.Header.Set("Origin", "http://localhost:4173")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 204 || rec.Header().Get("Access-Control-Allow-Origin") != "*" || rec.Header().Get("X-Request-ID") != "" {
+	if rec.Code != 204 || rec.Header().Get("Access-Control-Allow-Origin") != "http://localhost:4173" || rec.Header().Get("Access-Control-Allow-Credentials") != "true" || rec.Header().Get("X-Request-ID") != "" {
 		t.Fatalf("preflight: %d %v", rec.Code, rec.Header())
 	}
 	rec = httptest.NewRecorder()
@@ -296,6 +318,9 @@ func TestAuthentication(t *testing.T) {
 	if code, _ := do(t, h, "GET", "/api/teams", token, ""); code != 200 || log.bearers[0] != token {
 		t.Fatalf("token should be forwarded: %d %v", code, log.bearers)
 	}
+	if rec, body := doWithCookie(h, "GET", "/api/auth/session", sessionCookieName, token, ""); rec.Code != 200 || field(body, "username") != "admin" {
+		t.Fatalf("session cookie should restore the current user: %d %v", rec.Code, body)
+	}
 	if code, _ := do(t, h, "PUT", "/api/teams", token, ""); code != 405 {
 		t.Fatalf("wrong method: %d", code)
 	}
@@ -303,12 +328,16 @@ func TestAuthentication(t *testing.T) {
 
 func TestLoginRefreshLogout(t *testing.T) {
 	h, log, token := newServer(t)
-	code, body := do(t, h, "POST", "/api/auth/login", "", `{"username":" admin ","password":"right"}`)
-	if code != 200 || field(body, "token") != "access" || field(body, "refresh_token") != "refresh" {
-		t.Fatalf("login: %d %v", code, body)
+	login, body := doWithCookie(h, "POST", "/api/auth/login", "", "", `{"username":" admin ","password":"right"}`)
+	if login.Code != 200 || field(body, "token") != nil || field(body, "refresh_token") != nil {
+		t.Fatalf("login must keep tokens out of JSON: %d %v", login.Code, body)
 	}
 	if user := field(body, "user").(map[string]any); user["username"] != "admin" || user["role"] != "super_admin" || user["sub"] != "u1" {
 		t.Fatalf("login user: %v", user)
+	}
+	cookies := login.Result().Cookies()
+	if len(cookies) != 2 || cookies[0].Name != sessionCookieName || cookies[1].Name != refreshCookieName || !cookies[0].HttpOnly || !cookies[1].HttpOnly {
+		t.Fatalf("login must set HttpOnly session and refresh cookies: %v", cookies)
 	}
 	if code, body := do(t, h, "POST", "/api/auth/login", "", `{"username":"admin","password":"wrong"}`); code != 401 || field(body, "error") != "Invalid username or password" {
 		t.Fatalf("bad login: %d %v", code, body)
@@ -316,14 +345,16 @@ func TestLoginRefreshLogout(t *testing.T) {
 	if code, _ := do(t, h, "POST", "/api/auth/login", "", `{"user":"admin"}`); code != 400 {
 		t.Fatalf("unknown field: %d", code)
 	}
-	if code, body := do(t, h, "POST", "/api/auth/refresh", "", `{"refresh_token":"refresh"}`); code != 200 || field(body, "token") != "access2" || field(body, "refresh_token") != "refresh2" {
-		t.Fatalf("refresh: %d %v", code, body)
+	refreshed, _ := doWithCookie(h, "POST", "/api/auth/refresh", refreshCookieName, "refresh", "")
+	if refreshed.Code != http.StatusNoContent {
+		t.Fatalf("refresh: %d %s", refreshed.Code, refreshed.Body.String())
 	}
-	if code, _ := do(t, h, "POST", "/api/auth/refresh", "", `{"refresh_token":"old"}`); code != 401 {
-		t.Fatalf("stale refresh: %d", code)
+	if stale, _ := doWithCookie(h, "POST", "/api/auth/refresh", refreshCookieName, "old", ""); stale.Code != 401 {
+		t.Fatalf("stale refresh: %d", stale.Code)
 	}
-	if code, _ := do(t, h, "POST", "/api/auth/logout", token, ""); code != 200 || !log.has("RevokeSession") {
-		t.Fatalf("logout: %d", code)
+	logout, _ := doWithCookie(h, "POST", "/api/auth/logout", sessionCookieName, token, "")
+	if logout.Code != 200 || !log.has("RevokeSession") {
+		t.Fatalf("logout: %d", logout.Code)
 	}
 }
 
@@ -386,33 +417,74 @@ func TestListMatchesJoinsTeamsAndScores(t *testing.T) {
 	h, log, token := newServer(t)
 	code, body := do(t, h, "GET", "/api/matches?tournament_id=t1", token, "")
 	rows := body.([]any)
+	assertMatchListSucceeded(t, code, rows, body, log)
+	order, byID := indexMatchRows(rows)
+	assertMatchListOrder(t, order)
+	assertFinalMatchRow(t, byID["final"])
+	assertLiveMatchRow(t, byID["live"])
+	assertUnscoredMatchRow(t, byID["fresh"])
+	assertDegradedMatchRow(t, byID["broken"])
+	assertTeamLookupOnce(t, log.names)
+}
+
+func assertMatchListSucceeded(t *testing.T, code int, rows []any, body any, log *calls) {
+	t.Helper()
 	if code != 200 || len(rows) != 5 || !log.has("ListMatches:t1") {
 		t.Fatalf("list: %d %v", code, body)
 	}
-	order := []string{}
-	byID := map[string]map[string]any{}
-	for _, r := range rows {
-		row := r.(map[string]any)
-		order = append(order, row["id"].(string))
-		byID[row["id"].(string)] = row
+}
+
+func indexMatchRows(rows []any) ([]string, map[string]map[string]any) {
+	order := make([]string, 0, len(rows))
+	byID := make(map[string]map[string]any, len(rows))
+	for _, item := range rows {
+		row := item.(map[string]any)
+		id := row["id"].(string)
+		order = append(order, id)
+		byID[id] = row
 	}
+	return order, byID
+}
+
+func assertMatchListOrder(t *testing.T, order []string) {
+	t.Helper()
 	if strings.Join(order, ",") != "fresh,live,final,broken,no-kickoff" {
 		t.Fatalf("rows should be sorted by kickoff, unscheduled last: %v", order)
 	}
-	if r := byID["final"]; r["status"] != "completed" || r["result_home"] != float64(3) || r["live_home"] != nil || r["home"] != "Team h" {
-		t.Fatalf("final row: %v", r)
+}
+
+func assertFinalMatchRow(t *testing.T, row map[string]any) {
+	t.Helper()
+	if row["status"] != "completed" || row["result_home"] != float64(3) || row["live_home"] != nil || row["home"] != "Team h" {
+		t.Fatalf("final row: %v", row)
 	}
-	if r := byID["live"]; r["status"] != "live" || r["live_home"] != float64(1) || r["away"] != "Unknown team" || r["venue"] != "Changlimithang" {
-		t.Fatalf("live row (team lookup down): %v", r)
+}
+
+func assertLiveMatchRow(t *testing.T, row map[string]any) {
+	t.Helper()
+	if row["status"] != "live" || row["live_home"] != float64(1) || row["away"] != "Unknown team" || row["venue"] != "Changlimithang" {
+		t.Fatalf("live row (team lookup down): %v", row)
 	}
-	if r := byID["fresh"]; r["status"] != "scheduled" || r["live_home"] != nil || r["result_home"] != nil {
-		t.Fatalf("no score yet: %v", r)
+}
+
+func assertUnscoredMatchRow(t *testing.T, row map[string]any) {
+	t.Helper()
+	if row["status"] != "scheduled" || row["live_home"] != nil || row["result_home"] != nil {
+		t.Fatalf("no score yet: %v", row)
 	}
-	if r := byID["broken"]; r["status"] != "scheduled" || r["result_home"] != nil {
-		t.Fatalf("score outage should degrade the row, not fail the list: %v", r)
+}
+
+func assertDegradedMatchRow(t *testing.T, row map[string]any) {
+	t.Helper()
+	if row["status"] != "scheduled" || row["result_home"] != nil {
+		t.Fatalf("score outage should degrade the row, not fail the list: %v", row)
 	}
+}
+
+func assertTeamLookupOnce(t *testing.T, names []string) {
+	t.Helper()
 	lookups := 0
-	for _, name := range log.names {
+	for _, name := range names {
 		if name == "GetTeam:h" {
 			lookups++
 		}

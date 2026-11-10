@@ -12,12 +12,12 @@ type Repository interface {
 	List(ctx context.Context, filter domain.Filter, limit, offset int) ([]domain.Team, bool, error)
 }
 
-// Tournaments confirms a referenced tournament exists before a team is linked to it.
-type Tournaments interface {
+// TournamentGetter confirms a referenced tournament exists before a team is linked to it.
+type TournamentGetter interface {
 	Get(context.Context, string) (domain.TournamentRef, error)
 }
 
-// Dzongkhags resolves a district name or code to its canonical spelling.
-type Dzongkhags interface {
+// DzongkhagResolver resolves a district name or code to its canonical spelling.
+type DzongkhagResolver interface {
 	Canonical(context.Context, string) (string, error)
 }

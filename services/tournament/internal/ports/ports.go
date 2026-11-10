@@ -12,7 +12,7 @@ type Repository interface {
 	List(ctx context.Context, season string, limit, offset int) ([]domain.Tournament, bool, error)
 }
 
-// Dzongkhags resolves a district name or code to its canonical spelling.
-type Dzongkhags interface {
+// DzongkhagResolver resolves a district name or code to its canonical spelling.
+type DzongkhagResolver interface {
 	Canonical(context.Context, string) (string, error)
 }

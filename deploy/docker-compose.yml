@@ -63,6 +63,7 @@ services:
       dockerfile: services/bff/Dockerfile
     environment:
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4173}
     depends_on:
       - auth
       - user

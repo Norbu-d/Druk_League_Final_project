@@ -14,6 +14,7 @@ import (
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -33,29 +34,35 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := out.GetUser()
-	writeJSON(w, 200, map[string]any{
-		"token":         out.GetAccessToken(),
-		"refresh_token": out.GetRefreshToken(),
-		"expires_at":    timeOrNil(out.GetExpiresAt()),
-		"user":          map[string]any{"sub": user.GetId(), "username": user.GetUsername(), "role": user.GetRole(), "exp": out.GetExpiresAt().GetSeconds()},
-	})
+	var expiresAt time.Time
+	if out.GetExpiresAt() != nil {
+		expiresAt = out.GetExpiresAt().AsTime()
+	}
+	setAuthCookies(w, out.GetAccessToken(), out.GetRefreshToken(), expiresAt)
+	writeJSON(w, 200, map[string]any{"user": map[string]string{"sub": user.GetId(), "username": user.GetUsername(), "role": user.GetRole()}})
 }
 
 // refresh swaps a refresh token for a new access token (and a rotated refresh token), so
 // the browser does not lose its session when the 30-minute access token expires.
 func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		RefreshToken string `json:"refresh_token"`
-	}
-	if !decode(w, r, &in, false) {
+	cookie, err := r.Cookie(refreshCookieName)
+	if err != nil || cookie.Value == "" {
+		clearAuthCookies(w)
+		writeError(w, http.StatusUnauthorized, "Session expired; sign in again")
 		return
 	}
-	out, err := s.c.Auth.RefreshToken(r.Context(), &authv1.RefreshTokenRequest{RefreshToken: in.RefreshToken})
+	out, err := s.c.Auth.RefreshToken(r.Context(), &authv1.RefreshTokenRequest{RefreshToken: cookie.Value})
 	if err != nil {
+		clearAuthCookies(w)
 		writeStatus(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"token": out.GetAccessToken(), "refresh_token": out.GetRefreshToken(), "expires_at": timeOrNil(out.GetExpiresAt())})
+	var expiresAt time.Time
+	if out.GetExpiresAt() != nil {
+		expiresAt = out.GetExpiresAt().AsTime()
+	}
+	setAuthCookies(w, out.GetAccessToken(), out.GetRefreshToken(), expiresAt)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +70,17 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		writeStatus(w, err)
 		return
 	}
+	clearAuthCookies(w)
 	writeJSON(w, 200, map[string]bool{"revoked": true})
+}
+
+func (s *Server) session(w http.ResponseWriter, r *http.Request) {
+	identity, ok := servicekit.IdentityFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Sign in required")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"sub": identity.ID, "username": identity.Username, "role": identity.Role})
 }
 
 // --- Users

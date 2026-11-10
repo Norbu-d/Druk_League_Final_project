@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ type Server struct {
 
 func New(clients Clients, secret []byte, corsOrigin string) *Server {
 	if corsOrigin == "" {
-		corsOrigin = "*"
+		corsOrigin = "http://localhost:4173"
 	}
 	return &Server{c: clients, secret: secret, corsOrigin: corsOrigin}
 }
@@ -58,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/refresh", s.refresh)
 	routes := map[string]http.HandlerFunc{
 		"POST /api/auth/logout":               s.logout,
+		"GET /api/auth/session":               s.session,
 		"GET /api/tournaments":                s.listTournaments,
 		"POST /api/tournaments":               s.createTournament,
 		"POST /api/tournaments/{id}/fixtures": s.generateFixtures,
@@ -84,20 +86,52 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
 		if token == "" {
+			if cookie, err := r.Cookie(sessionCookieName); err == nil {
+				token = cookie.Value
+			}
+		}
+		if token == "" {
 			writeError(w, 401, "Sign in required")
 			return
 		}
-		if _, err := servicekit.VerifyToken(token, s.secret); err != nil {
+		identity, err := servicekit.VerifyToken(token, s.secret)
+		if err != nil {
 			writeError(w, 401, "Session expired or invalid; sign in again")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(servicekit.WithBearer(r.Context(), token)))
+		ctx := servicekit.WithBearer(r.Context(), token)
+		ctx = servicekit.WithIdentity(ctx, identity)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+const sessionCookieName = "drukleague-session"
+const refreshCookieName = "drukleague-refresh"
+
+func setAuthCookies(w http.ResponseWriter, accessToken, refreshToken string, expiresAt time.Time) {
+	secure := strings.EqualFold(os.Getenv("APP_ENV"), "production")
+	accessMaxAge := int(time.Until(expiresAt).Seconds())
+	if accessMaxAge <= 0 {
+		accessMaxAge = 30 * 60
+	}
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: accessToken, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: accessMaxAge})
+	http.SetCookie(w, &http.Cookie{Name: refreshCookieName, Value: refreshToken, Path: "/api/auth", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 60 * 60})
+}
+
+func clearAuthCookies(w http.ResponseWriter) {
+	secure := strings.EqualFold(os.Getenv("APP_ENV"), "production")
+	for _, cookie := range []*http.Cookie{
+		{Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: -1},
+		{Name: refreshCookieName, Value: "", Path: "/api/auth", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: -1},
+	} {
+		http.SetCookie(w, cookie)
+	}
 }
 
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", s.corsOrigin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 		if r.Method == http.MethodOptions {
