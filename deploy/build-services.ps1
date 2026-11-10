@@ -13,8 +13,11 @@ try {
             "dzongkhag", "notification", "media", "report", "search", "analytics",
             "audit-log", "configuration"
         )
-        docker compose --env-file .env --parallel 2 build @services
-        if ($LASTEXITCODE -ne 0) { throw "Service image build failed." }
+        foreach ($service in $services) {
+            Write-Host "Building $service..."
+            docker compose --env-file .env build $service
+            if ($LASTEXITCODE -ne 0) { throw "Service image build failed for '$service'." }
+        }
     }
     finally {
         Pop-Location
