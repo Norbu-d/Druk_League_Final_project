@@ -31,7 +31,10 @@ func (emptyDirectory) GetTournament(context.Context, string) (domain.Tournament,
 }
 
 func TestGetDashboardMetrics(t *testing.T) {
-	server := New(app.New(dashboardRepository{metrics: domain.DashboardMetrics{Tournaments: 2, Teams: 4, Matches: 7}}, emptyDirectory{}))
+	server := New(app.New(dashboardRepository{metrics: domain.DashboardMetrics{
+		Tournaments: 2, Teams: 4, Players: 5, Matches: 7, CompletedMatches: 3,
+		Venues: 6, Officials: 8, PendingRegistrations: 9,
+	}}, emptyDirectory{}))
 	if _, err := server.GetDashboardMetrics(context.Background(), nil); status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("nil request err=%v", err)
 	}
@@ -39,7 +42,9 @@ func TestGetDashboardMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if response.GetTournaments() != 2 || response.GetTeams() != 4 || response.GetMatches() != 7 || response.GetCompletedMatches() != 7 {
+	if response.GetTournaments() != 2 || response.GetTeams() != 4 || response.GetPlayers() != 5 ||
+		response.GetMatches() != 7 || response.GetCompletedMatches() != 3 || response.GetVenues() != 6 ||
+		response.GetOfficials() != 8 || response.GetPendingRegistrations() != 9 {
 		t.Fatalf("response=%+v", response)
 	}
 	server = New(app.New(dashboardRepository{err: errors.New("db down")}, emptyDirectory{}))

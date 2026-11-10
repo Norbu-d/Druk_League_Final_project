@@ -11,6 +11,10 @@ type Repository interface {
 	DashboardMetrics(context.Context, string, string) (domain.DashboardMetrics, error)
 }
 
+type DashboardMetricsSource interface {
+	DashboardMetrics(context.Context, string, string) (domain.DashboardMetrics, error)
+}
+
 type TournamentDirectory interface {
 	GetTournament(context.Context, string) (domain.Tournament, error)
 }

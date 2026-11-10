@@ -317,12 +317,24 @@ services:
       MIGRATIONS_DIR: /app/migrations
       NATS_URL: nats://nats:4222
       TOURNAMENT_SERVICE_ADDR: tournament:50051
+      TEAM_SERVICE_ADDR: team:50051
+      MATCH_SERVICE_ADDR: match:50051
+      PLAYER_SERVICE_ADDR: player:50051
+      REGISTRATION_SERVICE_ADDR: registration:50051
     depends_on:
       db-init:
         condition: service_completed_successfully
       nats:
         condition: service_started
       tournament:
+        condition: service_started
+      team:
+        condition: service_started
+      match:
+        condition: service_started
+      player:
+        condition: service_started
+      registration:
         condition: service_started
   audit-log:
     build:
