@@ -13,10 +13,15 @@ import (
 type Service struct {
 	repo        ports.Repository
 	tournaments ports.TournamentDirectory
+	dashboard   ports.DashboardMetricsSource
 }
 
-func New(repo ports.Repository, tournaments ports.TournamentDirectory) *Service {
-	return &Service{repo: repo, tournaments: tournaments}
+func New(repo ports.Repository, tournaments ports.TournamentDirectory, dashboard ...ports.DashboardMetricsSource) *Service {
+	service := &Service{repo: repo, tournaments: tournaments}
+	if len(dashboard) > 0 {
+		service.dashboard = dashboard[0]
+	}
+	return service
 }
 
 func (s *Service) RecordFinalized(ctx context.Context, event domain.MatchFinalized) error {

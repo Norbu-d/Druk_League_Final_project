@@ -1,8 +1,8 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-09
+**Last updated:** 2026-11-11
 **Project root:** `D:\druk-league`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). Later work and verification are recorded in sections 12–39 and the contribution summaries below. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. Docker Desktop's original data disk remains on **D:** (moved by Norbu on 2026-10-19).
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the recovered Docker WSL disk started the local Compose stack; 26 long-running containers were up, PostgreSQL and NATS were healthy, and the web page returned HTTP 200 (section 40). This was a startup smoke check, not a rerun of the 29/29 E2E suite. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. The active Docker disk is now under `D:\docker\DockerDesktopRecovery\DockerDesktopWSL`.
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -689,6 +689,7 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added Media tests for authentication and cookie fallback, malformed and invalid uploads, content-type validation, invalid resource IDs, storage setup failures, and storage-key helpers.
 - Analytics package tests pass locally and its non-database coverage profile is 89.1%. Media tests pass locally; database-backed Media tests are skipped because Docker Desktop's engine is unavailable, so only 40.2% local coverage was measured. Check the CI module coverage result on the pushed branch before claiming the 80% gate is resolved.
 - The first CI run with the new Analytics tests reported Analytics at 100%; Go vet caught and then the follow-up commit fixed a protobuf lock copy in the new gRPC client test. The next run showed Media at 71.1%, so additional DB-backed cases now cover missing records/files, invalid storage keys, admin deletion, empty results, and upload cleanup after metadata failure.
+- 10 Nov 2026 — SCRUM-67: expanded Analytics dashboard metrics across tournament, team, player, match, venue, official, and registration data. The branch recorded 90.5% internal coverage and an authenticated runtime RPC check.
 
 ## 37. Follow-up CI and handoff corrections (9 Nov 2026)
 
@@ -712,3 +713,13 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Docker Desktop now responds, but its active engine lists zero volumes and uses a newly initialized disk at `C:\\Users\\DELL\\AppData\\Local\\Docker\\wsl\\disk\\docker_data.vhdx` (about 1.6 GB).
 - The original Docker data disk is still present and unchanged at `D:\\docker\\DockerDesktopWSL\\disk\\docker_data.vhdx` (about 41 GB). No Compose stack was started on the new empty disk, to avoid creating a separate empty database state.
 - In Docker Desktop, open **Settings → Resources → Advanced → Disk image location** and select the existing disk on D:. If prompted to use the existing image or replace it, choose the existing image. Verify that the prior images and volumes reappear before running Compose. Docker's settings guide documents the disk-location control and the choice when an image already exists.
+- This is a historical snapshot from 9 Nov and was superseded by the recovery and Compose startup recorded in section 40.
+
+## 40. Docker recovery, local Compose startup, and branch sync (11 Nov 2026)
+
+- Reattached the Docker data by copying the original 41 GB `docker_data.vhdx` into the configured Recovery location. The original source copy was later removed after the recovered PostgreSQL volume was confirmed usable. The active disk is `D:\docker\DockerDesktopRecovery\DockerDesktopWSL\disk\docker_data.vhdx`.
+- The service image build completed after the network changed. `docker compose up -d` then started 26 long-running containers; PostgreSQL and NATS reported healthy, and `http://127.0.0.1:4173` returned HTTP 200. A read-only PostgreSQL check found 8 public tables, 1 user, 13 teams, 2 tournaments, and 78 matches. This is startup/data verification, not full browser or E2E acceptance.
+- Notification logs reported MatchFinalized events dead-lettered because both participating teams need assigned managers. Investigate the affected records and verify delivery with valid manager assignments.
+- Removed the specifically requested unused Buslink, Food Ordering, and Jenkins volumes after confirming no containers referenced them. Cleared the unused build cache and removed unreferenced Go builder/base images; future image builds may need to download or rebuild these layers again.
+- The current `codex/fix-sonar-security-rating` branch was pushed and clean before syncing; it was 5 commits ahead and 2 behind `origin/development`. The fetched development branch included PR #30 and the latest SCRUM-67 changes. Record the merge commit and CI status here after this sync is committed and pushed.
+- The 80% coverage gate, full browser/E2E acceptance, authenticated Media workflow, backup/restore test, fault-isolation/recovery scenarios, branch protection, secret rotation, tutor/group decisions, and SWE303 review evidence remain open as listed above.
