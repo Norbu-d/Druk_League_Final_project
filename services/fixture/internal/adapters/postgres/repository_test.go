@@ -20,9 +20,9 @@ const (
 	matchID    = "77777777-7777-4777-8777-777777777777"
 )
 
-func linkMatch(t *testing.T, repo *Repository, ctx context.Context, fixtureID, matchID string) {
+func linkMatch(t *testing.T, repo *Repository, ctx context.Context, tournamentID, fixtureID, matchID string) {
 	t.Helper()
-	fixtures, _, err := repo.List(ctx, tournament, 100, 0)
+	fixtures, _, err := repo.List(ctx, tournamentID, 100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,8 +106,8 @@ func TestKnockoutFinalizedEventsCreateOneNextRoundMatch(t *testing.T) {
 	}
 	matchOne := "66666666-6666-4666-8666-666666666666"
 	matchTwo := "77777777-7777-4777-8777-777777777777"
-	linkMatch(t, repo, ctx, fixtures[0].ID, matchOne)
-	linkMatch(t, repo, ctx, fixtures[1].ID, matchTwo)
+	linkMatch(t, repo, ctx, knockoutTournament, fixtures[0].ID, matchOne)
+	linkMatch(t, repo, ctx, knockoutTournament, fixtures[1].ID, matchTwo)
 	first := finalizedEvent(knockoutTournament, "88888888-8888-4888-8888-888888888888", matchOne, fixtures[0], 2, 1)
 	if _, created, err := repo.AdvanceKnockout(ctx, first); err != nil || created {
 		t.Fatalf("advanced before both feeders finished: created=%v err=%v", created, err)
@@ -124,7 +124,7 @@ func TestKnockoutFinalizedEventsCreateOneNextRoundMatch(t *testing.T) {
 	if err != nil || !retryCreated || pending.ID != next.ID {
 		t.Fatalf("duplicate event did not return pending match for retry: %+v created=%v err=%v", pending, retryCreated, err)
 	}
-	linkMatch(t, repo, ctx, next.ID, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+	linkMatch(t, repo, ctx, knockoutTournament, next.ID, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 	if _, created, err := repo.AdvanceKnockout(ctx, second); err != nil || created {
 		t.Fatalf("linked duplicate event returned a new match: created=%v err=%v", created, err)
 	}
@@ -181,7 +181,7 @@ func TestLeagueKnockoutWaitsForEveryFinalizedFixture(t *testing.T) {
 	for i := range stored {
 		matchID := fmt.Sprintf("%08x-aaaa-4aaa-8aaa-%012x", i+1, i+1)
 		eventID := fmt.Sprintf("%08x-bbbb-4bbb-8bbb-%012x", i+1, i+1)
-		linkMatch(t, repo, ctx, stored[i].ID, matchID)
+		linkMatch(t, repo, ctx, tournamentID, stored[i].ID, matchID)
 		event := finalizedEvent(tournamentID, eventID, matchID, stored[i], 1, 0)
 		_, created, err := repo.AdvanceKnockout(ctx, event)
 		if err != nil {
