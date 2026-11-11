@@ -751,3 +751,11 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added `servicekit.FetchDependency` to centralize gRPC dependency error mapping and required-response extraction; refactored Player→Team and Team→Tournament clients to use it.
 - `go test ./...` passed serially for both Player and Team modules (`GOFLAGS=-p=1`). `git diff --check` passed. Parallel Windows Go test runs encountered temporary executable-file locks during cleanup; serial reruns completed successfully.
 - SonarCloud's last observed scan before this change reported new-code Security Rating A, with duplication still slightly above the gate at 3.11%. This new commit must be pushed and analyzed before claiming the duplication gate or overall quality gate is passing.
+
+## 45. PR #2 CI failure fixes (12 Nov 2026)
+
+- The latest SonarCloud run on `39c7de1` reports Security Rating A and Quality Gate passed; new-code duplication is 1.47%. GitHub reports the PR branch is mergeable without conflicts.
+- Reviewed the supplied Actions log. The Go security scan identified GO-2026-6859 in Go 1.26.10 (fixed in Go 1.26.11). Updated Go CI and the service build/runtime Dockerfiles to Go 1.26.11.
+- The performance and audit E2E jobs target the monolith API, which Compose publishes on host port 8079; the jobs incorrectly targeted the BFF port 8080. Updated their health checks and API_BASE_URL to 8079.
+- The notification E2E stack omitted the Player service even though the scenario calls it; added `player` to the services started by that job.
+- Docker Compose configuration and `git diff --check` pass. Docker Desktop is unavailable in this session, and the Go 1.26.11 toolchain download stalled, so these CI changes have not yet been exercised locally. Push and rerun GitHub Actions to verify the remaining checks.
