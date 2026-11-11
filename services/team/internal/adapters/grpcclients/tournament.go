@@ -4,7 +4,6 @@ import (
 	"context"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
-	"github.com/drukleague/platform/packages/servicekit/core"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	"github.com/drukleague/platform/services/team/internal/domain"
 	"google.golang.org/grpc"
@@ -18,13 +17,13 @@ func NewTournaments(conn grpc.ClientConnInterface) *Tournaments {
 }
 
 func (t *Tournaments) Get(ctx context.Context, id string) (domain.TournamentRef, error) {
-	response, err := t.client.GetTournament(ctx, &v1.GetTournamentRequest{Id: id})
-	if err != nil {
-		return domain.TournamentRef{}, servicekit.FromStatus(err, "tournament")
-	}
-	tournament := response.GetTournament()
-	if tournament == nil {
-		return domain.TournamentRef{}, core.Dependency("tournament service returned no tournament")
-	}
-	return domain.TournamentRef{ID: tournament.GetId(), Status: tournament.GetStatus()}, nil
+	return servicekit.FetchDependency(ctx, func(ctx context.Context) (*v1.GetTournamentResponse, error) {
+		return t.client.GetTournament(ctx, &v1.GetTournamentRequest{Id: id})
+	}, "tournament", func(response *v1.GetTournamentResponse) (domain.TournamentRef, bool) {
+		tournament := response.GetTournament()
+		if tournament == nil {
+			return domain.TournamentRef{}, false
+		}
+		return domain.TournamentRef{ID: tournament.GetId(), Status: tournament.GetStatus()}, true
+	})
 }

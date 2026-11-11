@@ -743,5 +743,11 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 ## 43. PR #2 SonarCloud security follow-up (12 Nov 2026)
 
 - The SonarCloud run for `d88eff5` reported two session-cookie findings because `Secure` was set from an environment-dependent boolean. Both session and refresh cookies, including logout-clearing headers, now set `Secure: true`; BFF tests assert the flag. The cookies use HttpOnly and SameSite=Strict as before.
-- Replaced four repeated E2E manager-password literals with one named constant. SonarCloud also reported 4.5% new-code duplication; the repeated in-memory gRPC test-server setup in Player and Team adapters is being factored into `packages/servicekit/grpctest` to reduce that metric without excluding tests.
-- These follow-up changes still need to be committed, pushed, and re-analyzed. Do not claim Security Rating A until the new SonarCloud check reports A and the quality gate passes.
+- Replaced four repeated E2E manager-password literals with one named constant. The initial SonarCloud rerun reported Security Rating A but 3.11% new-code duplication, just over the 3% quality-gate limit.
+- Reduced repeated gRPC dependency-response handling in Player and Team clients to the shared `servicekit.FetchDependency` helper; focused Player and Team module tests pass. The revised PR still needs SonarCloud analysis to confirm the duplication gate result.
+
+## 44. PR #2 Sonar duplication follow-up (12 Nov 2026)
+
+- Added `servicekit.FetchDependency` to centralize gRPC dependency error mapping and required-response extraction; refactored Player→Team and Team→Tournament clients to use it.
+- `go test ./...` passed serially for both Player and Team modules (`GOFLAGS=-p=1`). `git diff --check` passed. Parallel Windows Go test runs encountered temporary executable-file locks during cleanup; serial reruns completed successfully.
+- SonarCloud's last observed scan before this change reported new-code Security Rating A, with duplication still slightly above the gate at 3.11%. This new commit must be pushed and analyzed before claiming the duplication gate or overall quality gate is passing.
