@@ -3,16 +3,14 @@ package grpcclients
 import (
 	"context"
 	"errors"
-	"net"
 	"testing"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	"github.com/drukleague/platform/packages/servicekit/core"
+	"github.com/drukleague/platform/packages/servicekit/grpctest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 type tournamentServer struct {
@@ -31,23 +29,9 @@ func (tournamentServer) GetTournament(_ context.Context, req *v1.GetTournamentRe
 	return &v1.GetTournamentResponse{Tournament: &v1.Tournament{Id: req.GetId(), Status: "registration_open"}}, nil
 }
 
-func connect(t *testing.T) *grpc.ClientConn {
-	t.Helper()
-	listener := bufconn.Listen(1 << 20)
-	server := grpc.NewServer()
-	v1.RegisterTournamentServiceServer(server, tournamentServer{})
-	go func() { _ = server.Serve(listener) }()
-	t.Cleanup(server.Stop)
-	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	return conn
-}
-
 func TestTournamentsClient(t *testing.T) {
-	tournaments := NewTournaments(connect(t))
+	conn := grpctest.NewClientConn(t, func(server grpc.ServiceRegistrar) { v1.RegisterTournamentServiceServer(server, tournamentServer{}) })
+	tournaments := NewTournaments(conn)
 	if tournament, err := tournaments.Get(context.Background(), "x1"); err != nil || tournament.ID != "x1" || tournament.Status != "registration_open" {
 		t.Fatalf("get: %+v %v", tournament, err)
 	}

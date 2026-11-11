@@ -38,6 +38,8 @@ import (
 
 var failures int
 
+const managerPassword = "manager-password-1"
+
 func check(name string, ok bool, detail ...any) {
 	if ok {
 		fmt.Printf("PASS  %s\n", name)
@@ -127,8 +129,8 @@ func main() {
 	managerIDs := make([]string, 4)
 	for i := range managerTokens {
 		managerName := fmt.Sprintf("manager-%d-%s", i, run)
-		manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: "manager-password-1", Role: "team_manager"})).GetUser()
-		managerLogin := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: "manager-password-1"}))
+		manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: managerPassword, Role: "team_manager"})).GetUser()
+		managerLogin := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: managerPassword}))
 		managerIDs[i], managerTokens[i] = manager.GetId(), managerLogin.GetAccessToken()
 	}
 
@@ -274,8 +276,8 @@ func main() {
 	_, err = teams.CreateTeam(as(admin), &v1.CreateTeamRequest{Name: "Taken " + run, ShortCode: fmt.Sprintf("E0%s", run[len(run)-3:]), Dzongkhag: "Paro", TournamentId: tournament.GetId()})
 	check("short code is unique within a tournament", code(err) == codes.AlreadyExists, err)
 	managerName := "manager-" + run
-	manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: "manager-password-1", Role: "team_manager"})).GetUser()
-	managerToken := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: "manager-password-1"})).GetAccessToken()
+	manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: managerPassword, Role: "team_manager"})).GetUser()
+	managerToken := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: managerPassword})).GetAccessToken()
 	_, err = tournaments.CreateTournament(as(managerToken), &v1.CreateTournamentRequest{Name: "Manager Cup " + run, Sport: "football", Season: "2026", Dzongkhag: "Paro"})
 	check("team manager cannot create a tournament", code(err) == codes.PermissionDenied, err)
 	openCup := must(tournaments.CreateTournament(as(admin), &v1.CreateTournamentRequest{Name: "E2E Open Cup " + run, Sport: "football", Season: "2026", Dzongkhag: "paro"})).GetTournament()

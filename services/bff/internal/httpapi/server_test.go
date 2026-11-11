@@ -336,7 +336,7 @@ func TestLoginRefreshLogout(t *testing.T) {
 		t.Fatalf("login user: %v", user)
 	}
 	cookies := login.Result().Cookies()
-	if len(cookies) != 2 || cookies[0].Name != sessionCookieName || cookies[1].Name != refreshCookieName || !cookies[0].HttpOnly || !cookies[1].HttpOnly {
+	if len(cookies) != 2 || cookies[0].Name != sessionCookieName || cookies[1].Name != refreshCookieName || !cookies[0].HttpOnly || !cookies[1].HttpOnly || !cookies[0].Secure || !cookies[1].Secure {
 		t.Fatalf("login must set HttpOnly session and refresh cookies: %v", cookies)
 	}
 	if code, body := do(t, h, "POST", "/api/auth/login", "", `{"username":"admin","password":"wrong"}`); code != 401 || field(body, "error") != "Invalid username or password" {

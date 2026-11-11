@@ -672,7 +672,7 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 ## 34. CI failures on combined branch (9 Nov 2026)
 
 - Reviewed the failed checks for merge commit `3f7b76c`. The Media module-manifest check found `github.com/jackc/pgx/v5` was imported directly but declared indirect; `services/media/go.mod` now declares it directly.
-- Gosec reported G124 on the session and logout cookies because `Secure` is disabled for local HTTP development. Added narrow G124 suppressions documenting that production sets `Secure`.
+- SonarCloud later flagged that the session and logout cookies did not explicitly set `Secure`. PR #2 follow-up now sets `Secure: true` on both cookies and their clearing headers; local-browser acceptance should confirm the cookies are retained on localhost.
 - The Trivy setup action selected `latest` and exited during binary installation without a diagnostic. A pinned binary version also failed silently, so the image scan is being switched to the pinned `aquasec/trivy:0.68.2` container.
 - Buf and k6 setup did not reach lint/tests: GitHub release downloads returned HTTP 504 after retries. These failures need a fresh CI run to determine whether they were transient.
 - Local `go test ./...` passed for Media and API Gateway, and `git diff --check` passed. Docker-backed tests and the full CI run remain pending.
@@ -738,4 +738,10 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Merged `origin/development` into `feature/norbu-match-engine` locally. Preserved the BFF HttpOnly-cookie session flow and the latest development Nginx security, Report/Media routes, registration flow, role-aware UI, and service changes. Fixture scheduling keeps the same-day venue/time conflict fallback and also retains knockout progression from finalized matches.
 - Resolved all 20 conflicted paths; no conflict markers remain. Adapted Fixture fakes and PostgreSQL call sites to the merged repository interface.
 - Local checks passed: `git diff --check`, `node --check` for `api.js`, `app.js`, and `role-permissions.js`, Docker Compose configuration validation, and `go test ./...` for Fixture, Player, Team, Tournament, Match, and the E2E tool module.
-- These checks establish local build/test readiness only. The merge commit still needs to be committed and pushed; then GitHub must rerun SonarCloud and all required checks. Do not report PR #2 merge-ready or Security Rating A until that live check passes.
+- The merge commit was pushed as `d88eff5`. GitHub now reports the PR branch is mergeable with development; CI is still running, so the PR is not yet merge-ready.
+
+## 43. PR #2 SonarCloud security follow-up (12 Nov 2026)
+
+- The SonarCloud run for `d88eff5` reported two session-cookie findings because `Secure` was set from an environment-dependent boolean. Both session and refresh cookies, including logout-clearing headers, now set `Secure: true`; BFF tests assert the flag. The cookies use HttpOnly and SameSite=Strict as before.
+- Replaced four repeated E2E manager-password literals with one named constant. SonarCloud also reported 4.5% new-code duplication; the repeated in-memory gRPC test-server setup in Player and Team adapters is being factored into `packages/servicekit/grpctest` to reduce that metric without excluding tests.
+- These follow-up changes still need to be committed, pushed, and re-analyzed. Do not claim Security Rating A until the new SonarCloud check reports A and the quality gate passes.

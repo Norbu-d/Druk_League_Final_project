@@ -11,7 +11,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -109,20 +108,18 @@ const sessionCookieName = "drukleague-session"
 const refreshCookieName = "drukleague-refresh"
 
 func setAuthCookies(w http.ResponseWriter, accessToken, refreshToken string, expiresAt time.Time) {
-	secure := strings.EqualFold(os.Getenv("APP_ENV"), "production")
 	accessMaxAge := int(time.Until(expiresAt).Seconds())
 	if accessMaxAge <= 0 {
 		accessMaxAge = 30 * 60
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: accessToken, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: accessMaxAge})
-	http.SetCookie(w, &http.Cookie{Name: refreshCookieName, Value: refreshToken, Path: "/api/auth", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 60 * 60})
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: accessToken, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: accessMaxAge})
+	http.SetCookie(w, &http.Cookie{Name: refreshCookieName, Value: refreshToken, Path: "/api/auth", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 60 * 60})
 }
 
 func clearAuthCookies(w http.ResponseWriter) {
-	secure := strings.EqualFold(os.Getenv("APP_ENV"), "production")
 	for _, cookie := range []*http.Cookie{
-		{Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: -1},
-		{Name: refreshCookieName, Value: "", Path: "/api/auth", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode, MaxAge: -1},
+		{Name: sessionCookieName, Value: "", Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: -1},
+		{Name: refreshCookieName, Value: "", Path: "/api/auth", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: -1},
 	} {
 		http.SetCookie(w, cookie)
 	}
