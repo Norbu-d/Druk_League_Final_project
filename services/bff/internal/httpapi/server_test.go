@@ -298,9 +298,11 @@ func TestHealthAndCORS(t *testing.T) {
 		t.Fatalf("preflight: %d %v", rec.Code, rec.Header())
 	}
 	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/healthz", nil))
-	if rec.Header().Get("X-Request-ID") == "" {
-		t.Fatal("responses should carry a request id")
+	request := httptest.NewRequest("GET", "/healthz", nil)
+	request.Header.Set("X-Request-ID", "untrusted-client-id")
+	h.ServeHTTP(rec, request)
+	if id := rec.Header().Get("X-Request-ID"); id == "" || id == "untrusted-client-id" {
+		t.Fatalf("response should carry a server-generated request id, got %q", id)
 	}
 }
 

@@ -154,14 +154,12 @@ func (r *statusRecorder) WriteHeader(code int) {
 func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		id := strings.TrimSpace(r.Header.Get("X-Request-ID"))
-		if id == "" {
-			id = servicekit.NewRequestID()
-		}
+		// Generate the ID at the HTTP boundary so untrusted header values never enter logs.
+		id := servicekit.NewRequestID()
 		w.Header().Set("X-Request-ID", id)
 		recorder := &statusRecorder{ResponseWriter: w, status: 200}
 		next.ServeHTTP(recorder, r.WithContext(servicekit.WithRequestID(r.Context(), id)))
-		log.Printf("request_id=%s method=%s status=%d duration=%s", id, r.Method, recorder.status, time.Since(start).Round(time.Millisecond))
+		log.Printf("status=%d duration=%s", recorder.status, time.Since(start).Round(time.Millisecond))
 	})
 }
 

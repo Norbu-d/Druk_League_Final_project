@@ -762,6 +762,6 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 ## 46. PR #2 security scan follow-up (12 Nov 2026)
 
-- The supplied latest gosec output identifies G706 log-injection risk in BFF request logging because the user-controlled URL path was written to logs. Removed the path from the request log fields; BFF HTTP API tests pass.
+- The supplied gosec output identified G706 log-injection risk in BFF request logging. Gosec still flagged client-controlled values after the URL path was removed, so the BFF now generates request IDs at its HTTP boundary and logs only response status and duration. Added a regression check that a client-provided ID is not reflected. The local gosec 2.30.0 scan now passes with zero findings, and the BFF HTTP API tests pass.
 - The supplied coverage output shows all displayed module totals from `services/official` onward above 80%, but it omits earlier modules where the coverage threshold failure occurred. A local all-module coverage attempt could not complete in this environment; Docker is unavailable and the Linux shell has Go 1.22.2 pinned with `GOTOOLCHAIN=local`.
-- The BFF security fix must be pushed and rescanned. The first failing module's coverage summary is still needed to diagnose the separate coverage failure.
+- The BFF security follow-up still needs to be committed and rescanned. The first failing module's coverage summary is still needed to diagnose the separate coverage failure.
