@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/drukleague/platform/packages/servicekit/core"
 	"github.com/drukleague/platform/services/match/internal/domain"
 )
 
@@ -95,6 +96,16 @@ func TestCreateSchedulesValidMatch(t *testing.T) {
 	}
 	if created.Status != domain.StatusScheduled || created.Venue != "Changlimithang" || created.TournamentID != tournament {
 		t.Fatalf("unexpected match %+v", created)
+	}
+}
+
+func TestFixtureServiceCanCreateBackgroundBracketMatches(t *testing.T) {
+	s := service(newRepo(), fakeUsers{})
+	if _, err := s.CreateAs(context.Background(), core.RoleService, "fixture-service", validMatch()); err != nil {
+		t.Fatalf("fixture service denied: %v", err)
+	}
+	if _, err := s.CreateAs(context.Background(), core.RoleService, "notification-service", validMatch()); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("other service was allowed to create matches: %v", err)
 	}
 }
 

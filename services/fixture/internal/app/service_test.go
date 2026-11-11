@@ -47,6 +47,15 @@ func (f *fakeRepo) LinkMatch(_ context.Context, booked domain.Fixture) error {
 	}
 	return nil
 }
+func (f *fakeRepo) SaveKnockoutSchedule(context.Context, string, domain.KnockoutPlan, domain.OutboxEvent) ([]domain.Fixture, bool, error) {
+	return nil, false, nil
+}
+func (f *fakeRepo) AdvanceKnockout(context.Context, domain.MatchFinalized) (domain.Fixture, bool, error) {
+	return domain.Fixture{}, false, nil
+}
+func (f *fakeRepo) PendingFixtures(context.Context, string) ([]domain.Fixture, error) {
+	return nil, nil
+}
 func (f *fakeRepo) List(context.Context, string, int, int) ([]domain.Fixture, bool, error) {
 	return f.stored, false, nil
 }
@@ -62,7 +71,7 @@ type fakeTeams struct {
 	err error
 }
 
-func (f fakeTeams) IDsInTournament(context.Context, string) ([]string, error) { return f.ids, f.err }
+func (f fakeTeams) ApprovedTeamIDs(context.Context, string) ([]string, error) { return f.ids, f.err }
 
 type fakeVenues struct {
 	dzongkhag *string
@@ -206,7 +215,7 @@ func TestGenerateRejections(t *testing.T) {
 	if _, _, err := s.Generate(context.Background(), admin, "x", "", time.Time{}); !errors.Is(err, core.ErrInvalid) {
 		t.Fatal("bad id accepted")
 	}
-	if _, _, err := s.Generate(context.Background(), admin, tournament, "knockout", time.Time{}); !errors.Is(err, core.ErrInvalid) {
+	if _, _, err := s.Generate(context.Background(), admin, tournament, "made_up", time.Time{}); !errors.Is(err, core.ErrInvalid) {
 		t.Fatal("unsupported format accepted")
 	}
 	lonely, _ := newService(&fakeRepo{linked: map[string]string{}}, []string{"a"}, &fakeMatches{})

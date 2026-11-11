@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/drukleague/platform/services/fixture/internal/domain"
 )
@@ -14,20 +15,24 @@ type Repository interface {
 	// LinkMatch records the fixture's match and the venue and kickoff actually booked, which
 	// differ from the plan when the planned slot was taken.
 	LinkMatch(ctx context.Context, booked domain.Fixture) error
+	SaveKnockoutSchedule(ctx context.Context, tournamentID string, plan domain.KnockoutPlan, event domain.OutboxEvent) (stored []domain.Fixture, created bool, err error)
+	AdvanceKnockout(ctx context.Context, event domain.MatchFinalized) (fixture domain.Fixture, created bool, err error)
+	PendingFixtures(ctx context.Context, tournamentID string) ([]domain.Fixture, error)
 	List(ctx context.Context, tournamentID string, limit, offset int) ([]domain.Fixture, bool, error)
 }
 
 type Outbox interface {
 	PendingEvents(ctx context.Context, limit int) ([]domain.OutboxEvent, error)
 	MarkPublished(ctx context.Context, eventID string) error
+	PrunePublished(ctx context.Context, before time.Time) (int64, error)
 }
 
 type Tournaments interface {
 	Get(ctx context.Context, id string) (domain.Tournament, error)
 }
 
-type Teams interface {
-	IDsInTournament(ctx context.Context, tournamentID string) ([]string, error)
+type TournamentEntries interface {
+	ApprovedTeamIDs(ctx context.Context, tournamentID string) ([]string, error)
 }
 
 type Venues interface {
@@ -36,4 +41,8 @@ type Venues interface {
 
 type Matches interface {
 	Create(ctx context.Context, fixture domain.Fixture) (matchID string, err error)
+}
+
+type Standings interface {
+	TeamIDsByRank(ctx context.Context, tournamentID string) ([]string, error)
 }

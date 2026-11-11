@@ -28,7 +28,7 @@ func (s *Server) CreateMatch(ctx context.Context, req *v1.CreateMatchRequest) (*
 		return nil, status.Error(codes.InvalidArgument, "kickoff is required and must be valid")
 	}
 	identity, _ := servicekit.IdentityFromContext(ctx)
-	match, err := s.service.Create(ctx, identity.Role, domain.Match{
+	match, err := s.service.CreateAs(ctx, identity.Role, identity.Username, domain.Match{
 		TournamentID: req.GetTournamentId(), HomeTeamID: req.GetHomeTeamId(),
 		AwayTeamID: req.GetAwayTeamId(), Venue: req.GetVenue(), Kickoff: req.GetKickoff().AsTime(),
 	})

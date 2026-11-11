@@ -4,6 +4,8 @@ import (
 	"context"
 	"sort"
 
+	registrationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1"
+	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	venuev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
 	"github.com/drukleague/platform/packages/servicekit/core"
@@ -32,28 +34,30 @@ func (t *Tournaments) Get(ctx context.Context, id string) (domain.Tournament, er
 	return domain.Tournament{ID: response.GetTournament().GetId(), Dzongkhag: response.GetTournament().GetDzongkhag()}, nil
 }
 
-type Teams struct{ client v1.TeamServiceClient }
-
-func NewTeams(conn grpc.ClientConnInterface) *Teams {
-	return &Teams{client: v1.NewTeamServiceClient(conn)}
+type Registrations struct {
+	client registrationv1.RegistrationServiceClient
 }
 
-func (t *Teams) IDsInTournament(ctx context.Context, tournamentID string) ([]string, error) {
+func NewRegistrations(conn grpc.ClientConnInterface) *Registrations {
+	return &Registrations{client: registrationv1.NewRegistrationServiceClient(conn)}
+}
+
+func (r *Registrations) ApprovedTeamIDs(ctx context.Context, tournamentID string) ([]string, error) {
 	ids := []string{}
 	token := ""
 	for page := 0; page < maxPages; page++ {
-		response, err := t.client.ListTeams(ctx, &v1.ListTeamsRequest{TournamentId: tournamentID, PageSize: 100, PageToken: token})
+		response, err := r.client.ListRegistrations(ctx, &registrationv1.ListRegistrationsRequest{TournamentId: tournamentID, Status: "approved", PageSize: 100, PageToken: token})
 		if err != nil {
-			return nil, servicekit.FromStatus(err, "teams")
+			return nil, servicekit.FromStatus(err, "approved registrations")
 		}
-		for _, team := range response.GetTeams() {
-			ids = append(ids, team.GetId())
+		for _, registration := range response.GetRegistrations() {
+			ids = append(ids, registration.GetTeamId())
 		}
 		if token = response.GetNextPageToken(); token == "" {
-			break
+			return ids, nil
 		}
 	}
-	return ids, nil
+	return nil, core.Dependency("approved registration listing exceeded pagination limit")
 }
 
 type Venues struct{ client venuev1.VenueServiceClient }
@@ -90,11 +94,53 @@ func (m *Matches) Create(ctx context.Context, f domain.Fixture) (string, error) 
 	response, err := m.client.CreateMatch(ctx, &v1.CreateMatchRequest{TournamentId: f.TournamentID, HomeTeamId: f.HomeTeamID, AwayTeamId: f.AwayTeamID, Venue: f.VenueName, Kickoff: timestamppb.New(f.Kickoff)})
 	if err != nil {
 		if status.Code(err) == codes.AlreadyExists {
-			// Match names what is busy ("venue X already has a match at ..."); keep it so the
-			// app can try another slot and report the last clash if none is free.
-			return "", core.Conflict(status.Convert(err).Message())
+			if id, found, lookupErr := m.findExact(ctx, f); lookupErr == nil && found {
+				return id, nil
+			}
+			return "", core.Conflict("a team or venue already has a match at " + f.Kickoff.UTC().Format("2006-01-02 15:04") + " UTC")
 		}
 		return "", servicekit.FromStatus(err, "match")
 	}
 	return response.GetMatch().GetId(), nil
+}
+
+func (m *Matches) findExact(ctx context.Context, f domain.Fixture) (string, bool, error) {
+	token := ""
+	for page := 0; page < maxPages; page++ {
+		response, err := m.client.ListMatches(ctx, &v1.ListMatchesRequest{TournamentId: f.TournamentID, PageSize: 100, PageToken: token})
+		if err != nil {
+			return "", false, servicekit.FromStatus(err, "matches")
+		}
+		for _, match := range response.GetMatches() {
+			if match.GetHomeTeamId() == f.HomeTeamID && match.GetAwayTeamId() == f.AwayTeamID && match.GetVenue() == f.VenueName &&
+				match.GetKickoff() != nil && match.GetKickoff().AsTime().Equal(f.Kickoff) {
+				return match.GetId(), true, nil
+			}
+		}
+		token = response.GetNextPageToken()
+		if token == "" {
+			return "", false, nil
+		}
+	}
+	return "", false, core.Dependency("match listing exceeded pagination limit")
+}
+
+type Standings struct {
+	client standingsv1.StandingsServiceClient
+}
+
+func NewStandings(conn grpc.ClientConnInterface) *Standings {
+	return &Standings{client: standingsv1.NewStandingsServiceClient(conn)}
+}
+
+func (s *Standings) TeamIDsByRank(ctx context.Context, tournamentID string) ([]string, error) {
+	response, err := s.client.GetStandings(ctx, &standingsv1.GetStandingsRequest{TournamentId: tournamentID})
+	if err != nil {
+		return nil, servicekit.FromStatus(err, "standings")
+	}
+	ids := make([]string, 0, len(response.GetStandings()))
+	for _, standing := range response.GetStandings() {
+		ids = append(ids, standing.GetTeamId())
+	}
+	return ids, nil
 }

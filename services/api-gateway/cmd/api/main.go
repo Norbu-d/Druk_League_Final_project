@@ -78,6 +78,10 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("POST /api/auth/login", s.login)
+	mux.Handle("GET /api/auth/session", s.authenticate(http.HandlerFunc(s.session)))
+	mux.HandleFunc("POST /api/auth/logout", s.logout)
+	// Standings are public so viewers can read published results without signing in.
+	mux.HandleFunc("GET /api/standings", s.listStandings)
 	mux.Handle("/api/", s.authenticate(http.HandlerFunc(s.api)))
 	wrapped := cors(logging(mux))
 	log.Printf("DrukLeague API listening on %s", addr)
@@ -158,6 +162,13 @@ func (s *server) api(w http.ResponseWriter, r *http.Request) {
 				methodNotAllowed(w)
 			}
 			return
+		case "correct-result":
+			if r.Method == http.MethodPost {
+				s.correctResult(w, r, p, parts[1])
+			} else {
+				methodNotAllowed(w)
+			}
+			return
 		}
 	}
 	if len(parts) == 3 && parts[0] == "tournaments" && parts[2] == "fixtures" && r.Method == http.MethodPost {
@@ -188,7 +199,27 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Could not create session")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"token": token, "user": claim})
+	setSessionCookie(w, token)
+	writeJSON(w, 200, map[string]any{"user": map[string]string{"id": claim.ID, "username": claim.Username, "role": claim.Role}})
+}
+
+func (s *server) session(w http.ResponseWriter, r *http.Request) {
+	p := r.Context().Value("principal").(principal)
+	writeJSON(w, http.StatusOK, map[string]string{"id": p.ID, "username": p.Username, "role": p.Role})
+}
+
+func (s *server) logout(w http.ResponseWriter, _ *http.Request) {
+	// #nosec G124 -- Secure is disabled only for local HTTP development; production sets it.
+	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: "", Path: "/", HttpOnly: true, // NOSONAR -- Secure is disabled only for local HTTP development; production sets it.
+		Secure: env("APP_ENV", "development") == "production", SameSite: http.SameSiteStrictMode, MaxAge: -1})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "signed_out"})
+}
+
+func setSessionCookie(w http.ResponseWriter, token string) {
+	// #nosec G124 -- Secure is disabled only for local HTTP development; production sets it.
+	http.SetCookie(w, &http.Cookie{Name: "drukleague-session", Value: token, Path: "/", HttpOnly: true, // NOSONAR -- Secure is disabled only for local HTTP development; production sets it.
+		Secure: env("APP_ENV", "development") == "production", SameSite: http.SameSiteStrictMode,
+		MaxAge: 12 * 60 * 60})
 }
 func (s *server) listTournaments(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, e := s.db.QueryContext(r.Context(), `SELECT id,name,sport,season,status,venue,starts_at,COALESCE(dzongkhag,'') FROM tournaments ORDER BY created_at DESC`)
@@ -240,9 +271,23 @@ func (s *server) createTournament(w http.ResponseWriter, r *http.Request, p prin
 		writeError(w, 400, "dzongkhag must be one of the 20 Bhutanese districts")
 		return
 	}
-	var id string
-	e := s.db.QueryRowContext(r.Context(), `INSERT INTO tournaments(name,sport,season,venue,starts_at,created_by,dzongkhag) VALUES($1,$2,$3,$4,NULLIF($5,'')::date,NULLIF($6,'')::uuid,$7) RETURNING id::text`, in.Name, in.Sport, in.Season, in.Venue, in.StartsAt, p.ID, in.Dzongkhag).Scan(&id)
+	tx, e := s.db.BeginTx(r.Context(), nil)
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	var id string
+	e = tx.QueryRowContext(r.Context(), `INSERT INTO tournaments(name,sport,season,venue,starts_at,created_by,dzongkhag) VALUES($1,$2,$3,$4,NULLIF($5,'')::date,NULLIF($6,'')::uuid,$7) RETURNING id::text`, in.Name, in.Sport, in.Season, in.Venue, in.StartsAt, p.ID, in.Dzongkhag).Scan(&id)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "tournament.created", "tournament", id, ""); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -308,8 +353,22 @@ func (s *server) createTeam(w http.ResponseWriter, r *http.Request, p principal)
 		return
 	}
 	var id string
-	e := s.db.QueryRowContext(r.Context(), `INSERT INTO teams(name,short_code,dzongkhag,tournament_id) VALUES($1,$2,$3,NULLIF($4,'')::uuid) RETURNING id::text`, in.Name, in.Short, in.Dzongkhag, in.TournamentID).Scan(&id)
+	tx, e := s.db.BeginTx(r.Context(), nil)
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	e = tx.QueryRowContext(r.Context(), `INSERT INTO teams(name,short_code,dzongkhag,tournament_id) VALUES($1,$2,$3,NULLIF($4,'')::uuid) RETURNING id::text`, in.Name, in.Short, in.Dzongkhag, in.TournamentID).Scan(&id)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "team.created", "team", id, ""); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -427,7 +486,7 @@ func (s *server) finalize(w http.ResponseWriter, r *http.Request, p principal, i
 		serverError(w, e)
 		return
 	}
-	if _, e = tx.ExecContext(r.Context(), `INSERT INTO event_outbox(subject,payload) VALUES('MatchFinalized',$1::jsonb)`, string(payload)); e != nil {
+	if _, e = tx.ExecContext(r.Context(), `INSERT INTO event_outbox(subject,payload) VALUES('drukleague.match.finalized',$1::jsonb)`, string(payload)); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -498,13 +557,25 @@ func (s *server) generateFixtures(w http.ResponseWriter, r *http.Request, p prin
 	for rows.Next() {
 		var team string
 		if e = rows.Scan(&team); e != nil {
-			rows.Close()
+			if closeErr := rows.Close(); closeErr != nil {
+				log.Printf("close team rows after scan error: %v", closeErr)
+			}
 			serverError(w, e)
 			return
 		}
 		ids = append(ids, team)
 	}
-	rows.Close()
+	if e = rows.Err(); e != nil {
+		if closeErr := rows.Close(); closeErr != nil {
+			log.Printf("close team rows after iteration error: %v", closeErr)
+		}
+		serverError(w, e)
+		return
+	}
+	if e = rows.Close(); e != nil {
+		serverError(w, e)
+		return
+	}
 	if len(ids) < 2 {
 		writeError(w, 400, "At least two registered teams are required")
 		return
@@ -536,6 +607,10 @@ func (s *server) generateFixtures(w http.ResponseWriter, r *http.Request, p prin
 		copy(ids[2:], ids[1:len(ids)-1])
 		ids[1] = last
 	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "tournament.fixtures.generated", "tournament", id, ""); e != nil {
+		serverError(w, e)
+		return
+	}
 	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
@@ -546,6 +621,11 @@ func (s *server) generateFixtures(w http.ResponseWriter, r *http.Request, p prin
 func (s *server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		a := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if a == "" {
+			if cookie, err := r.Cookie("drukleague-session"); err == nil {
+				a = cookie.Value
+			}
+		}
 		p, e := s.verify(a)
 		if e != nil {
 			writeError(w, 401, "Sign in to continue")
@@ -631,7 +711,8 @@ func pbkdf2(password, salt []byte, iter, keyLen int) []byte {
 	return out[:keyLen]
 }
 func migrate(ctx context.Context, db *sql.DB, path string) error {
-	b, e := os.ReadFile(path)
+	// The migration filename is selected from deployment configuration at startup.
+	b, e := os.ReadFile(path) // #nosec G304 -- this path is operator-configured, not request-controlled.
 	if e != nil {
 		return e
 	}
@@ -682,7 +763,6 @@ func serverError(w http.ResponseWriter, e error) {
 func methodNotAllowed(w http.ResponseWriter) { writeError(w, 405, "Method not allowed") }
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", env("CORS_ORIGIN", "*"))
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
 		if r.Method == http.MethodOptions {
@@ -696,6 +776,6 @@ func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
+		log.Printf("%q %q %s", r.Method, r.URL.Path, time.Since(start)) // #nosec G706 -- %q escapes control characters from request values.
 	})
 }

@@ -30,9 +30,23 @@ func (s *server) createUser(w http.ResponseWriter, r *http.Request, p principal)
 		writeError(w, 400, "role must be match_official or viewer")
 		return
 	}
-	var id string
-	e := s.db.QueryRowContext(r.Context(), `INSERT INTO users(username,password_hash,role) VALUES($1,$2,$3) RETURNING id::text`, in.Username, hashPassword(in.Password), in.Role).Scan(&id)
+	tx, e := s.db.BeginTx(r.Context(), nil)
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	var id string
+	e = tx.QueryRowContext(r.Context(), `INSERT INTO users(username,password_hash,role) VALUES($1,$2,$3) RETURNING id::text`, in.Username, hashPassword(in.Password), in.Role).Scan(&id)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "user.created", "user", id, "role="+in.Role); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -77,13 +91,27 @@ func (s *server) createMatch(w http.ResponseWriter, r *http.Request, p principal
 			return
 		}
 	}
+	tx, e := s.db.BeginTx(r.Context(), nil)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
 	var id string
-	e = s.db.QueryRowContext(r.Context(), `WITH valid_teams AS (SELECT count(*) AS n FROM teams WHERE tournament_id=$1 AND id IN ($2::uuid,$3::uuid)), clashes AS (SELECT count(*) AS n FROM matches WHERE kickoff=$4 AND (home_team_id IN ($2::uuid,$3::uuid) OR away_team_id IN ($2::uuid,$3::uuid) OR ($5<>'' AND venue=$5))) INSERT INTO matches(tournament_id,home_team_id,away_team_id,venue,kickoff,official_id) SELECT $1,$2,$3,$5,$4,NULLIF($6,'')::uuid WHERE (SELECT n FROM valid_teams)=2 AND (SELECT n FROM clashes)=0 RETURNING id::text`, in.TournamentID, in.HomeTeamID, in.AwayTeamID, start, in.Venue, in.OfficialID).Scan(&id)
+	e = tx.QueryRowContext(r.Context(), `WITH valid_teams AS (SELECT count(*) AS n FROM teams WHERE tournament_id=$1 AND id IN ($2::uuid,$3::uuid)), clashes AS (SELECT count(*) AS n FROM matches WHERE kickoff=$4 AND (home_team_id IN ($2::uuid,$3::uuid) OR away_team_id IN ($2::uuid,$3::uuid) OR ($5<>'' AND venue=$5))) INSERT INTO matches(tournament_id,home_team_id,away_team_id,venue,kickoff,official_id) SELECT $1,$2,$3,$5,$4,NULLIF($6,'')::uuid WHERE (SELECT n FROM valid_teams)=2 AND (SELECT n FROM clashes)=0 RETURNING id::text`, in.TournamentID, in.HomeTeamID, in.AwayTeamID, start, in.Venue, in.OfficialID).Scan(&id)
 	if errors.Is(e, sql.ErrNoRows) {
 		writeError(w, 409, "Teams must belong to this tournament and the time slot must have no team or venue clash")
 		return
 	}
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "match.created", "match", id, ""); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -143,7 +171,13 @@ func (s *server) assignOfficial(w http.ResponseWriter, r *http.Request, p princi
 		return
 	}
 
-	res, e := s.db.ExecContext(r.Context(), `UPDATE matches SET official_id=$1 WHERE id=$2 AND finalized_at IS NULL`, in.OfficialID, matchID)
+	tx, e := s.db.BeginTx(r.Context(), nil)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	res, e := tx.ExecContext(r.Context(), `UPDATE matches SET official_id=$1 WHERE id=$2 AND finalized_at IS NULL`, in.OfficialID, matchID)
 	if e != nil {
 		serverError(w, e)
 		return
@@ -151,6 +185,14 @@ func (s *server) assignOfficial(w http.ResponseWriter, r *http.Request, p princi
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		writeError(w, 409, "Match is finalized or does not exist")
+		return
+	}
+	if e = recordAdminAction(r.Context(), tx, p.ID, "match.official.assigned", "match", matchID, "official_id="+in.OfficialID); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
+		serverError(w, e)
 		return
 	}
 	writeJSON(w, 200, map[string]string{"match_id": matchID, "official_id": in.OfficialID})

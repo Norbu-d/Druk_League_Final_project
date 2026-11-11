@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"time"
 
 	"github.com/drukleague/platform/services/score/internal/domain"
 )
@@ -17,6 +18,7 @@ type Repository interface {
 type Outbox interface {
 	PendingEvents(ctx context.Context, limit int) ([]domain.OutboxEvent, error)
 	MarkPublished(ctx context.Context, eventID string) error
+	PrunePublished(ctx context.Context, before time.Time) (int64, error)
 }
 
 type MatchReader interface {
