@@ -1,11 +1,12 @@
 (() => {
+  let currentUser = null;
   const authKey = 'drukleague-authenticated';
   const roleKey = 'drukleague-role';
   const usernameKey = 'drukleague-username';
   const safeRole = sanitizeRole;
   const safeUsername = sanitizeUsername;
   const safeUUID = sanitizeUUID;
-  const token = () => sessionStorage.getItem(authKey) === 'true';
+  const token = () => Boolean(currentUser);
   const defaultApiRoot = location.protocol === 'file:' ? 'http://127.0.0.1:8080/api' : `${location.origin}/api`;
   const configuredApiRoot = (() => {
     try {
@@ -18,10 +19,18 @@
   })();
   const apiRoot = configuredApiRoot.href.replace(/\/+$/, '');
   const headers = () => ({'Content-Type':'application/json'});
-  async function request(path, options={}) {
+  async function renew() {
+    const safeURL = safeAPIURL(apiRoot, '/auth/refresh', 'POST');
+    if (!safeURL) return false;
+    const response = await fetch(safeURL, {method:'POST', credentials:'same-origin', headers:headers()});
+    if (!response.ok) { currentUser = null; window.DRUKLEAGUE_AUTHENTICATED = false; return false; }
+    return true;
+  }
+  async function request(path, options={}, retried=false) {
     const safeURL = safeAPIURL(apiRoot, path, options.method);
     if (!safeURL) throw new Error('Invalid API request path.');
     const response = await fetch(safeURL, {...options, credentials:'same-origin', headers:{...headers(), ...(options.headers||{})}});
+    if (response.status === 401 && !retried && !path.startsWith('/auth/') && await renew()) return request(path, options, true);
     const data = await response.json().catch(()=>({}));
     if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
     return data;
@@ -57,8 +66,15 @@
   }
   async function showLogin() {
     if (token()) {
-      try { await request('/auth/logout',{method:'POST'}); } catch (error) { toast(error.message); return; }
-      sessionStorage.removeItem(authKey); sessionStorage.removeItem(roleKey); sessionStorage.removeItem(usernameKey); syncRoleIdentity(); render('dashboard');
+      try { await request('/auth/logout',{method:'POST'}); }
+      catch (error) { toast(error.message); return; }
+      currentUser = null;
+      sessionStorage.removeItem(authKey);
+      sessionStorage.removeItem(roleKey);
+      sessionStorage.removeItem(usernameKey);
+      window.DRUKLEAGUE_AUTHENTICATED = false;
+      syncRoleIdentity();
+      render('dashboard');
       toast('Signed out.'); return;
     }
     document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title"><header class="modal-head"><div><h2 id="login-title">Sign in to DrukLeague</h2><p>Connect to your saved tournaments and match data.</p></div><button class="modal-close" type="button" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="login-form"><div class="modal-body"><div class="form-grid"><div class="form-field full"><label for="login-user">Username</label><input id="login-user" name="username" autocomplete="username" required></div><div class="form-field full"><label for="login-password">Password</label><input id="login-password" name="password" type="password" autocomplete="current-password" required></div></div></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" class="button button-primary">Sign in</button></footer></form></section></div>`;
@@ -70,7 +86,20 @@
     const form=event.target;
     if (form.id==='login-form') {
       event.preventDefault();
-      try { const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});const user=result.user||{};const username=safeUsername(user.username);sessionStorage.setItem(authKey,'true');sessionStorage.setItem(roleKey,safeRole(user.role));sessionStorage.setItem(usernameKey,username);syncRoleIdentity();document.getElementById('modal-root').innerHTML='';render(activePage);toast(`Signed in as ${username||'user'}.`);await refresh(); }
+      try {
+        const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});
+        currentUser=result.user||null;
+        const username=safeUsername(currentUser?.username);
+        sessionStorage.setItem(authKey,'true');
+        sessionStorage.setItem(roleKey,safeRole(currentUser?.role));
+        sessionStorage.setItem(usernameKey,username);
+        window.DRUKLEAGUE_AUTHENTICATED=Boolean(currentUser);
+        syncRoleIdentity();
+        document.getElementById('modal-root').innerHTML='';
+        render(activePage);
+        toast(`Signed in as ${username||'user'}.`);
+        await refresh();
+      }
       catch(error){
         toast(error.message);
         const modal=document.querySelector('#login-form .modal-body');
@@ -116,21 +145,29 @@
     }
   });
   document.querySelector('.top-avatar').classList.add('auth-button');
-  // Clear legacy bearer tokens and restore the HttpOnly cookie session from the API.
+  window.DRUKLEAGUE_AUTHENTICATED = false;
   sessionStorage.removeItem('drukleague-session');
-  void request('/auth/session').then(user => {
-    const username=safeUsername(user?.username);
-    sessionStorage.setItem(authKey,'true');
-    sessionStorage.setItem(roleKey,safeRole(user?.role));
-    sessionStorage.setItem(usernameKey,username);
+  void (async () => {
+    try {
+      currentUser = await request('/auth/session');
+    } catch (_) {
+      if (await renew()) {
+        try { currentUser = await request('/auth/session'); }
+        catch (_) { currentUser = null; }
+      }
+    }
+    if (currentUser) {
+      sessionStorage.setItem(authKey, 'true');
+      sessionStorage.setItem(roleKey, safeRole(currentUser.role));
+      sessionStorage.setItem(usernameKey, safeUsername(currentUser.username));
+    } else {
+      sessionStorage.removeItem(authKey);
+      sessionStorage.setItem(roleKey, 'viewer');
+      sessionStorage.removeItem(usernameKey);
+    }
+    window.DRUKLEAGUE_AUTHENTICATED = Boolean(currentUser);
     syncRoleIdentity();
     render(activePage);
-    return refresh();
-  }).catch(() => {
-    sessionStorage.removeItem(authKey);
-    sessionStorage.setItem(roleKey,'viewer');
-    sessionStorage.removeItem(usernameKey);
-    syncRoleIdentity();
-    render(activePage);
-  });
+    if (currentUser) await refresh();
+  })();
 })();

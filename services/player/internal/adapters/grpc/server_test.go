@@ -5,155 +5,81 @@ import (
 	"testing"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/player/v1"
-	"github.com/drukleague/platform/packages/servicekit/testdb"
+	"github.com/drukleague/platform/packages/servicekit/core"
+	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	"github.com/drukleague/platform/services/player/internal/app"
+	"github.com/drukleague/platform/services/player/internal/domain"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-func TestCreatePlayerRequiresTeamAndNames(t *testing.T) {
-	server := New(nil)
-	tests := map[string]*v1.CreatePlayerRequest{
-		"empty":             {},
-		"missing team":      {GivenName: "Sonam", FamilyName: "Choki"},
-		"missing given":     {TeamId: "team-id", FamilyName: "Choki"},
-		"missing family":    {TeamId: "team-id", GivenName: "Sonam"},
-		"whitespace values": {TeamId: " ", GivenName: " ", FamilyName: " "},
-	}
-	for name, req := range tests {
-		t.Run(name, func(t *testing.T) {
-			if _, err := server.CreatePlayer(context.Background(), req); status.Code(err) != codes.InvalidArgument {
-				t.Fatalf("CreatePlayer error = %v, want InvalidArgument", err)
-			}
-		})
-	}
+const (
+	playerID  = "11111111-1111-4111-8111-111111111111"
+	teamID    = "22222222-2222-4222-8222-222222222222"
+	managerID = "66666666-6666-4666-8666-666666666666"
+)
+
+type repo struct{}
+
+func (repo) Create(_ context.Context, p domain.Player) (domain.Player, error) {
+	p.ID = playerID
+	return p, nil
+}
+func (repo) Get(_ context.Context, id string) (domain.Player, error) {
+	return domain.Player{ID: id, TeamID: teamID, GivenName: "Sonam"}, nil
+}
+func (repo) List(context.Context, string, int, int) ([]domain.Player, bool, error) {
+	return []domain.Player{{ID: playerID}, {ID: playerID}}, true, nil
+}
+func (repo) Update(_ context.Context, p domain.Player) (domain.Player, error) { return p, nil }
+
+type teams struct{}
+
+func (teams) Get(_ context.Context, id string) (domain.TeamRef, error) {
+	return domain.TeamRef{ID: id, ManagerID: managerID}, nil
 }
 
-func TestUpdatePlayerRequiresIDAndNames(t *testing.T) {
-	server := New(nil)
-	tests := map[string]*v1.UpdatePlayerRequest{
-		"empty":             {},
-		"missing id":        {GivenName: "Sonam", FamilyName: "Choki"},
-		"missing given":     {Id: "player-id", FamilyName: "Choki"},
-		"missing family":    {Id: "player-id", GivenName: "Sonam"},
-		"whitespace values": {Id: " ", GivenName: " ", FamilyName: " "},
-	}
-	for name, req := range tests {
-		t.Run(name, func(t *testing.T) {
-			if _, err := server.UpdatePlayer(context.Background(), req); status.Code(err) != codes.InvalidArgument {
-				t.Fatalf("UpdatePlayer error = %v, want InvalidArgument", err)
-			}
-		})
-	}
+func as(id, role string) context.Context {
+	return servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: id, Role: role})
 }
 
-func TestListPlayersRejectsInvalidPageTokenBeforeQuery(t *testing.T) {
-	server := New(nil)
-	for _, token := range []string{"invalid", "-1"} {
-		t.Run(token, func(t *testing.T) {
-			if _, err := server.ListPlayers(context.Background(), &v1.ListPlayersRequest{PageToken: token}); status.Code(err) != codes.InvalidArgument {
-				t.Fatalf("ListPlayers error = %v, want InvalidArgument", err)
-			}
-		})
+func TestPlayerRPCs(t *testing.T) {
+	s := New(app.New(repo{}, teams{}))
+	manager := as(managerID, core.RoleTeamManager)
+	created, err := s.CreatePlayer(manager, &v1.CreatePlayerRequest{TeamId: teamID, GivenName: "Karma", ShirtNumber: "07"})
+	if err != nil || created.GetPlayer().GetShirtNumber() != "7" || created.GetPlayer().GetId() != playerID {
+		t.Fatalf("create: %v %+v", err, created)
 	}
-}
-
-func TestPageDefaultsCapsAndParsesOffset(t *testing.T) {
-	tests := []struct {
-		name       string
-		size       int32
-		token      string
-		wantSize   int32
-		wantOffset int
-	}{
-		{name: "default", wantSize: 50},
-		{name: "cap", size: 500, wantSize: 100},
-		{name: "offset", size: 25, token: "75", wantSize: 25, wantOffset: 75},
+	if _, err := s.CreatePlayer(context.Background(), &v1.CreatePlayerRequest{TeamId: teamID, GivenName: "Karma"}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("anonymous create: %v", err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			size, offset, err := page(tt.size, tt.token)
-			if err != nil || size != tt.wantSize || offset != tt.wantOffset {
-				t.Fatalf("page() = (%d, %d, %v), want (%d, %d, nil)", size, offset, err, tt.wantSize, tt.wantOffset)
-			}
-		})
+	if _, err := s.CreatePlayer(as("o", core.RoleMatchOfficial), &v1.CreatePlayerRequest{TeamId: teamID, GivenName: "Karma"}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("official create: %v", err)
 	}
-	for _, token := range []string{"invalid", "-1"} {
-		if _, _, err := page(10, token); status.Code(err) != codes.InvalidArgument {
-			t.Fatalf("page(%q) error = %v, want InvalidArgument", token, err)
-		}
+	updated, err := s.UpdatePlayer(manager, &v1.UpdatePlayerRequest{Id: playerID, GivenName: "Sonam", FamilyName: "Choki", ShirtNumber: "10"})
+	if err != nil || updated.GetPlayer().GetFamilyName() != "Choki" || updated.GetPlayer().GetTeamId() != teamID {
+		t.Fatalf("update: %v %+v", err, updated)
 	}
-}
-
-func TestPlayerCRUDAndPagination(t *testing.T) {
-	db := testdb.New(t, "../../../migrations")
-	server := New(db)
-	ctx := context.Background()
-	teamID := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-
-	first, err := server.CreatePlayer(ctx, &v1.CreatePlayerRequest{TeamId: teamID, GivenName: " Sonam ", FamilyName: " Choki ", ShirtNumber: " 7 "})
-	if err != nil {
-		t.Fatalf("CreatePlayer() error = %v", err)
+	if _, err := s.UpdatePlayer(context.Background(), &v1.UpdatePlayerRequest{Id: playerID, GivenName: "Sonam"}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("anonymous update: %v", err)
 	}
-	if first.GetPlayer().GetGivenName() != "Sonam" || first.GetPlayer().GetFamilyName() != "Choki" || first.GetPlayer().GetShirtNumber() != "7" || first.GetPlayer().GetCreatedAt() == nil {
-		t.Fatalf("CreatePlayer() returned untrimmed or incomplete player: %+v", first.GetPlayer())
+	if _, err := s.UpdatePlayer(manager, &v1.UpdatePlayerRequest{Id: playerID, GivenName: "Sonam", ShirtNumber: "100"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("invalid update: %v", err)
 	}
-	second, err := server.CreatePlayer(ctx, &v1.CreatePlayerRequest{TeamId: teamID, GivenName: "Pema", FamilyName: "Wangmo"})
-	if err != nil {
-		t.Fatalf("CreatePlayer() second player error = %v", err)
+	if got, err := s.GetPlayer(as("v", core.RoleViewer), &v1.GetPlayerRequest{Id: playerID}); err != nil || got.GetPlayer().GetGivenName() != "Sonam" {
+		t.Fatalf("get: %v", err)
 	}
-
-	got, err := server.GetPlayer(ctx, &v1.GetPlayerRequest{Id: first.GetPlayer().GetId()})
-	if err != nil || got.GetPlayer().GetId() != first.GetPlayer().GetId() {
-		t.Fatalf("GetPlayer() = (%+v, %v), want first player", got, err)
+	if _, err := s.GetPlayer(as("v", core.RoleViewer), &v1.GetPlayerRequest{Id: "x"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("bad id: %v", err)
 	}
-	updated, err := server.UpdatePlayer(ctx, &v1.UpdatePlayerRequest{Id: first.GetPlayer().GetId(), GivenName: "Sonam D.", FamilyName: "Choki", ShirtNumber: "10"})
-	if err != nil || updated.GetPlayer().GetGivenName() != "Sonam D." || updated.GetPlayer().GetShirtNumber() != "10" {
-		t.Fatalf("UpdatePlayer() = (%+v, %v), want updated player", updated, err)
+	list, err := s.ListPlayers(as("v", core.RoleViewer), &v1.ListPlayersRequest{TeamId: teamID, PageSize: 2})
+	if err != nil || len(list.GetPlayers()) != 2 || list.GetNextPageToken() != "2" {
+		t.Fatalf("list: %v %+v", err, list)
 	}
-
-	page1, err := server.ListPlayers(ctx, &v1.ListPlayersRequest{TeamId: teamID, PageSize: 1})
-	if err != nil || len(page1.GetPlayers()) != 1 || page1.GetNextPageToken() != "1" {
-		t.Fatalf("ListPlayers() first page = (%+v, %v), want one player and next token 1", page1, err)
+	if _, err := s.ListPlayers(as("v", core.RoleViewer), &v1.ListPlayersRequest{PageToken: "bad"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatal("bad token accepted")
 	}
-	page2, err := server.ListPlayers(ctx, &v1.ListPlayersRequest{TeamId: teamID, PageSize: 1, PageToken: page1.GetNextPageToken()})
-	if err != nil || len(page2.GetPlayers()) != 1 || page2.GetNextPageToken() != "" || page2.GetPlayers()[0].GetId() != second.GetPlayer().GetId() {
-		t.Fatalf("ListPlayers() second page = (%+v, %v), want second player and no next token", page2, err)
-	}
-
-	if _, err := server.GetPlayer(ctx, &v1.GetPlayerRequest{Id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}); status.Code(err) != codes.NotFound {
-		t.Fatalf("GetPlayer() missing error = %v, want NotFound", err)
-	}
-	if _, err := server.GetPlayer(ctx, &v1.GetPlayerRequest{Id: "bad-id"}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("GetPlayer() invalid id error = %v, want InvalidArgument", err)
-	}
-	if _, err := server.UpdatePlayer(ctx, &v1.UpdatePlayerRequest{Id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", GivenName: "No", FamilyName: "Player"}); status.Code(err) != codes.NotFound {
-		t.Fatalf("UpdatePlayer() missing error = %v, want NotFound", err)
-	}
-	if _, err := server.UpdatePlayer(ctx, &v1.UpdatePlayerRequest{Id: "bad-id", GivenName: "Bad", FamilyName: "ID"}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("UpdatePlayer() invalid id error = %v, want InvalidArgument", err)
-	}
-	if _, err := server.CreatePlayer(ctx, &v1.CreatePlayerRequest{TeamId: "bad-id", GivenName: "Bad", FamilyName: "Team"}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("CreatePlayer() invalid team error = %v, want InvalidArgument", err)
-	}
-}
-
-func TestPlayerDatabaseErrors(t *testing.T) {
-	db := testdb.New(t, "../../../migrations")
-	if err := db.Close(); err != nil {
-		t.Fatalf("close test database: %v", err)
-	}
-	server := New(db)
-	ctx := context.Background()
-	if _, err := server.CreatePlayer(ctx, &v1.CreatePlayerRequest{TeamId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", GivenName: "A", FamilyName: "B"}); status.Code(err) != codes.Internal {
-		t.Fatalf("CreatePlayer() database error = %v, want Internal", err)
-	}
-	if _, err := server.GetPlayer(ctx, &v1.GetPlayerRequest{Id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}); status.Code(err) != codes.Internal {
-		t.Fatalf("GetPlayer() database error = %v, want Internal", err)
-	}
-	if _, err := server.ListPlayers(ctx, &v1.ListPlayersRequest{}); status.Code(err) != codes.Internal {
-		t.Fatalf("ListPlayers() database error = %v, want Internal", err)
-	}
-	if _, err := server.UpdatePlayer(ctx, &v1.UpdatePlayerRequest{Id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", GivenName: "A", FamilyName: "B"}); status.Code(err) != codes.Internal {
-		t.Fatalf("UpdatePlayer() database error = %v, want Internal", err)
+	if _, err := s.ListPlayers(as("v", core.RoleViewer), &v1.ListPlayersRequest{TeamId: "x"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatal("bad team filter accepted")
 	}
 }

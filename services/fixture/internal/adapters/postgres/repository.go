@@ -242,8 +242,9 @@ func (r *Repository) AdvanceKnockout(ctx context.Context, event domain.MatchFina
 	return fixture, true, tx.Commit()
 }
 
-func (r *Repository) LinkMatch(ctx context.Context, fixtureID, matchID string) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE fixtures SET match_id=$2 WHERE id=$1 AND match_id IS NULL`, fixtureID, matchID)
+func (r *Repository) LinkMatch(ctx context.Context, fixture domain.Fixture) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE fixtures SET match_id=$2,venue_id=NULLIF($3,'')::uuid,venue_name=$4,kickoff=$5 WHERE id=$1 AND match_id IS NULL`,
+		fixture.ID, fixture.MatchID, fixture.VenueID, fixture.VenueName, fixture.Kickoff)
 	return err
 }
 

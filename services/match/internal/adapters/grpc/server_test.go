@@ -7,7 +7,6 @@ import (
 	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
-	"github.com/drukleague/platform/packages/servicekit/core"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	"github.com/drukleague/platform/services/match/internal/app"
 	"github.com/drukleague/platform/services/match/internal/domain"
@@ -72,9 +71,9 @@ func TestCreateMatch(t *testing.T) {
 	if _, err := server(repo{err: domain.ErrConflict}).CreateMatch(admin(), &v1.CreateMatchRequest{TournamentId: tournament, HomeTeamId: home, AwayTeamId: away, Kickoff: timestamppb.Now()}); status.Code(err) != codes.AlreadyExists {
 		t.Fatalf("clash: %v", err)
 	}
-	serviceCtx := servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: "service:fixture-service", Username: "fixture-service", Role: core.RoleService})
-	if _, err := s.CreateMatch(serviceCtx, &v1.CreateMatchRequest{TournamentId: tournament, HomeTeamId: home, AwayTeamId: away, Kickoff: timestamppb.Now()}); err != nil {
-		t.Fatalf("fixture service create: %v", err)
+	clash := domain.Clash("venue Changlimithang", time.Date(2026, 11, 1, 4, 0, 0, 0, time.UTC))
+	if _, err := server(repo{err: clash}).CreateMatch(admin(), &v1.CreateMatchRequest{TournamentId: tournament, HomeTeamId: home, AwayTeamId: away, Kickoff: timestamppb.Now()}); status.Code(err) != codes.AlreadyExists || status.Convert(err).Message() != "venue Changlimithang already has a match at 2026-11-01 04:00 UTC" {
+		t.Fatalf("clash detail should reach the caller: %v", err)
 	}
 }
 

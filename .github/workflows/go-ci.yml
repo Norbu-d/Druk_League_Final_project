@@ -34,7 +34,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.10'
+          go-version: '1.26.11'
           cache-dependency-path: |
             **/go.sum
 
@@ -100,7 +100,7 @@ jobs:
       - name: Set up Go for security analyzers
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.10'
+          go-version: '1.26.11'
           cache-dependency-path: |
             **/go.sum
 
@@ -188,7 +188,7 @@ jobs:
         shell: bash
         run: |
           for attempt in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8080/healthz >/dev/null; then
+            if curl --fail --silent http://127.0.0.1:8079/healthz >/dev/null; then
               exit 0
             fi
             sleep 2
@@ -203,7 +203,7 @@ jobs:
 
       - name: Load test login and public standings
         env:
-          API_BASE_URL: http://127.0.0.1:8080
+          API_BASE_URL: http://127.0.0.1:8079
         run: k6 run tests/performance/api-login-standings.js
 
       - name: Stop the test stack
@@ -219,7 +219,7 @@ jobs:
       JWT_SECRET: ci-only-audit-jwt-secret
       BOOTSTRAP_ADMIN_USER: ci-audit-admin
       BOOTSTRAP_ADMIN_PASSWORD: ci-only-audit-admin-password
-      API_BASE_URL: http://127.0.0.1:8080
+      API_BASE_URL: http://127.0.0.1:8079
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -256,7 +256,7 @@ jobs:
       - name: Start the notification end-to-end service stack
         run: >-
           docker compose --file deploy/docker-compose.yml up -d
-          postgres nats db-init auth user team tournament venue dzongkhag fixture official
+          postgres nats db-init auth user team player tournament venue dzongkhag fixture official
           match score standings notification report
 
       - name: Wait for the split services to finish starting

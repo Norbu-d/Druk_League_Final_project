@@ -7,112 +7,70 @@ import (
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	"github.com/drukleague/platform/packages/servicekit/core"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
-	"github.com/drukleague/platform/packages/servicekit/testdb"
+	"github.com/drukleague/platform/services/team/internal/app"
+	"github.com/drukleague/platform/services/team/internal/domain"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 const (
-	managerA     = "11111111-1111-4111-8111-111111111111"
-	managerB     = "22222222-2222-4222-8222-222222222222"
-	tournamentID = "33333333-3333-4333-8333-333333333333"
+	teamID    = "11111111-1111-4111-8111-111111111111"
+	managerID = "55555555-5555-4555-8555-555555555555"
 )
 
-type teamTestState struct {
-	server      *Server
-	managerCtx  context.Context
-	managerBCtx context.Context
-	adminCtx    context.Context
-	teamA       *v1.Team
-	teamB       *v1.Team
+type repo struct{}
+
+func (repo) Create(_ context.Context, t domain.Team) (domain.Team, error) {
+	t.ID = teamID
+	return t, nil
+}
+func (repo) Get(_ context.Context, id string) (domain.Team, error) {
+	return domain.Team{ID: id, Name: "Paro FC", ManagerID: managerID}, nil
+}
+func (repo) List(context.Context, domain.Filter, int, int) ([]domain.Team, bool, error) {
+	return []domain.Team{{ID: teamID}, {ID: teamID}}, true, nil
 }
 
-func newTeamTestState(t *testing.T) teamTestState {
-	t.Helper()
-	server := New(testdb.New(t, "../../../migrations"))
-	managerCtx := servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: managerA, Role: core.RoleTeamManager})
-	managerBCtx := servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: managerB, Role: core.RoleTeamManager})
-	adminCtx := servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: "44444444-4444-4444-8444-444444444444", Role: core.RoleSuperAdmin})
-	teamA := createTeamForTest(t, server, managerCtx, "Thimphu FC", "thf", "Thimphu", tournamentID)
-	teamB := createTeamForTest(t, server, managerBCtx, "Paro FC", "par", "Paro", tournamentID)
-	createTeamForTest(t, server, adminCtx, "Free Agents", "free", "Punakha", "")
-	return teamTestState{server: server, managerCtx: managerCtx, managerBCtx: managerBCtx, adminCtx: adminCtx, teamA: teamA, teamB: teamB}
+type tournaments struct{}
+
+func (tournaments) Get(_ context.Context, id string) (domain.TournamentRef, error) {
+	return domain.TournamentRef{ID: id, Status: domain.TournamentOpen}, nil
 }
 
-func createTeamForTest(t *testing.T, server *Server, ctx context.Context, name, code, district, tournament string) *v1.Team {
-	t.Helper()
-	response, err := server.CreateTeam(ctx, &v1.CreateTeamRequest{Name: name, ShortCode: code, Dzongkhag: district, TournamentId: tournament})
-	if err != nil {
-		t.Fatalf("create team %q: %v", name, err)
-	}
-	return response.GetTeam()
+type dz struct{}
+
+func (dz) Canonical(context.Context, string) (string, error) { return "Paro", nil }
+
+func as(id, role string) context.Context {
+	return servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: id, Role: role})
 }
 
-func TestCreateTeamAuthorizationAndValidation(t *testing.T) {
-	state := newTeamTestState(t)
-	if state.teamA.GetManagerId() != managerA || state.teamB.GetManagerId() != managerB {
-		t.Fatalf("manager-created teams have incorrect owners: A=%q B=%q", state.teamA.GetManagerId(), state.teamB.GetManagerId())
+func TestTeamRPCs(t *testing.T) {
+	s := New(app.New(repo{}, tournaments{}, dz{}))
+	created, err := s.CreateTeam(as(managerID, core.RoleTeamManager), &v1.CreateTeamRequest{Name: "Paro FC", ShortCode: "pfc", Dzongkhag: "paro"})
+	if err != nil || created.GetTeam().GetManagerId() != managerID || created.GetTeam().GetShortCode() != "PFC" {
+		t.Fatalf("create: %v %+v", err, created)
 	}
-	if _, err := state.server.CreateTeam(context.Background(), &v1.CreateTeamRequest{}); status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("unauthenticated create code = %v, want unauthenticated", status.Code(err))
+	if _, err := s.CreateTeam(context.Background(), &v1.CreateTeamRequest{Name: "Paro FC", ShortCode: "PFC", Dzongkhag: "Paro"}); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("anonymous create: %v", err)
 	}
-	viewer := servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: managerA, Role: core.RoleViewer})
-	if _, err := state.server.CreateTeam(viewer, &v1.CreateTeamRequest{}); status.Code(err) != codes.PermissionDenied {
-		t.Fatalf("viewer create code = %v, want permission denied", status.Code(err))
+	if _, err := s.CreateTeam(as("v", core.RoleViewer), &v1.CreateTeamRequest{Name: "Paro FC", ShortCode: "PFC", Dzongkhag: "Paro"}); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("viewer create: %v", err)
 	}
-	if _, err := state.server.CreateTeam(state.managerCtx, &v1.CreateTeamRequest{Name: " ", ShortCode: "x", Dzongkhag: "Thimphu"}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("invalid team create code = %v, want invalid argument", status.Code(err))
+	if got, err := s.GetTeam(as("a", core.RoleSuperAdmin), &v1.GetTeamRequest{Id: teamID}); err != nil || got.GetTeam().GetManagerId() != managerID {
+		t.Fatalf("get: %v", err)
 	}
-	badManager := servicekit.WithIdentity(context.Background(), servicekit.Identity{ID: "not-a-uuid", Role: core.RoleTeamManager})
-	if _, err := state.server.CreateTeam(badManager, &v1.CreateTeamRequest{Name: "Bad", ShortCode: "bad", Dzongkhag: "Thimphu"}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("invalid manager create code = %v, want invalid argument", status.Code(err))
+	if _, err := s.GetTeam(as("a", core.RoleSuperAdmin), &v1.GetTeamRequest{Id: "x"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("bad id: %v", err)
 	}
-	if _, err := state.server.CreateTeam(state.adminCtx, &v1.CreateTeamRequest{Name: "Bad Tournament", ShortCode: "bad-t", Dzongkhag: "Thimphu", TournamentId: "not-a-uuid"}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("invalid tournament code = %v, want invalid argument", status.Code(err))
+	list, err := s.ListTeams(as("a", core.RoleService), &v1.ListTeamsRequest{PageSize: 2})
+	if err != nil || len(list.GetTeams()) != 2 || list.GetNextPageToken() != "2" {
+		t.Fatalf("list: %v %+v", err, list)
 	}
-}
-
-func TestGetTeamRestrictsManagersToOwnedTeams(t *testing.T) {
-	state := newTeamTestState(t)
-	if _, err := state.server.GetTeam(state.managerCtx, &v1.GetTeamRequest{}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("empty team id code = %v, want invalid argument", status.Code(err))
+	if _, err := s.ListTeams(as("a", core.RoleService), &v1.ListTeamsRequest{PageToken: "bad"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatal("bad token accepted")
 	}
-	read, err := state.server.GetTeam(state.managerCtx, &v1.GetTeamRequest{Id: state.teamA.GetId()})
-	if err != nil || read.GetTeam().GetManagerId() != managerA {
-		t.Fatalf("get owned team: response=%+v err=%v", read, err)
-	}
-	if _, err := state.server.GetTeam(state.managerCtx, &v1.GetTeamRequest{Id: state.teamB.GetId()}); status.Code(err) != codes.NotFound {
-		t.Fatalf("foreign manager team code = %v, want not found", status.Code(err))
-	}
-	if _, err := state.server.GetTeam(state.managerCtx, &v1.GetTeamRequest{Id: "66666666-6666-4666-8666-666666666666"}); status.Code(err) != codes.NotFound {
-		t.Fatalf("missing team code = %v, want not found", status.Code(err))
-	}
-	if _, err := state.server.GetTeam(state.managerCtx, &v1.GetTeamRequest{Id: "not-a-uuid"}); status.Code(err) != codes.Internal {
-		t.Fatalf("invalid database id code = %v, want internal", status.Code(err))
-	}
-	if _, err := state.server.GetTeam(context.Background(), &v1.GetTeamRequest{Id: state.teamA.GetId()}); status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("unauthenticated get code = %v, want unauthenticated", status.Code(err))
-	}
-}
-
-func TestListTeamsRestrictsManagersAndPaginates(t *testing.T) {
-	state := newTeamTestState(t)
-	owned, err := state.server.ListTeams(state.managerCtx, &v1.ListTeamsRequest{ManagerId: managerB, PageSize: 10})
-	if err != nil || len(owned.GetTeams()) != 1 || owned.GetTeams()[0].GetManagerId() != managerA {
-		t.Fatalf("manager list was not restricted to caller: response=%+v err=%v", owned, err)
-	}
-	firstPage, err := state.server.ListTeams(state.adminCtx, &v1.ListTeamsRequest{PageSize: 2})
-	if err != nil || len(firstPage.GetTeams()) != 2 || firstPage.GetNextPageToken() != "2" {
-		t.Fatalf("first team page: response=%+v err=%v", firstPage, err)
-	}
-	secondPage, err := state.server.ListTeams(state.adminCtx, &v1.ListTeamsRequest{PageSize: 2, PageToken: firstPage.GetNextPageToken()})
-	if err != nil || len(secondPage.GetTeams()) != 1 || secondPage.GetNextPageToken() != "" {
-		t.Fatalf("second team page: response=%+v err=%v", secondPage, err)
-	}
-	if _, err := state.server.ListTeams(context.Background(), &v1.ListTeamsRequest{}); status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("unauthenticated list code = %v, want unauthenticated", status.Code(err))
-	}
-	if _, err := state.server.ListTeams(state.adminCtx, &v1.ListTeamsRequest{PageToken: "bad"}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("invalid page token code = %v, want invalid argument", status.Code(err))
+	if _, err := s.ListTeams(as("a", core.RoleService), &v1.ListTeamsRequest{ManagerId: "x"}); status.Code(err) != codes.InvalidArgument {
+		t.Fatal("bad manager filter accepted")
 	}
 }

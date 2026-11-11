@@ -105,6 +105,27 @@ func TestLargeLeagueSpacing(t *testing.T) {
 	}
 }
 
+func TestAlternatives(t *testing.T) {
+	kickoff := time.Date(2026, 11, 1, 4, 0, 0, 0, time.UTC)
+	planned := Fixture{ID: "f1", VenueID: "v2", VenueName: "Lungtenphu", Kickoff: kickoff}
+	slots := Alternatives(planned, []Venue{{ID: "v1", Name: "Changlimithang"}, {ID: "v2", Name: "Lungtenphu"}})
+	want := []struct {
+		venue string
+		shift time.Duration
+	}{{"v2", 0}, {"v1", 0}, {"v2", 3 * time.Hour}, {"v1", 3 * time.Hour}, {"v2", 6 * time.Hour}, {"v1", 6 * time.Hour}}
+	if len(slots) != len(want) {
+		t.Fatalf("got %d slots", len(slots))
+	}
+	for i, w := range want {
+		if slots[i].VenueID != w.venue || !slots[i].Kickoff.Equal(kickoff.Add(w.shift)) || slots[i].ID != "f1" {
+			t.Fatalf("slot %d: %+v", i, slots[i])
+		}
+	}
+	if none := Alternatives(Fixture{Kickoff: kickoff}, nil); len(none) != len(SameDaySlots) || none[0].VenueID != "" {
+		t.Fatalf("without venues only the kickoff moves: %+v", none)
+	}
+}
+
 func TestScheduleErrors(t *testing.T) {
 	if _, err := Schedule("t", teams(1), nil, start, FormatRoundRobin); !errors.Is(err, core.ErrPrecondition) {
 		t.Fatalf("one team: %v", err)

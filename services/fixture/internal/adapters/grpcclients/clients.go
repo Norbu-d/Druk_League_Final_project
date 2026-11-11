@@ -97,7 +97,7 @@ func (m *Matches) Create(ctx context.Context, f domain.Fixture) (string, error) 
 			if id, found, lookupErr := m.findExact(ctx, f); lookupErr == nil && found {
 				return id, nil
 			}
-			return "", core.Conflict("a team or venue already has a match at " + f.Kickoff.Format("2006-01-02 15:04") + " UTC")
+			return "", core.Conflict("a team or venue already has a match at " + f.Kickoff.UTC().Format("2006-01-02 15:04") + " UTC")
 		}
 		return "", servicekit.FromStatus(err, "match")
 	}

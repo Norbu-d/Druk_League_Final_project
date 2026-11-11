@@ -42,6 +42,16 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	if _, err := repo.Create(ctx, domain.Match{TournamentID: tournament, HomeTeamID: home, AwayTeamID: third, Kickoff: kickoff.Add(24 * time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
+	// Overlaps within the two-hour slot clash too, and the error names what is busy.
+	if _, err := repo.Create(ctx, domain.Match{TournamentID: tournament, HomeTeamID: third, AwayTeamID: official, Venue: "changlimithang", Kickoff: kickoff.Add(90 * time.Minute)}); !errors.Is(err, domain.ErrConflict) || err.Error() != "match scheduling conflict: venue changlimithang already has a match at 2026-11-01 10:00 UTC" {
+		t.Fatalf("venue overlap (case-insensitive): %v", err)
+	}
+	if _, err := repo.Create(ctx, domain.Match{TournamentID: tournament, HomeTeamID: away, AwayTeamID: third, Kickoff: kickoff.Add(-time.Hour)}); !errors.Is(err, domain.ErrConflict) || err.Error() != "match scheduling conflict: a team already has a match at 2026-11-01 10:00 UTC" {
+		t.Fatalf("team overlap before kickoff: %v", err)
+	}
+	if _, err := repo.Create(ctx, domain.Match{TournamentID: tournament, HomeTeamID: third, AwayTeamID: official, Venue: "Changlimithang", Kickoff: kickoff.Add(domain.SlotLength)}); err != nil {
+		t.Fatalf("a match exactly one slot later should fit: %v", err)
+	}
 
 	got, err := repo.Get(ctx, created.ID)
 	if err != nil || !got.Kickoff.Equal(kickoff) || got.Venue != "Changlimithang" {
@@ -56,13 +66,24 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	}
 	after := kickoff.Add(time.Hour)
 	page, more, err = repo.List(ctx, "", &after, 10, 0)
-	if err != nil || len(page) != 1 || more {
+	if err != nil || len(page) != 2 || more {
 		t.Fatalf("after filter: %v %d %v", err, len(page), more)
 	}
 
 	assigned, err := repo.AssignOfficial(ctx, created.ID, official)
 	if err != nil || assigned.OfficialID != official {
 		t.Fatalf("assign: %+v %v", assigned, err)
+	}
+	// The same official cannot also take a match that overlaps this one.
+	overlapping, err := repo.Create(ctx, domain.Match{TournamentID: tournament, HomeTeamID: "77777777-7777-4777-8777-777777777777", AwayTeamID: "88888888-8888-4888-8888-888888888888", Kickoff: kickoff.Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AssignOfficial(ctx, overlapping.ID, official); !errors.Is(err, domain.ErrConflict) || err.Error() != "match scheduling conflict: the official already has a match at 2026-11-01 10:00 UTC" {
+		t.Fatalf("official overlap: %v", err)
+	}
+	if again, err := repo.AssignOfficial(ctx, created.ID, official); err != nil || again.OfficialID != official {
+		t.Fatalf("re-assigning the same match must not clash with itself: %v", err)
 	}
 	if _, err := repo.AssignOfficial(ctx, third, official); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("assign missing: %v", err)
@@ -80,6 +101,9 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	}
 	if _, err := repo.AssignOfficial(ctx, created.ID, official); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("assign to completed match: %v", err)
+	}
+	if _, err := repo.AssignOfficial(ctx, overlapping.ID, official); err != nil {
+		t.Fatalf("a completed match no longer blocks the official: %v", err)
 	}
 	if !IsInvalidUUID(errors.New(`invalid input syntax for type uuid: "x"`)) || IsInvalidUUID(nil) {
 		t.Fatal("uuid error detection wrong")

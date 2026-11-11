@@ -20,6 +20,24 @@ const (
 	matchID    = "77777777-7777-4777-8777-777777777777"
 )
 
+func linkMatch(t *testing.T, repo *Repository, ctx context.Context, tournamentID, fixtureID, matchID string) {
+	t.Helper()
+	fixtures, _, err := repo.List(ctx, tournamentID, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fixture := range fixtures {
+		if fixture.ID == fixtureID {
+			fixture.MatchID = matchID
+			if err := repo.LinkMatch(ctx, fixture); err != nil {
+				t.Fatal(err)
+			}
+			return
+		}
+	}
+	t.Fatalf("fixture %s not found", fixtureID)
+}
+
 func TestRepositoryAgainstPostgres(t *testing.T) {
 	repo := New(testdb.New(t, "../../../migrations"))
 	ctx := context.Background()
@@ -37,12 +55,21 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	if err != nil || created || len(again) != 3 || again[0].ID != stored[0].ID {
 		t.Fatalf("second save: %v %v %d", err, created, len(again))
 	}
-	if err := repo.LinkMatch(ctx, stored[0].ID, matchID); err != nil {
+	booked := stored[0]
+	booked.MatchID, booked.VenueID, booked.VenueName, booked.Kickoff = matchID, "", "", start.Add(3*time.Hour)
+	if err := repo.LinkMatch(ctx, booked); err != nil {
 		t.Fatal(err)
 	}
 	page, more, err := repo.List(ctx, tournament, 2, 0)
-	if err != nil || len(page) != 2 || !more || page[0].MatchID != matchID || !page[0].Kickoff.Equal(start) {
-		t.Fatalf("list: %v %v %+v", err, more, page)
+	if err != nil || len(page) != 2 || !more || page[0].MatchID != matchID || !page[0].Kickoff.Equal(start.Add(3*time.Hour)) || page[0].VenueID != "" {
+		t.Fatalf("linking should store the slot actually booked: %v %v %+v", err, more, page)
+	}
+	booked.MatchID = "11111111-1111-4111-8111-111111111111"
+	if err := repo.LinkMatch(ctx, booked); err != nil {
+		t.Fatal(err)
+	}
+	if again, _, _ := repo.List(ctx, tournament, 1, 0); again[0].MatchID != matchID {
+		t.Fatal("a linked fixture must not be relinked")
 	}
 	pending, err := repo.PendingEvents(ctx, 10)
 	if err != nil || len(pending) != 1 || pending[0].EventID != eventID {
@@ -79,12 +106,8 @@ func TestKnockoutFinalizedEventsCreateOneNextRoundMatch(t *testing.T) {
 	}
 	matchOne := "66666666-6666-4666-8666-666666666666"
 	matchTwo := "77777777-7777-4777-8777-777777777777"
-	if err := repo.LinkMatch(ctx, fixtures[0].ID, matchOne); err != nil {
-		t.Fatal(err)
-	}
-	if err := repo.LinkMatch(ctx, fixtures[1].ID, matchTwo); err != nil {
-		t.Fatal(err)
-	}
+	linkMatch(t, repo, ctx, knockoutTournament, fixtures[0].ID, matchOne)
+	linkMatch(t, repo, ctx, knockoutTournament, fixtures[1].ID, matchTwo)
 	first := finalizedEvent(knockoutTournament, "88888888-8888-4888-8888-888888888888", matchOne, fixtures[0], 2, 1)
 	if _, created, err := repo.AdvanceKnockout(ctx, first); err != nil || created {
 		t.Fatalf("advanced before both feeders finished: created=%v err=%v", created, err)
@@ -101,9 +124,7 @@ func TestKnockoutFinalizedEventsCreateOneNextRoundMatch(t *testing.T) {
 	if err != nil || !retryCreated || pending.ID != next.ID {
 		t.Fatalf("duplicate event did not return pending match for retry: %+v created=%v err=%v", pending, retryCreated, err)
 	}
-	if err := repo.LinkMatch(ctx, next.ID, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"); err != nil {
-		t.Fatal(err)
-	}
+	linkMatch(t, repo, ctx, knockoutTournament, next.ID, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
 	if _, created, err := repo.AdvanceKnockout(ctx, second); err != nil || created {
 		t.Fatalf("linked duplicate event returned a new match: created=%v err=%v", created, err)
 	}
@@ -160,9 +181,7 @@ func TestLeagueKnockoutWaitsForEveryFinalizedFixture(t *testing.T) {
 	for i := range stored {
 		matchID := fmt.Sprintf("%08x-aaaa-4aaa-8aaa-%012x", i+1, i+1)
 		eventID := fmt.Sprintf("%08x-bbbb-4bbb-8bbb-%012x", i+1, i+1)
-		if err := repo.LinkMatch(ctx, stored[i].ID, matchID); err != nil {
-			t.Fatal(err)
-		}
+		linkMatch(t, repo, ctx, tournamentID, stored[i].ID, matchID)
 		event := finalizedEvent(tournamentID, eventID, matchID, stored[i], 1, 0)
 		_, created, err := repo.AdvanceKnockout(ctx, event)
 		if err != nil {

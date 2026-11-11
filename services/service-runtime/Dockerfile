@@ -1,4 +1,4 @@
-FROM golang:1.26.10-alpine AS build
+FROM golang:1.26.11-alpine AS build
 WORKDIR /src
 COPY packages/servicekit/go.mod packages/servicekit/go.sum ./
 RUN set -eu; \

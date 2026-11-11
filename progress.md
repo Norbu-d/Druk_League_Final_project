@@ -1,6 +1,6 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-11
+**Last updated:** 2026-11-12
 **Project root:** `D:\druk-league`
 **Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the recovered Docker WSL disk started the local Compose stack; 26 long-running containers were up, PostgreSQL and NATS were healthy, and the web page returned HTTP 200 (section 40). This was a startup smoke check, not a rerun of the 29/29 E2E suite. PR #31 merged into `development` on 11 Nov with 17/17 checks passing; local `development` was fast-forwarded to that merge and is clean. PR #2 remains open and unmergeable: its feature branch has a merge conflict with `development`, and its latest SonarCloud check reports Security Rating B (required A). Commit `5d92461` on `feature/norbu-match-engine` contains the BFF cookie-auth and Sonar findings follow-up; its focused Go, JavaScript, PowerShell, Compose-config, and diff checks passed locally. The fixes are not yet integrated into `development`. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. The active Docker disk is now under `D:\docker\DockerDesktopRecovery\DockerDesktopWSL`.
 
@@ -672,7 +672,7 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 ## 34. CI failures on combined branch (9 Nov 2026)
 
 - Reviewed the failed checks for merge commit `3f7b76c`. The Media module-manifest check found `github.com/jackc/pgx/v5` was imported directly but declared indirect; `services/media/go.mod` now declares it directly.
-- Gosec reported G124 on the session and logout cookies because `Secure` is disabled for local HTTP development. Added narrow G124 suppressions documenting that production sets `Secure`.
+- SonarCloud later flagged that the session and logout cookies did not explicitly set `Secure`. PR #2 follow-up now sets `Secure: true` on both cookies and their clearing headers; local-browser acceptance should confirm the cookies are retained on localhost.
 - The Trivy setup action selected `latest` and exited during binary installation without a diagnostic. A pinned binary version also failed silently, so the image scan is being switched to the pinned `aquasec/trivy:0.68.2` container.
 - Buf and k6 setup did not reach lint/tests: GitHub release downloads returned HTTP 504 after retries. These failures need a fresh CI run to determine whether they were transient.
 - Local `go test ./...` passed for Media and API Gateway, and `git diff --check` passed. Docker-backed tests and the full CI run remain pending.
@@ -732,3 +732,36 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Local verification on the PR branch passed: `go test ./...` for BFF, Player, Team, and Tournament; `node --check api.js` and `node --check app.js`; PowerShell parser check for `scripts/bff-smoke.ps1`; `docker compose -f deploy/docker-compose.yml config --quiet`; and `git diff --check`. A transient Windows Go build-temp file lock during parallel execution cleared when Player tests were rerun alone.
 - After the follow-up push, the latest SonarCloud check still fails the quality gate with Security Rating B (required A); the check run returned no actionable annotations. SonarCloud's PR Summary page reported branch analysis is not included in the current plan, so further findings may require the project owner to enable branch analysis or review the check details through the project account.
 - Do not merge PR #2 yet. Reconcile its conflicts with current `development`, inspect the remaining Sonar findings and rerun CI, then confirm GitHub reports no conflicts and all required checks pass. The work in `5d92461` is on the feature branch and is not part of `development` until PR #2 merges.
+
+## 42. PR #2 development sync and conflict resolution (12 Nov 2026)
+
+- Merged `origin/development` into `feature/norbu-match-engine` locally. Preserved the BFF HttpOnly-cookie session flow and the latest development Nginx security, Report/Media routes, registration flow, role-aware UI, and service changes. Fixture scheduling keeps the same-day venue/time conflict fallback and also retains knockout progression from finalized matches.
+- Resolved all 20 conflicted paths; no conflict markers remain. Adapted Fixture fakes and PostgreSQL call sites to the merged repository interface.
+- Local checks passed: `git diff --check`, `node --check` for `api.js`, `app.js`, and `role-permissions.js`, Docker Compose configuration validation, and `go test ./...` for Fixture, Player, Team, Tournament, Match, and the E2E tool module.
+- The merge commit was pushed as `d88eff5`. GitHub now reports the PR branch is mergeable with development; CI is still running, so the PR is not yet merge-ready.
+
+## 43. PR #2 SonarCloud security follow-up (12 Nov 2026)
+
+- The SonarCloud run for `d88eff5` reported two session-cookie findings because `Secure` was set from an environment-dependent boolean. Both session and refresh cookies, including logout-clearing headers, now set `Secure: true`; BFF tests assert the flag. The cookies use HttpOnly and SameSite=Strict as before.
+- Replaced four repeated E2E manager-password literals with one named constant. The initial SonarCloud rerun reported Security Rating A but 3.11% new-code duplication, just over the 3% quality-gate limit.
+- Reduced repeated gRPC dependency-response handling in Player and Team clients to the shared `servicekit.FetchDependency` helper; focused Player and Team module tests pass. The revised PR still needs SonarCloud analysis to confirm the duplication gate result.
+
+## 44. PR #2 Sonar duplication follow-up (12 Nov 2026)
+
+- Added `servicekit.FetchDependency` to centralize gRPC dependency error mapping and required-response extraction; refactored Player→Team and Team→Tournament clients to use it.
+- `go test ./...` passed serially for both Player and Team modules (`GOFLAGS=-p=1`). `git diff --check` passed. Parallel Windows Go test runs encountered temporary executable-file locks during cleanup; serial reruns completed successfully.
+- SonarCloud's last observed scan before this change reported new-code Security Rating A, with duplication still slightly above the gate at 3.11%. This new commit must be pushed and analyzed before claiming the duplication gate or overall quality gate is passing.
+
+## 45. PR #2 CI failure fixes (12 Nov 2026)
+
+- The latest SonarCloud run on `39c7de1` reports Security Rating A and Quality Gate passed; new-code duplication is 1.47%. GitHub reports the PR branch is mergeable without conflicts.
+- Reviewed the supplied Actions log. The Go security scan identified GO-2026-6859 in Go 1.26.10 (fixed in Go 1.26.11). Updated Go CI and the service build/runtime Dockerfiles to Go 1.26.11.
+- The performance and audit E2E jobs target the monolith API, which Compose publishes on host port 8079; the jobs incorrectly targeted the BFF port 8080. Updated their health checks and API_BASE_URL to 8079.
+- The notification E2E stack omitted the Player service even though the scenario calls it; added `player` to the services started by that job.
+- Docker Compose configuration and `git diff --check` pass. Docker Desktop is unavailable in this session, and the Go 1.26.11 toolchain download stalled, so these CI changes have not yet been exercised locally. Push and rerun GitHub Actions to verify the remaining checks.
+
+## 46. PR #2 security scan follow-up (12 Nov 2026)
+
+- The supplied gosec output identified G706 log-injection risk in BFF request logging. Gosec still flagged client-controlled values after the URL path was removed, so the BFF now generates request IDs at its HTTP boundary and logs only response status and duration. Added a regression check that a client-provided ID is not reflected. The local gosec 2.30.0 scan now passes with zero findings, and the BFF HTTP API tests pass.
+- The supplied coverage output shows all displayed module totals from `services/official` onward above 80%, but it omits earlier modules where the coverage threshold failure occurred. A local all-module coverage attempt could not complete in this environment; Docker is unavailable and the Linux shell has Go 1.22.2 pinned with `GOTOOLCHAIN=local`.
+- The BFF security follow-up still needs to be committed and rescanned. The first failing module's coverage summary is still needed to diagnose the separate coverage failure.

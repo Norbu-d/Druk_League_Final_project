@@ -1,6 +1,6 @@
 // Command e2e is an end-to-end smoke test of the split services. It runs inside the Compose
 // network (service ports are not published) and exercises Auth, User, Tournament, Team,
-// Venue, Fixture, Official, Match, Score, Standings and Notification, including NATS event flow.
+// Player, Venue, Fixture, Official, Match, Score, Standings and Notification, including NATS event flow.
 //
 //	docker run --rm --network deploy_default -v D:/druk-league:/src -w /src/tools/e2e \
 //	  -e E2E_ADMIN_PASSWORD=... drukleague-service-builder:local go run .
@@ -22,6 +22,7 @@ import (
 	fixturev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
 	notificationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/notification/v1"
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
+	playerv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/player/v1"
 	registrationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1"
 	reportv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/report/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
@@ -36,6 +37,8 @@ import (
 )
 
 var failures int
+
+const managerPassword = "manager-password-1"
 
 func check(name string, ok bool, detail ...any) {
 	if ok {
@@ -81,6 +84,7 @@ func main() {
 	users := v1.NewUserServiceClient(dial("user"))
 	tournaments := v1.NewTournamentServiceClient(dial("tournament"))
 	teams := v1.NewTeamServiceClient(dial("team"))
+	players := playerv1.NewPlayerServiceClient(dial("player"))
 	registrations := registrationv1.NewRegistrationServiceClient(dial("registration"))
 	venues := venuev1.NewVenueServiceClient(dial("venue"))
 	fixtures := fixturev1.NewFixtureServiceClient(dial("fixture"))
@@ -125,8 +129,8 @@ func main() {
 	managerIDs := make([]string, 4)
 	for i := range managerTokens {
 		managerName := fmt.Sprintf("manager-%d-%s", i, run)
-		manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: "manager-password-1", Role: "team_manager"})).GetUser()
-		managerLogin := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: "manager-password-1"}))
+		manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: managerPassword, Role: "team_manager"})).GetUser()
+		managerLogin := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: managerPassword}))
 		managerIDs[i], managerTokens[i] = manager.GetId(), managerLogin.GetAccessToken()
 	}
 
@@ -155,7 +159,7 @@ func main() {
 	}
 
 	// --- Approved registrations feed fixture generation (Part 3)
-	start := runStarted.AddDate(0, 3, 0).Truncate(time.Second)
+	start := runStarted.AddDate(0, 3, 0).Truncate(time.Minute)
 	generated := must(fixtures.GenerateFixtures(as(admin), &fixturev1.GenerateFixturesRequest{TournamentId: tournament.GetId(), StartsAt: timestamppb.New(start)}))
 	check("4 teams produce 6 fixtures, all linked to matches", generated.GetCreatedCount() == 6 && len(generated.GetFixtures()) == 6 && allLinked(generated.GetFixtures()), generated.GetCreatedCount())
 	districtVenues := must(venues.ListVenues(as(admin), &venuev1.ListVenuesRequest{Dzongkhag: tournament.GetDzongkhag(), PageSize: 100}))
@@ -263,6 +267,31 @@ func main() {
 	check("fixture JSON export includes every generated fixture", fixtureReport.GetStatus() == "complete" && strings.Count(fixtureJSON, `"tournament_id"`) == 6 && strings.Contains(fixtureJSON, `"home_team_id"`), fixtureJSON)
 	_, err = officials.AssignOfficial(as(admin), &officialv1.AssignOfficialRequest{MatchId: matchID, OfficialUserId: official.GetId()})
 	check("completed match cannot be reassigned", code(err) == codes.AlreadyExists, err)
+
+	// --- Tournament, Team ownership and Player rosters (a separate tournament, so the fixture counts above are unaffected)
+	_, err = tournaments.CreateTournament(as(admin), &v1.CreateTournamentRequest{Name: "e2e cup " + run, Sport: "football", Season: "2026", Dzongkhag: "Paro"})
+	check("tournament name is unique per season", code(err) == codes.AlreadyExists, err)
+	_, err = teams.CreateTeam(as(admin), &v1.CreateTeamRequest{Name: "Ghost FC " + run, ShortCode: "GHOST", Dzongkhag: "Paro", TournamentId: "00000000-0000-4000-8000-000000000000"})
+	check("team in a nonexistent tournament is rejected", code(err) == codes.NotFound, err)
+	_, err = teams.CreateTeam(as(admin), &v1.CreateTeamRequest{Name: "Taken " + run, ShortCode: fmt.Sprintf("E0%s", run[len(run)-3:]), Dzongkhag: "Paro", TournamentId: tournament.GetId()})
+	check("short code is unique within a tournament", code(err) == codes.AlreadyExists, err)
+	managerName := "manager-" + run
+	manager := must(users.CreateUser(as(admin), &v1.CreateUserRequest{Username: managerName, Password: managerPassword, Role: "team_manager"})).GetUser()
+	managerToken := must(auth.Login(bg, &authv1.LoginRequest{Username: managerName, Password: managerPassword})).GetAccessToken()
+	_, err = tournaments.CreateTournament(as(managerToken), &v1.CreateTournamentRequest{Name: "Manager Cup " + run, Sport: "football", Season: "2026", Dzongkhag: "Paro"})
+	check("team manager cannot create a tournament", code(err) == codes.PermissionDenied, err)
+	openCup := must(tournaments.CreateTournament(as(admin), &v1.CreateTournamentRequest{Name: "E2E Open Cup " + run, Sport: "football", Season: "2026", Dzongkhag: "paro"})).GetTournament()
+	check("new tournament is open for registration, dzongkhag canonicalised", openCup.GetStatus() == "registration_open" && openCup.GetDzongkhag() == "Paro", openCup)
+	ownTeam := must(teams.CreateTeam(as(managerToken), &v1.CreateTeamRequest{Name: "Paro E2E " + run, ShortCode: "pe2e", Dzongkhag: "paro", TournamentId: openCup.GetId()})).GetTeam()
+	check("team manager owns the team they create", ownTeam.GetManagerId() == manager.GetId() && ownTeam.GetShortCode() == "PE2E", ownTeam)
+	player := must(players.CreatePlayer(as(managerToken), &playerv1.CreatePlayerRequest{TeamId: ownTeam.GetId(), GivenName: "Karma Dorji", ShirtNumber: "07"})).GetPlayer()
+	check("manager adds a player to own team (shirt 07 stored as 7)", player.GetShirtNumber() == "7", player)
+	_, err = players.CreatePlayer(as(managerToken), &playerv1.CreatePlayerRequest{TeamId: ownTeam.GetId(), GivenName: "Pema", ShirtNumber: "7"})
+	check("shirt number is unique within a team", code(err) == codes.AlreadyExists, err)
+	_, err = players.CreatePlayer(as(managerToken), &playerv1.CreatePlayerRequest{TeamId: teamIDs[0], GivenName: "Pema"})
+	check("manager cannot add players to another team", code(err) == codes.PermissionDenied, err)
+	_, err = players.CreatePlayer(as(officialToken), &playerv1.CreatePlayerRequest{TeamId: ownTeam.GetId(), GivenName: "Pema"})
+	check("official cannot add players", code(err) == codes.PermissionDenied, err)
 
 	// --- Logout
 	_, err = auth.RevokeSession(as(officialToken), &authv1.RevokeSessionRequest{})

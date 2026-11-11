@@ -95,6 +95,9 @@ func translate(err error) error {
 		return status.Error(codes.InvalidArgument, "match request is invalid")
 	case errors.Is(err, domain.ErrNotFound):
 		return status.Error(codes.NotFound, "match not found")
+	case errors.Is(err, domain.ErrConflict) && err != domain.ErrConflict:
+		// A clash names what is busy and when, so a caller such as Fixture can pick another slot.
+		return status.Error(codes.AlreadyExists, strings.TrimPrefix(err.Error(), domain.ErrConflict.Error()+": "))
 	case errors.Is(err, domain.ErrConflict):
 		return status.Error(codes.AlreadyExists, "match scheduling conflict or match is finalised")
 	case errors.Is(err, domain.ErrForbidden):
