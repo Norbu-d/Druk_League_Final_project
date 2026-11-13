@@ -53,6 +53,8 @@
   }
   async function refresh() {
     if (!token()) return;
+    window.DRUKLEAGUE_DASHBOARD_STATE = {status:'loading'};
+    if (activePage === 'dashboard') render(activePage);
     try {
       const [remoteTeams, remoteTournaments, remoteMatches] = await Promise.all([request('/teams'),request('/tournaments'),request('/matches')]);
       const standingsTournamentID=safeUUID(remoteTournaments[0]?.id);
@@ -61,14 +63,20 @@
       teams.splice(0,teams.length,...remoteTeams.map(t=>{const row=byTeam.get(t.id)||{};return {id:t.id,name:t.name,short:t.short_code||initials(t.name),color:'',dz:t.dzongkhag,played:row.played||0,w:row.won||0,d:row.drawn||0,l:row.lost||0,gf:row.goals_for||0,ga:row.goals_against||0,gd:row.goal_difference===undefined?'0':String(row.goal_difference),pts:row.points||0,form:[]}}));
       tournaments.splice(0,tournaments.length,...remoteTournaments.map(t=>({id:t.id,name:t.name,sport:t.sport,season:t.season,status:t.status==='completed'?'Completed':t.status==='in_progress'?'In progress':'Registration open',teams:0,fixtures:0,fill:0,theme:'',description:`${t.sport} · ${t.season}`,venue:t.venue,dz:t.dzongkhag})));
       fixtureData.splice(0,fixtureData.length,...remoteMatches.map(m=>({id:m.id,tournamentId:m.tournament_id,time:m.kickoff?new Date(m.kickoff).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'TBD',period:m.status.toUpperCase(),home:m.home,h:initials(m.home),away:m.away,a:initials(m.away),aColor:'warm',venue:m.venue,status:m.status==='completed'?'COMPLETED':m.status==='live'?'LIVE':'UPCOMING',score:m.result_home!==null?`${m.result_home} — ${m.result_away}`:m.live_home!==null?`${m.live_home} — ${m.live_away}`:'',official:'Assigned official',matchResult:m.status==='completed'?{homeGoals:m.result_home,awayGoals:m.result_away}:null})));
+      window.DRUKLEAGUE_DASHBOARD_STATE = {status:'loaded'};
       render(activePage);
-    } catch (error) { toast(`Could not load saved project data: ${error.message}`); }
+    } catch (error) {
+      window.DRUKLEAGUE_DASHBOARD_STATE = {status:'error',message:error.message};
+      if (activePage === 'dashboard') render(activePage);
+      toast(`Could not load saved project data: ${error.message}`);
+    }
   }
   async function showLogin() {
     if (token()) {
       try { await request('/auth/logout',{method:'POST'}); }
       catch (error) { toast(error.message); return; }
       currentUser = null;
+      window.DRUKLEAGUE_DASHBOARD_STATE = {status:'signed-out'};
       sessionStorage.removeItem(authKey);
       sessionStorage.removeItem(roleKey);
       sessionStorage.removeItem(usernameKey);
@@ -89,6 +97,7 @@
       try {
         const result=await request('/auth/login',{method:'POST',body:JSON.stringify({username:form.elements.username.value,password:form.elements.password.value})});
         currentUser=result.user||null;
+        window.DRUKLEAGUE_DASHBOARD_STATE = {status:'loading'};
         const username=safeUsername(currentUser?.username);
         sessionStorage.setItem(authKey,'true');
         sessionStorage.setItem(roleKey,safeRole(currentUser?.role));
@@ -137,6 +146,7 @@
     }
   });
   document.addEventListener('click',async(event)=>{
+    if(event.target.closest('[data-action="refresh-dashboard"]')) { await refresh(); return; }
     if(event.target.closest('[data-action="generate-fixtures"]')) {
       if(!canRoleAction('generate-fixtures')) {toast('Only Super Admins can generate fixtures.');return;}
       if(!token()){toast('Sign in to generate saved fixtures.');return;}
@@ -166,6 +176,7 @@
       sessionStorage.removeItem(usernameKey);
     }
     window.DRUKLEAGUE_AUTHENTICATED = Boolean(currentUser);
+    window.DRUKLEAGUE_DASHBOARD_STATE = currentUser ? {status:'loading'} : {status:'signed-out'};
     syncRoleIdentity();
     render(activePage);
     if (currentUser) await refresh();
