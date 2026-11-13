@@ -3,9 +3,7 @@
   const authKey = 'drukleague-authenticated';
   const roleKey = 'drukleague-role';
   const usernameKey = 'drukleague-username';
-  const safeRole = sanitizeRole;
-  const safeUsername = sanitizeUsername;
-  const safeUUID = sanitizeUUID;
+  const {currentRole, canRoleAction, roleIdentity, sanitizeRole:safeRole, sanitizeUsername:safeUsername, sanitizeUUID:safeUUID, safeAPIURL} = window.DrukLeaguePermissions;
   const token = () => Boolean(currentUser);
   const defaultApiRoot = location.protocol === 'file:' ? 'http://127.0.0.1:8080/api' : `${location.origin}/api`;
   const configuredApiRoot = (() => {

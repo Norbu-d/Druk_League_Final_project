@@ -410,6 +410,7 @@ services:
     volumes:
       - ../index.html:/usr/share/nginx/html/index.html:ro
       - ../styles.css:/usr/share/nginx/html/styles.css:ro
+      - ../role-permissions.js:/usr/share/nginx/html/role-permissions.js:ro
       - ../app.js:/usr/share/nginx/html/app.js:ro
       - ../api.js:/usr/share/nginx/html/api.js:ro
       - ../assets:/usr/share/nginx/html/assets:ro
