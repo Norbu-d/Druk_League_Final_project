@@ -771,3 +771,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added an authenticated shared configuration loader in servicekit. It reads only allowlisted non-secret settings from `service.<service-name>.<SETTING>` keys and retains environment/default values when a key is missing or Config is unavailable. Database URLs, JWT secrets, bootstrap credentials, and media storage paths remain environment-based.
 - Wired the loader into the 19 domain services that consume Config and the BFF; Compose now supplies the Config address and starts Config before consumers.
 - All affected Go modules compile, Docker Compose configuration validates, and `git diff --check` passes. A live central-value override still needs a runtime smoke check.
+
+## 48. SCRUM-69 PR #32 check fixes (13 Nov 2026)
+
+- Replaced the dynamic RPC target/method values in the circuit-breaker log with a fixed message to address gosec G706. Added the indirect Contracts dependency to the service template module for the repository tidy check.
+- `go build ./...` passed for `packages/servicekit` and `services/_template`; `git diff --check` passed. The Bash security script could not run in this Windows session, so GitHub Actions must confirm the G706 fix.
