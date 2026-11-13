@@ -60,9 +60,11 @@ services:
       context: ..
       dockerfile: services/bff/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:4173}
     depends_on:
+      - configuration
       - auth
       - user
       - tournament
@@ -80,6 +82,7 @@ services:
       context: ..
       dockerfile: services/auth/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/auth_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -88,6 +91,8 @@ services:
       ACCESS_TOKEN_TTL: 30m
       REFRESH_TOKEN_TTL: 168h
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   user:
@@ -95,6 +100,7 @@ services:
       context: ..
       dockerfile: services/user/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/user_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -103,6 +109,8 @@ services:
       BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER:-admin}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-drukleague-dev}
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   team:
@@ -110,11 +118,14 @@ services:
       context: ..
       dockerfile: services/team/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/team_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   player:
@@ -122,11 +133,14 @@ services:
       context: ..
       dockerfile: services/player/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/player_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   tournament:
@@ -134,11 +148,14 @@ services:
       context: ..
       dockerfile: services/tournament/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/tournament_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   registration:
@@ -146,6 +163,7 @@ services:
       context: ..
       dockerfile: services/registration/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/registration_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -153,6 +171,8 @@ services:
       TEAM_SERVICE_ADDR: team:50051
       TOURNAMENT_SERVICE_ADDR: tournament:50051
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
       team:
@@ -164,12 +184,15 @@ services:
       context: ..
       dockerfile: services/match/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/match_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
       NATS_URL: nats://nats:4222
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
       nats:
@@ -179,6 +202,7 @@ services:
       context: ..
       dockerfile: services/score/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/score_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -186,6 +210,8 @@ services:
       MATCH_SERVICE_ADDR: match:50051
       NATS_URL: nats://nats:4222
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
       nats:
@@ -195,6 +221,7 @@ services:
       context: ..
       dockerfile: services/fixture/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/fixture_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -206,6 +233,8 @@ services:
       STANDINGS_SERVICE_ADDR: standings:50051
       NATS_URL: nats://nats:4222
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
       nats:
@@ -219,6 +248,7 @@ services:
       context: ..
       dockerfile: services/standings/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/standings_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -226,6 +256,8 @@ services:
       TEAM_SERVICE_ADDR: team:50051
       NATS_URL: nats://nats:4222
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
       nats:
@@ -235,12 +267,15 @@ services:
       context: ..
       dockerfile: services/venue/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/venue_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
       DZONGKHAG_SERVICE_ADDR: dzongkhag:50051
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   official:
@@ -248,12 +283,15 @@ services:
       context: ..
       dockerfile: services/official/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/official_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
       MATCH_SERVICE_ADDR: match:50051
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   dzongkhag:
@@ -261,11 +299,14 @@ services:
       context: ..
       dockerfile: services/dzongkhag/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/dzongkhag_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   notification:
@@ -273,6 +314,7 @@ services:
       context: ..
       dockerfile: services/notification/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/notification_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -280,6 +322,8 @@ services:
       NATS_URL: nats://nats:4222
       TEAM_SERVICE_ADDR: team:50051
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
       nats:
@@ -291,6 +335,7 @@ services:
       context: ..
       dockerfile: services/media/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/media_service?sslmode=disable
       MEDIA_HTTP_ADDR: :8080
       MEDIA_DATA_DIR: /data
@@ -299,6 +344,8 @@ services:
     volumes:
       - media-data:/data
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   report:
@@ -306,6 +353,7 @@ services:
       context: ..
       dockerfile: services/report/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/report_service?sslmode=disable
       GRPC_ADDR: :50051
       REPORT_HTTP_ADDR: :8080
@@ -313,6 +361,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   search:
@@ -320,11 +370,14 @@ services:
       context: ..
       dockerfile: services/search/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/search_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   analytics:
@@ -332,6 +385,7 @@ services:
       context: ..
       dockerfile: services/analytics/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/analytics_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
@@ -343,6 +397,8 @@ services:
       PLAYER_SERVICE_ADDR: player:50051
       REGISTRATION_SERVICE_ADDR: registration:50051
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
       nats:
@@ -362,11 +418,14 @@ services:
       context: ..
       dockerfile: services/audit-log/Dockerfile
     environment:
+      CONFIGURATION_SERVICE_ADDR: configuration:50051
       DATABASE_URL: postgres://drukleague:${POSTGRES_PASSWORD:-drukleague-local}@postgres:5432/audit_log_service?sslmode=disable
       GRPC_ADDR: :50051
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
     depends_on:
+      configuration:
+        condition: service_started
       db-init:
         condition: service_completed_successfully
   configuration:

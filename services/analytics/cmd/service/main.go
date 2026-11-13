@@ -19,6 +19,16 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("analytics-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TOURNAMENT_SERVICE_ADDR",
+		"TEAM_SERVICE_ADDR",
+		"MATCH_SERVICE_ADDR",
+		"PLAYER_SERVICE_ADDR",
+		"REGISTRATION_SERVICE_ADDR",
+		"NATS_URL",
+	)
 	dial := func(key, fallback string) (*grpc.ClientConn, error) {
 		return servicekit.Dial(servicekit.Env(key, fallback), servicekit.ClientOptions{
 			Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("analytics-service", servicekit.Secret(), 0), Timeout: 5 * time.Second,

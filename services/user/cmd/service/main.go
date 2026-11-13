@@ -17,6 +17,11 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("user-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"BCRYPT_COST",
+	)
 	cost, _ := strconv.Atoi(servicekit.Env("BCRYPT_COST", "12"))
 	register := func(server *grpc.Server, db *sql.DB) error {
 		service := app.New(postgres.New(db), hasher.New(cost))

@@ -29,6 +29,16 @@ func dial(name, fallback string) *grpc.ClientConn {
 }
 
 func main() {
+	servicekit.LoadConfiguration("fixture-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TOURNAMENT_SERVICE_ADDR",
+		"REGISTRATION_SERVICE_ADDR",
+		"VENUE_SERVICE_ADDR",
+		"MATCH_SERVICE_ADDR",
+		"STANDINGS_SERVICE_ADDR",
+		"NATS_URL",
+	)
 	tournamentConn := dial("TOURNAMENT_SERVICE_ADDR", "tournament:50051")
 	registrationConn := dial("REGISTRATION_SERVICE_ADDR", "registration:50051")
 	venueConn := dial("VENUE_SERVICE_ADDR", "venue:50051")

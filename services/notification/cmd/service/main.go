@@ -19,6 +19,12 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("notification-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TEAM_SERVICE_ADDR",
+		"NATS_URL",
+	)
 	teamConn, err := servicekit.Dial(servicekit.Env("TEAM_SERVICE_ADDR", "team:50051"), servicekit.ClientOptions{
 		Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("notification-service", servicekit.Secret(), 0), Timeout: 5 * time.Second,
 	})
