@@ -776,3 +776,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Replaced the dynamic RPC target/method values in the circuit-breaker log with a fixed message to address gosec G706. Added the indirect Contracts dependency to the service template module for the repository tidy check.
 - `go build ./...` passed for `packages/servicekit` and `services/_template`; `git diff --check` passed. The Bash security script could not run in this Windows session, so GitHub Actions must confirm the G706 fix.
+
+## 49. SCRUM-69 coverage gate fixes (13 Nov 2026)
+
+- Added tests for centralized configuration loading and fixture knockout progression, pending fixtures, and outbox pruning.
+- `bash scripts/coverage.sh 80` passed; servicekit coverage is 83.5% and fixture coverage is 82.1%.
