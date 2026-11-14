@@ -19,6 +19,12 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("standings-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TEAM_SERVICE_ADDR",
+		"NATS_URL",
+	)
 	// The consumer has no caller token, so lookups always use a self-renewing service token.
 	teamConn, err := servicekit.Dial(servicekit.Env("TEAM_SERVICE_ADDR", "team:50051"), servicekit.ClientOptions{Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("standings-service", servicekit.Secret(), 0)})
 	if err != nil {

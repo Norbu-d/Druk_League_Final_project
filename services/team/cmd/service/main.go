@@ -15,6 +15,12 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("team-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TOURNAMENT_SERVICE_ADDR",
+		"DZONGKHAG_SERVICE_ADDR",
+	)
 	// Reference checks are lookups, not actions on behalf of the caller, so they use this
 	// service's own self-renewing token. The caller's role is checked in the app layer.
 	options := func() servicekit.ClientOptions {

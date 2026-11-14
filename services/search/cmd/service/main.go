@@ -12,6 +12,10 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("search-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+	)
 	register := func(server *grpc.Server, db *sql.DB) error {
 		v1.RegisterSearchServiceServer(server, grpcadapter.New(postgres.New(db)))
 		return nil

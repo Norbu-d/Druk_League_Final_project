@@ -20,6 +20,14 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("report-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"STANDINGS_SERVICE_ADDR",
+		"FIXTURE_SERVICE_ADDR",
+		"REPORT_PUBLIC_BASE_URL",
+		"REPORT_HTTP_ADDR",
+	)
 	serviceToken := servicekit.NewTokenSource("report-service", servicekit.Secret(), 0)
 	standingsConn, err := servicekit.Dial(servicekit.Env("STANDINGS_SERVICE_ADDR", "standings:50051"), servicekit.ClientOptions{
 		Auth: servicekit.ServiceIdentity, Tokens: serviceToken, Timeout: 5 * time.Second,

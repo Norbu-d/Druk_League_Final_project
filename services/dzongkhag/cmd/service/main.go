@@ -13,6 +13,10 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("dzongkhag-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+	)
 	register := func(server *grpc.Server, db *sql.DB) error {
 		repository := postgres.New(db)
 		dzongkhagv1.RegisterDzongkhagServiceServer(server, grpcadapter.New(app.New(repository)))

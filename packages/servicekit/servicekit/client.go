@@ -48,7 +48,7 @@ func Dial(target string, options ClientOptions) (*grpc.ClientConn, error) {
 }
 
 // NewClientInterceptor builds the resilience interceptor used by Dial; the breaker is returned for tests and metrics.
-func NewClientInterceptor(target string, options ClientOptions) (grpc.UnaryClientInterceptor, *CircuitBreaker) {
+func NewClientInterceptor(_ string, options ClientOptions) (grpc.UnaryClientInterceptor, *CircuitBreaker) {
 	if options.Timeout <= 0 {
 		options.Timeout = 3 * time.Second
 	}
@@ -73,7 +73,7 @@ func NewClientInterceptor(target string, options ClientOptions) (grpc.UnaryClien
 			err = callOnce(ctx, breaker, options.Timeout, method, req, reply, cc, invoker, callOptions...)
 			if err == nil || attempt >= attempts || !retryable(err) || ctx.Err() != nil {
 				if errors.Is(err, errCircuitOpen) {
-					log.Printf("rpc client target=%s method=%s circuit=open", target, method)
+					log.Print("rpc client circuit is open")
 				}
 				return err
 			}

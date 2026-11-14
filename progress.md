@@ -765,3 +765,19 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - The supplied gosec output identified G706 log-injection risk in BFF request logging. Gosec still flagged client-controlled values after the URL path was removed, so the BFF now generates request IDs at its HTTP boundary and logs only response status and duration. Added a regression check that a client-provided ID is not reflected. The local gosec 2.30.0 scan now passes with zero findings, and the BFF HTTP API tests pass.
 - The supplied coverage output shows all displayed module totals from `services/official` onward above 80%, but it omits earlier modules where the coverage threshold failure occurred. A local all-module coverage attempt could not complete in this environment; Docker is unavailable and the Linux shell has Go 1.22.2 pinned with `GOTOOLCHAIN=local`.
 - The BFF security follow-up still needs to be committed and rescanned. The first failing module's coverage summary is still needed to diagnose the separate coverage failure.
+
+## 47. SCRUM-69 centralized configuration consumers (13 Nov 2026)
+
+- Added an authenticated shared configuration loader in servicekit. It reads only allowlisted non-secret settings from `service.<service-name>.<SETTING>` keys and retains environment/default values when a key is missing or Config is unavailable. Database URLs, JWT secrets, bootstrap credentials, and media storage paths remain environment-based.
+- Wired the loader into the 19 domain services that consume Config and the BFF; Compose now supplies the Config address and starts Config before consumers.
+- All affected Go modules compile, Docker Compose configuration validates, and `git diff --check` passes. A live central-value override still needs a runtime smoke check.
+
+## 48. SCRUM-69 PR #32 check fixes (13 Nov 2026)
+
+- Replaced the dynamic RPC target/method values in the circuit-breaker log with a fixed message to address gosec G706. Added the indirect Contracts dependency to the service template module for the repository tidy check.
+- `go build ./...` passed for `packages/servicekit` and `services/_template`; `git diff --check` passed. The Bash security script could not run in this Windows session, so GitHub Actions must confirm the G706 fix.
+
+## 49. SCRUM-69 coverage gate fixes (13 Nov 2026)
+
+- Added tests for centralized configuration loading and fixture knockout progression, pending fixtures, and outbox pruning.
+- `bash scripts/coverage.sh 80` passed; servicekit coverage is 83.5% and fixture coverage is 82.1%.

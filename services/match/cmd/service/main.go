@@ -20,6 +20,13 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("match-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TEAM_SERVICE_ADDR",
+		"USER_SERVICE_ADDR",
+		"NATS_URL",
+	)
 	// Forward the caller's token for user-driven calls; fall back to the service identity.
 	options := servicekit.ClientOptions{Auth: servicekit.ForwardOrService, Tokens: servicekit.NewTokenSource("match-service", servicekit.Secret(), 0)}
 	teamConn, err := servicekit.Dial(servicekit.Env("TEAM_SERVICE_ADDR", "team:50051"), options)

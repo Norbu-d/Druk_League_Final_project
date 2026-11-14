@@ -14,6 +14,11 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("player-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TEAM_SERVICE_ADDR",
+	)
 	// Team lookups are not actions on behalf of the caller, so they use this service's own
 	// self-renewing token. The caller's role and team ownership are checked in the app layer.
 	teamConn, err := servicekit.Dial(servicekit.Env("TEAM_SERVICE_ADDR", "team:50051"), servicekit.ClientOptions{Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("player-service", servicekit.Secret(), 0)})

@@ -14,6 +14,11 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("official-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"MATCH_SERVICE_ADDR",
+	)
 	// Assignment is an admin action, so the admin's token is forwarded to the Match service.
 	matchConn, err := servicekit.Dial(servicekit.Env("MATCH_SERVICE_ADDR", "match:50051"), servicekit.ClientOptions{Auth: servicekit.ForwardCaller})
 	if err != nil {

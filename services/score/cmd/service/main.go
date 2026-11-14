@@ -20,6 +20,12 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("score-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"MATCH_SERVICE_ADDR",
+		"NATS_URL",
+	)
 	matchConn, err := servicekit.Dial(servicekit.Env("MATCH_SERVICE_ADDR", "match:50051"), servicekit.ClientOptions{Auth: servicekit.ForwardOrService, Tokens: servicekit.NewTokenSource("score-service", servicekit.Secret(), 0)})
 	if err != nil {
 		log.Fatal(err)

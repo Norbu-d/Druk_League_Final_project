@@ -81,6 +81,10 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	if pending, _ := repo.PendingEvents(ctx, 10); len(pending) != 0 {
 		t.Fatal("published event still pending")
 	}
+	pruned, err := repo.PrunePublished(ctx, time.Now().Add(time.Second))
+	if err != nil || pruned != 1 {
+		t.Fatalf("prune published event: pruned=%d err=%v", pruned, err)
+	}
 }
 
 func TestKnockoutFinalizedEventsCreateOneNextRoundMatch(t *testing.T) {
@@ -103,6 +107,10 @@ func TestKnockoutFinalizedEventsCreateOneNextRoundMatch(t *testing.T) {
 	fixtures, _, err := repo.List(ctx, knockoutTournament, 10, 0)
 	if err != nil || len(fixtures) != 2 {
 		t.Fatalf("list bracket: %d %v", len(fixtures), err)
+	}
+	unlinked, err := repo.PendingFixtures(ctx, knockoutTournament)
+	if err != nil || len(unlinked) != len(fixtures) {
+		t.Fatalf("pending knockout fixtures: %d %v", len(unlinked), err)
 	}
 	matchOne := "66666666-6666-4666-8666-666666666666"
 	matchTwo := "77777777-7777-4777-8777-777777777777"

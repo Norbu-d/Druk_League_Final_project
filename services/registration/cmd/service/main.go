@@ -14,6 +14,12 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("registration-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"TEAM_SERVICE_ADDR",
+		"TOURNAMENT_SERVICE_ADDR",
+	)
 	// Existence checks are lookups, not actions on behalf of the caller, so they use this
 	// service's own self-renewing token. The caller's role is checked in the app layer.
 	options := func() servicekit.ClientOptions {
