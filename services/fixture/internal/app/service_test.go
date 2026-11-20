@@ -171,6 +171,38 @@ func TestGenerateRejections(t *testing.T) {
 	}
 }
 
+func TestGenerateVenueAndTeamDependencies(t *testing.T) {
+	var district string
+	repo := &fakeRepo{linked: map[string]string{}}
+	venueDown := New(repo, fakeTournaments{}, fakeTeams{ids: []string{"a", "b"}}, fakeVenuesError{}, &fakeMatches{})
+	if _, _, err := venueDown.Generate(context.Background(), admin, tournament, "", time.Time{}); err == nil {
+		t.Fatal("venue outage not reported")
+	}
+
+	saveDown := New(repo, fakeTournaments{}, fakeTeams{ids: []string{"a", "b"}}, fakeVenues{dzongkhag: &district}, &fakeMatches{})
+	saveDownRepo := &saveErrorRepo{}
+	saveDown.repo = saveDownRepo
+	if _, _, err := saveDown.Generate(context.Background(), admin, tournament, "", time.Time{}); err == nil {
+		t.Fatal("schedule save failure ignored")
+	}
+}
+
+type fakeVenuesError struct{}
+
+func (fakeVenuesError) InDzongkhag(context.Context, string) ([]domain.Venue, error) {
+	return nil, core.Dependency("venue service down")
+}
+
+type saveErrorRepo struct{}
+
+func (*saveErrorRepo) SaveSchedule(context.Context, string, []domain.Fixture, domain.OutboxEvent) ([]domain.Fixture, bool, error) {
+	return nil, false, core.Dependency("database down")
+}
+func (*saveErrorRepo) LinkMatch(context.Context, string, string) error { return nil }
+func (*saveErrorRepo) List(context.Context, string, int, int) ([]domain.Fixture, bool, error) {
+	return nil, false, nil
+}
+
 func TestList(t *testing.T) {
 	s, _ := newService(&fakeRepo{stored: []domain.Fixture{{ID: "f1"}}}, nil, &fakeMatches{})
 	if _, _, err := s.List(context.Background(), "x", 10, 0); !errors.Is(err, core.ErrInvalid) {
