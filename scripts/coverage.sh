@@ -16,15 +16,22 @@ for dir in "$root"/packages/servicekit "$root"/packages/eventkit "$root"/service
   case "$name" in services/_template|services/api-gateway|services/service-*) continue ;; esac
   if [ -d "$dir/internal" ]; then pkgs=./internal/...; else pkgs=./...; fi
   profile=$(mktemp)
-  if ! (cd "$dir" && go test -count=1 -coverpkg="$pkgs" -coverprofile="$profile" $pkgs >/dev/null 2>&1); then
+  output=$(mktemp)
+  if ! (cd "$dir" && go test -count=1 -coverpkg="$pkgs" -coverprofile="$profile" $pkgs >"$output" 2>&1); then
     printf '%-28s %8s\n' "$name" FAIL
     status=1
     rm -f "$profile"
+    rm -f "$output"
     continue
   fi
-  total=$(cd "$dir" && go tool cover -func="$profile" | awk '/^total:/ {sub("%","",$3); print $3}')
+  total=$(cd "$dir" && go tool cover -func="$profile" 2>/dev/null | awk '/^total:/ {sub("%","",$3); print $3}')
   rm -f "$profile"
-  [ -z "$total" ] && total=0
+  if [ -z "$total" ] || { [ "$total" = "0.0" ] && grep -q '\[no test files\]' "$output"; }; then
+    printf '%-28s %8s\n' "$name" "NO TESTS"
+    rm -f "$output"
+    continue
+  fi
+  rm -f "$output"
   printf '%-28s %7s%%\n' "$name" "$total"
   if awk -v t="$total" -v m="$min" 'BEGIN{exit !(t+0 < m+0)}'; then status=1; fi
 done
