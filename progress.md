@@ -787,3 +787,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added Configuration gRPC tests for invalid/missing keys, public reads, Super Admin-only writes, oversized values, insert/update persistence, and role denial. Added Search unit/gRPC tests for validation, Unicode query limits, filter normalization/deduplication, page-size/token bounds, pagination, hit mapping, and repository error handling; added PostgreSQL tests for entity filters, case-insensitive matching, display-field mapping, pagination, and database errors.
 - Added test-plan cases T-20 (Configuration access/validation) and T-21 (Search filters/pagination). `go test ./...` passed in the Configuration and Search modules locally. Their PostgreSQL integration cases were skipped because `TEST_DATABASE_URL` is not configured; GitHub CI's PostgreSQL-backed coverage job must verify them.
 - Parent SCRUM-24 remains In Progress. Jira assigns SCRUM-55 integration/contract tests to Norbu, and that child remains In Progress; reconcile that work and the full story acceptance before closing SCRUM-24.
+
+## 51. SCRUM-66 Search indexing (20 Nov 2026)
+
+- Added durable Search consumers and transactional Team, Player, and Tournament outboxes, including initial events for existing records and a replay procedure.
+- The four service images started successfully; Search indexed 20 teams and 5 tournaments, and an authenticated Search RPC returned the requested team. The Player database currently has no records.
