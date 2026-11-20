@@ -20,12 +20,15 @@ const (
 	SubjectMatchFinalized    = "drukleague.match.finalized"
 	SubjectFixturesGenerated = "drukleague.fixtures.generated"
 	SubjectAdminActions      = "drukleague.admin.>"
+	SubjectSearchTeam        = "drukleague.search.team"
+	SubjectSearchPlayer      = "drukleague.search.player"
+	SubjectSearchTournament  = "drukleague.search.tournament"
 	// DLQPrefix + durable consumer name is where a consumer parks messages it cannot process.
 	DLQPrefix = "drukleague.dlq."
 )
 
 // EventSubjects are the subjects carried by the events stream.
-var EventSubjects = []string{SubjectMatchFinalized, SubjectFixturesGenerated, SubjectAdminActions}
+var EventSubjects = []string{SubjectMatchFinalized, SubjectFixturesGenerated, SubjectAdminActions, SubjectSearchTeam, SubjectSearchPlayer, SubjectSearchTournament}
 
 // Connect opens a connection that keeps retrying, so a service can start before NATS is ready.
 func Connect(url, name string) (*nats.Conn, nats.JetStreamContext, error) {

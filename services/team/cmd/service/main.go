@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
+	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	"github.com/drukleague/platform/packages/eventkit"
 	"github.com/drukleague/platform/packages/servicekit/dzongkhags"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	grpcadapter "github.com/drukleague/platform/services/team/internal/adapters/grpc"
@@ -20,7 +23,11 @@ func main() {
 		"METRICS_ADDR",
 		"TOURNAMENT_SERVICE_ADDR",
 		"DZONGKHAG_SERVICE_ADDR",
+		"NATS_URL",
 	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var natsConn interface{ Close() }
 	// Reference checks are lookups, not actions on behalf of the caller, so they use this
 	// service's own self-renewing token. The caller's role is checked in the app layer.
 	options := func() servicekit.ClientOptions {
@@ -39,9 +46,25 @@ func main() {
 	tournaments, directory := grpcclients.NewTournaments(tournamentConn), dzongkhags.New(dzongkhagConn, 0)
 	register := func(server *grpc.Server, db *sql.DB) error {
 		v1.RegisterTeamServiceServer(server, grpcadapter.New(app.New(postgres.New(db), tournaments, directory)))
+		conn, js, err := eventkit.Connect(servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-team")
+		if err != nil {
+			return err
+		}
+		natsConn = conn
+		if err := eventkit.EnsureStreams(js); err != nil {
+			return err
+		}
+		store, err := eventkit.NewSQLOutboxStore(db, "search_outbox")
+		if err != nil {
+			return err
+		}
+		go eventkit.RunOutboxRelay(ctx, store, js, time.Second)
 		return nil
 	}
 	if err := servicekit.Run("team-service", register); err != nil {
 		log.Fatal(err)
+	}
+	if natsConn != nil {
+		natsConn.Close()
 	}
 }

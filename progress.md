@@ -781,3 +781,8 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added tests for centralized configuration loading and fixture knockout progression, pending fixtures, and outbox pruning.
 - `bash scripts/coverage.sh 80` passed; servicekit coverage is 83.5% and fixture coverage is 82.1%.
+
+## 50. SCRUM-66 Search indexing (20 Nov 2026)
+
+- Added durable Search consumers and transactional Team, Player, and Tournament outboxes, including initial events for existing records and a replay procedure.
+- The four service images started successfully; Search indexed 20 teams and 5 tournaments, and an authenticated Search RPC returned the requested team. The Player database currently has no records.
