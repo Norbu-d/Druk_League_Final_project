@@ -17,6 +17,8 @@
   })();
   const apiRoot = configuredApiRoot.href.replace(/\/+$/, '');
   const headers = () => ({'Content-Type':'application/json'});
+  const standingsState = {status:'signed-out', tournamentID:'', tournaments:[], rows:[], message:''};
+  window.DRUKLEAGUE_STANDINGS_STATE = standingsState;
   async function renew() {
     const safeURL = safeAPIURL(apiRoot, '/auth/refresh', 'POST');
     if (!safeURL) return false;
@@ -34,6 +36,47 @@
     return data;
   }
   const initials = (name) => name.split(/\s+/).map(part=>part[0]||'').join('').slice(0,2).toUpperCase();
+  async function loadStandings(tournamentID, {renderPage=true}={}) {
+    const safeID = safeUUID(tournamentID);
+    standingsState.tournamentID = safeID || '';
+    standingsState.rows = [];
+    standingsState.message = '';
+    if (!token()) {
+      standingsState.status = 'signed-out';
+    } else if (!standingsState.tournaments.length) {
+      standingsState.status = 'no-tournaments';
+    } else if (!safeID) {
+      standingsState.status = 'error';
+      standingsState.message = 'Choose a valid tournament to load standings.';
+    } else {
+      standingsState.status = 'loading';
+      if (renderPage && activePage === 'standings') render(activePage);
+      try {
+        const response = await request(`/standings?tournament_id=${encodeURIComponent(safeID)}`);
+        standingsState.rows = (Array.isArray(response) ? response : []).map(row => ({
+          team_id: safeUUID(row.team_id) || '',
+          name: typeof row.team === 'string' && row.team.trim() ? row.team.trim() : 'Unnamed team',
+          dz: typeof row.dzongkhag === 'string' && row.dzongkhag.trim() ? row.dzongkhag.trim() : '—',
+          played: Number(row.played) || 0,
+          w: Number(row.won) || 0,
+          d: Number(row.drawn) || 0,
+          l: Number(row.lost) || 0,
+          gf: Number(row.goals_for) || 0,
+          ga: Number(row.goals_against) || 0,
+          gd: Number(row.goal_difference) || 0,
+          pts: Number(row.points) || 0
+        }));
+        standingsState.status = 'loaded';
+        standingsState.updatedAt = new Date().toISOString();
+      } catch (error) {
+        standingsState.status = 'error';
+        standingsState.message = error.message || 'Could not load standings.';
+      }
+    }
+    if (renderPage && activePage === 'standings') render(activePage);
+    return standingsState;
+  }
+  window.DRUKLEAGUE_LOAD_STANDINGS = loadStandings;
   function syncRoleIdentity() {
     const signedIn = Boolean(token());
     const identity = roleIdentity(
@@ -52,11 +95,14 @@
   async function refresh() {
     if (!token()) return;
     window.DRUKLEAGUE_DASHBOARD_STATE = {status:'loading'};
-    if (activePage === 'dashboard') render(activePage);
+    standingsState.status = 'loading';
+    if (activePage === 'dashboard' || activePage === 'standings') render(activePage);
     try {
       const [remoteTeams, remoteTournaments, remoteMatches] = await Promise.all([request('/teams'),request('/tournaments'),request('/matches')]);
-      const standingsTournamentID=safeUUID(remoteTournaments[0]?.id);
-      const table=standingsTournamentID?await request(`/standings?tournament_id=${encodeURIComponent(standingsTournamentID)}`):[];
+      const standingsTournamentID=safeUUID(remoteTournaments.find(t=>t.id===standingsState.tournamentID)?.id || remoteTournaments[0]?.id);
+      standingsState.tournaments = remoteTournaments.map(t=>({id:safeUUID(t.id),name:t.name,season:t.season})).filter(t=>t.id);
+      const tableState=await loadStandings(standingsTournamentID, {renderPage:false});
+      const table=tableState.status==='loaded'?tableState.rows.map(row=>({team_id:row.team_id,played:row.played,won:row.w,drawn:row.d,lost:row.l,goals_for:row.gf,goals_against:row.ga,goal_difference:row.gd,points:row.pts})):[];
       const byTeam=new Map(table.map(row=>[row.team_id,row]));
       teams.splice(0,teams.length,...remoteTeams.map(t=>{const row=byTeam.get(t.id)||{};return {id:t.id,name:t.name,short:t.short_code||initials(t.name),color:'',dz:t.dzongkhag,played:row.played||0,w:row.won||0,d:row.drawn||0,l:row.lost||0,gf:row.goals_for||0,ga:row.goals_against||0,gd:row.goal_difference===undefined?'0':String(row.goal_difference),pts:row.points||0,form:[]}}));
       tournaments.splice(0,tournaments.length,...remoteTournaments.map(t=>({id:t.id,name:t.name,sport:t.sport,season:t.season,status:t.status==='completed'?'Completed':t.status==='in_progress'?'In progress':'Registration open',teams:0,fixtures:0,fill:0,theme:'',description:`${t.sport} · ${t.season}`,venue:t.venue,dz:t.dzongkhag})));
@@ -65,7 +111,9 @@
       render(activePage);
     } catch (error) {
       window.DRUKLEAGUE_DASHBOARD_STATE = {status:'error',message:error.message};
-      if (activePage === 'dashboard') render(activePage);
+      standingsState.status = 'error';
+      standingsState.message = error.message || 'Could not load saved project data.';
+      if (activePage === 'dashboard' || activePage === 'standings') render(activePage);
       toast(`Could not load saved project data: ${error.message}`);
     }
   }
@@ -151,6 +199,9 @@
       const tournament=tournaments.find(t=>t.id),tournamentID=safeUUID(tournament?.id);if(!tournamentID){toast('Create a tournament and register at least two teams first.');return;}
       try{const result=await request(`/tournaments/${encodeURIComponent(tournamentID)}/fixtures`,{method:'POST'});toast(`${result.fixtures_created} fixtures created.`);await refresh();}catch(error){toast(error.message);}
     }
+  });
+  document.addEventListener('change', event => {
+    if (event.target.id === 'standings-tournament') void loadStandings(event.target.value);
   });
   document.querySelector('.top-avatar').classList.add('auth-button');
   window.DRUKLEAGUE_AUTHENTICATED = false;
