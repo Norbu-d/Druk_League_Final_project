@@ -1,8 +1,8 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-20
+**Last updated:** 2026-11-21
 **Project root:** `D:\druk-league`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the recovered Docker WSL disk started the local Compose stack; 26 long-running containers were up, PostgreSQL and NATS were healthy, and the web page returned HTTP 200 (section 40). This was a startup smoke check, not a rerun of the 29/29 E2E suite. PR #31 merged into `development` on 11 Nov with 17/17 checks passing; PR #34 (live dashboard counts) merged on 13 Nov with 17/17 checks passing. Namgay's PR #35 (Configuration and Search tests) merged on 18 Nov with 17 checks passing. Sonam's PR #36 (Search indexing pipeline) merged on 20 Nov with 17 checks passing and SonarCloud Quality Gate passed; its PR notes say Player indexing still needs a runtime check once Player records exist. `origin/development` was fetched at `d5302e9`; local `codex/live-standings-ui` was fast-forwarded to it. The standings UI change is pushed on `origin/codex/live-standings-ui`; PR #37 is open against `development`. Signed-in browser acceptance remains unverified. GitHub's PR list showed PR #2 as open at the last check, while local `development` contains a merge commit labeled PR #2; reconcile this discrepancy before treating that PR as closed or assigning duplicate work. The Docker disk is under `D:\docker\DockerDesktopRecovery\DockerDesktopWSL`.
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the local Compose stack started and the web page returned HTTP 200; this was a startup smoke check, not a rerun of the E2E suite. PRs #31, #34, #35, and #36 merged with their reported CI checks passing. PR #37 (live standings UI) merged into `development` on 20 Nov; local `feature/namgay-SCRUM-46-registration-fixtures` starts at `afc0b28` (the PR #37 merge commit). Signed-in browser acceptance remains unverified. Docker volumes contain test rows, so confirm a test-only database before any workflow that creates or finalizes competition records.
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -800,3 +800,13 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Added durable Search consumers and transactional Team, Player, and Tournament outboxes, including initial events for existing records and a replay procedure.
 - The four service images started successfully; Search indexed 20 teams and 5 tournaments, and an authenticated Search RPC returned the requested team. The Player database currently has no records.
+
+## SCRUM-46 — Registration and fixtures views (Namgay)
+
+- Jira: [SCRUM-46](https://rub-team-da9meulc.atlassian.net/browse/SCRUM-46), In Progress. Scope: screens for team/tournament registration and fixture browsing using the API gateway.
+- Branch: `feature/namgay-SCRUM-46-registration-fixtures`. PR: [#38](https://github.com/Norbu-d/Druk_League_Final_project/pull/38), open against `development`.
+- Added live counts to tournament cards from saved team and match records; removed hard-coded team registration counts and standings-only team assumptions from the team list.
+- The team registration form requires a saved tournament and submits its ID with the team record. Team rows show their linked tournament and standings values.
+- Added a tournament selector for fixtures and display of saved kickoff date/time, venue, tournament, and current match status/result.
+- The gateway currently exposes team creation/listing and fixture generation/listing, but no separate registration-service routes. This implementation follows the gateway contract and treats a team linked to a tournament as the current registration flow; approval/review workflow remains unavailable through this API.
+- Verification: `node --check app.js` and `node --check api.js` passed. Docker is unavailable in this environment and local API ports 8079/8080 did not respond, so signed-in browser/API behavior could not be checked. No competition records were created or modified; verify on a confirmed test-only database before exercising record-changing flows.
