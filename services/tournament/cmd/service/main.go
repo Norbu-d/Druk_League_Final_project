@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"log"
-	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
 	"github.com/drukleague/platform/packages/eventkit"
@@ -34,19 +33,11 @@ func main() {
 	directory := dzongkhags.New(dzongkhagConn, 0)
 	register := func(server *grpc.Server, db *sql.DB) error {
 		v1.RegisterTournamentServiceServer(server, grpcadapter.New(app.New(postgres.New(db), directory)))
-		conn, js, err := eventkit.Connect(servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-tournament")
+		conn, err := eventkit.StartSQLOutboxRelay(ctx, db, servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-tournament")
 		if err != nil {
 			return err
 		}
 		natsConn = conn
-		if err := eventkit.EnsureStreams(js); err != nil {
-			return err
-		}
-		store, err := eventkit.NewSQLOutboxStore(db)
-		if err != nil {
-			return err
-		}
-		go eventkit.RunOutboxRelay(ctx, store, js, time.Second)
 		return nil
 	}
 	if err := servicekit.Run("tournament-service", register); err != nil {

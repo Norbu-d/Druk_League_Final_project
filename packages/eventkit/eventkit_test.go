@@ -327,6 +327,23 @@ type outboxSQLConn struct{}
 type outboxSQLRows struct{ sent bool }
 type outboxSQLResult struct{}
 
+type trackedCloser struct {
+	closed bool
+}
+
+func (c *trackedCloser) Close() {
+	c.closed = true
+}
+
+type relayPublisher struct {
+	published chan *nats.Msg
+}
+
+func (p relayPublisher) PublishMsg(m *nats.Msg, _ ...nats.PubOpt) (*nats.PubAck, error) {
+	p.published <- m
+	return &nats.PubAck{}, nil
+}
+
 var outboxSQLState struct {
 	sync.Mutex
 	queries []string
@@ -395,5 +412,83 @@ func TestSQLOutboxStoreReadsAndMarksPendingEvents(t *testing.T) {
 func TestNewSQLOutboxStoreRejectsNilDB(t *testing.T) {
 	if _, err := NewSQLOutboxStore(nil); err == nil {
 		t.Fatal("expected nil database error")
+	}
+}
+
+func TestStartSQLOutboxRelayClosesConnectionWhenStreamSetupFails(t *testing.T) {
+	want := errors.New("nats unavailable")
+	conn := &trackedCloser{}
+	streams := &fakeStreams{streams: map[string]*nats.StreamConfig{}, infoErr: want}
+
+	got, err := startSQLOutboxRelay(context.Background(), nil, conn, streams, &fakePublisher{})
+	if !errors.Is(err, want) || got != nil {
+		t.Fatalf("got closer=%v err=%v, want nil closer and %v", got, err, want)
+	}
+	if !conn.closed {
+		t.Fatal("connection was not closed after stream setup failed")
+	}
+}
+
+func TestStartSQLOutboxRelayStartsAndReturnsConnection(t *testing.T) {
+	registerOutboxSQLDriver.Do(func() { sql.Register("eventkit-outbox-test", outboxSQLDriver{}) })
+	db, err := sql.Open("eventkit-outbox-test", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	outboxSQLState.Lock()
+	outboxSQLState.queries, outboxSQLState.execs = nil, nil
+	outboxSQLState.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn := &trackedCloser{}
+	streams := &fakeStreams{streams: map[string]*nats.StreamConfig{}}
+	publisher := relayPublisher{published: make(chan *nats.Msg, 1)}
+	done := make(chan struct{})
+	got, err := startSQLOutboxRelay(ctx, db, conn, streams, publisher)
+	if err != nil {
+		t.Fatalf("start relay: %v", err)
+	}
+	if got != conn {
+		t.Fatal("returned connection does not match the connection passed to startup")
+	}
+
+	select {
+	case msg := <-publisher.published:
+		if msg.Subject != SubjectSearchTeam || string(msg.Data) != `{"event_id":"event-1"}` {
+			t.Fatalf("unexpected relayed message: %+v", msg)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("relay did not publish the pending outbox event")
+	}
+	cancel()
+	go func() {
+		// The relay exits after observing cancellation at the end of its first pass.
+		// A short wait here is bounded by RunOutboxRelay's cancellation select.
+		for i := 0; i < 100; i++ {
+			outboxSQLState.Lock()
+			marked := len(outboxSQLState.execs) > 0
+			outboxSQLState.Unlock()
+			if marked {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("relay did not finish publishing the pending event")
+	}
+	outboxSQLState.Lock()
+	marked := len(outboxSQLState.execs) == 1 && strings.Contains(outboxSQLState.execs[0], "UPDATE search_outbox")
+	outboxSQLState.Unlock()
+	if !marked {
+		t.Fatal("relay did not mark the event as published")
+	}
+	if len(streams.added) != 2 {
+		t.Fatalf("expected both streams to be ensured, added %v", streams.added)
 	}
 }
