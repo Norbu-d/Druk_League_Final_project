@@ -3,28 +3,23 @@ package eventkit
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"regexp"
+	"errors"
 )
-
-var outboxTablePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
 // SQLOutboxStore reads and acknowledges rows from a service-local transactional outbox.
 type SQLOutboxStore struct {
-	db    *sql.DB
-	table string
+	db *sql.DB
 }
 
-func NewSQLOutboxStore(db *sql.DB, table string) (*SQLOutboxStore, error) {
-	if db == nil || !outboxTablePattern.MatchString(table) {
-		return nil, fmt.Errorf("invalid SQL outbox store configuration")
+func NewSQLOutboxStore(db *sql.DB) (*SQLOutboxStore, error) {
+	if db == nil {
+		return nil, errors.New("SQL outbox database is required")
 	}
-	return &SQLOutboxStore{db: db, table: table}, nil
+	return &SQLOutboxStore{db: db}, nil
 }
 
 func (s *SQLOutboxStore) PendingEvents(ctx context.Context, limit int) ([]OutboxEvent, error) {
-	query := fmt.Sprintf(`SELECT event_id::text, subject, payload::text FROM %s WHERE published_at IS NULL ORDER BY created_at,event_id LIMIT $1`, s.table)
-	rows, err := s.db.QueryContext(ctx, query, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT event_id::text, subject, payload::text FROM search_outbox WHERE published_at IS NULL ORDER BY created_at,event_id LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +38,6 @@ func (s *SQLOutboxStore) PendingEvents(ctx context.Context, limit int) ([]Outbox
 }
 
 func (s *SQLOutboxStore) MarkPublished(ctx context.Context, eventID string) error {
-	query := fmt.Sprintf(`UPDATE %s SET published_at=now() WHERE event_id=$1 AND published_at IS NULL`, s.table)
-	_, err := s.db.ExecContext(ctx, query, eventID)
+	_, err := s.db.ExecContext(ctx, `UPDATE search_outbox SET published_at=now() WHERE event_id=$1 AND published_at IS NULL`, eventID)
 	return err
 }

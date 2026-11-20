@@ -19,11 +19,11 @@ DECLARE event_id uuid := gen_random_uuid(); event_version bigint; event_time tim
 BEGIN
   IF TG_OP = 'DELETE' THEN
     event_version := OLD.search_version + 1;
-    INSERT INTO search_outbox(event_id,subject,payload,created_at) VALUES(event_id,'drukleague.search.team',jsonb_build_object('event_id',event_id,'entity_type','team','entity_id',OLD.id,'version',event_version,'operation','delete','occurred_at',event_time));
+    INSERT INTO search_outbox(event_id,subject,payload,created_at) VALUES(event_id,'drukleague.search.team',jsonb_build_object('event_id',event_id,'entity_type','team','entity_id',OLD.id,'version',event_version,'operation','delete','occurred_at',event_time),event_time);
     RETURN OLD;
   END IF;
   IF TG_OP = 'INSERT' THEN NEW.search_version := GREATEST(NEW.search_version,1); ELSE NEW.search_version := OLD.search_version + 1; END IF;
-  INSERT INTO search_outbox(event_id,subject,payload,created_at) VALUES(event_id,'drukleague.search.team',jsonb_build_object('event_id',event_id,'entity_type','team','entity_id',NEW.id,'version',NEW.search_version,'operation','upsert','occurred_at',event_time,'fields',jsonb_build_object('title',NEW.name,'subtitle',concat_ws(' · ',NEW.dzongkhag,NEW.short_code),'search_text',concat_ws(' ',NEW.name,NEW.short_code,NEW.dzongkhag))));
+  INSERT INTO search_outbox(event_id,subject,payload,created_at) VALUES(event_id,'drukleague.search.team',jsonb_build_object('event_id',event_id,'entity_type','team','entity_id',NEW.id,'version',NEW.search_version,'operation','upsert','occurred_at',event_time,'fields',jsonb_build_object('title',NEW.name,'subtitle',concat_ws(' · ',NEW.dzongkhag,NEW.short_code),'search_text',concat_ws(' ',NEW.name,NEW.short_code,NEW.dzongkhag))),event_time);
   RETURN NEW;
 END $$;
 DROP TRIGGER IF EXISTS teams_search_event ON teams;

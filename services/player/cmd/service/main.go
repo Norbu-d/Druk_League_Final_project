@@ -44,7 +44,7 @@ func main() {
 		if err := eventkit.EnsureStreams(js); err != nil {
 			return err
 		}
-		store, err := eventkit.NewSQLOutboxStore(db, "search_outbox")
+		store, err := eventkit.NewSQLOutboxStore(db)
 		if err != nil {
 			return err
 		}
