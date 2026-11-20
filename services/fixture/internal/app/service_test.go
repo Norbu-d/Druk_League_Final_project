@@ -19,10 +19,16 @@ const (
 var admin = Caller{ID: adminID, Role: core.RoleSuperAdmin}
 
 type fakeRepo struct {
-	stored  []domain.Fixture
-	event   domain.OutboxEvent
-	linked  map[string]string
-	linkErr error
+	stored         []domain.Fixture
+	event          domain.OutboxEvent
+	linked         map[string]string
+	linkErr        error
+	knockout       domain.KnockoutPlan
+	advanceFixture domain.Fixture
+	advanceCreated bool
+	advanceErr     error
+	pending        []domain.Fixture
+	pendingErr     error
 }
 
 func (f *fakeRepo) SaveSchedule(_ context.Context, _ string, fixtures []domain.Fixture, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
@@ -47,14 +53,22 @@ func (f *fakeRepo) LinkMatch(_ context.Context, booked domain.Fixture) error {
 	}
 	return nil
 }
-func (f *fakeRepo) SaveKnockoutSchedule(context.Context, string, domain.KnockoutPlan, domain.OutboxEvent) ([]domain.Fixture, bool, error) {
-	return nil, false, nil
+func (f *fakeRepo) SaveKnockoutSchedule(_ context.Context, _ string, plan domain.KnockoutPlan, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
+	f.knockout, f.event = plan, event
+	if f.stored != nil {
+		return append([]domain.Fixture(nil), f.stored...), false, nil
+	}
+	f.stored = append([]domain.Fixture(nil), plan.Fixtures...)
+	for i := range f.stored {
+		f.stored[i].ID = string(rune('a' + i))
+	}
+	return append([]domain.Fixture(nil), f.stored...), true, nil
 }
 func (f *fakeRepo) AdvanceKnockout(context.Context, domain.MatchFinalized) (domain.Fixture, bool, error) {
-	return domain.Fixture{}, false, nil
+	return f.advanceFixture, f.advanceCreated, f.advanceErr
 }
 func (f *fakeRepo) PendingFixtures(context.Context, string) ([]domain.Fixture, error) {
-	return nil, nil
+	return f.pending, f.pendingErr
 }
 func (f *fakeRepo) List(context.Context, string, int, int) ([]domain.Fixture, bool, error) {
 	return f.stored, false, nil
@@ -72,6 +86,13 @@ type fakeTeams struct {
 }
 
 func (f fakeTeams) ApprovedTeamIDs(context.Context, string) ([]string, error) { return f.ids, f.err }
+
+type fakeStandings struct {
+	ids []string
+	err error
+}
+
+func (f fakeStandings) TeamIDsByRank(context.Context, string) ([]string, error) { return f.ids, f.err }
 
 type fakeVenues struct {
 	dzongkhag *string
@@ -249,5 +270,39 @@ func TestList(t *testing.T) {
 	}
 	if items, _, err := s.List(context.Background(), tournament, 10, 0); err != nil || len(items) != 1 {
 		t.Fatalf("list: %v", err)
+	}
+}
+
+func TestGenerateKnockoutAndHandleFinalizedLeagueKnockout(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}}, &fakeMatches{}
+	var district string
+	teams := []string{
+		"11111111-1111-4111-8111-111111111101",
+		"11111111-1111-4111-8111-111111111102",
+		"11111111-1111-4111-8111-111111111103",
+		"11111111-1111-4111-8111-111111111104",
+	}
+	s := New(repo, fakeTournaments{}, fakeTeams{ids: teams},
+		fakeVenues{dzongkhag: &district}, matches, fakeStandings{ids: []string{teams[3], teams[0], teams[2], teams[1], "11111111-1111-4111-8111-111111111105"}})
+	s.now = func() time.Time { return time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC) }
+	s.newID = func() (string, error) { return "event-1", nil }
+
+	fixtures, created, err := s.Generate(context.Background(), admin, tournament, domain.FormatKnockout, time.Time{})
+	if err != nil || created == 0 || len(fixtures) == 0 || len(repo.knockout.Fixtures) == 0 {
+		t.Fatalf("knockout schedule: fixtures=%d created=%d err=%v", len(fixtures), created, err)
+	}
+	if event := repo.event; event.EventID != "event-1" || len(event.Payload) == 0 {
+		t.Fatalf("knockout outbox event missing: %+v", event)
+	}
+
+	repo.advanceFixture = domain.Fixture{Format: domain.FormatLeagueKnockout}
+	repo.advanceCreated = true
+	repo.pending = []domain.Fixture{{ID: "next"}}
+	event := domain.MatchFinalized{TournamentID: tournament, FinalizedAt: time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)}
+	if err := s.HandleMatchFinalized(context.Background(), event); err != nil {
+		t.Fatal(err)
+	}
+	if repo.knockout.Rounds == 0 || repo.event.EventID != "event-1" || repo.linked["next"] == "" {
+		t.Fatalf("league knockout did not create and link next round: plan=%+v event=%+v linked=%v", repo.knockout, repo.event, repo.linked)
 	}
 }
