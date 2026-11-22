@@ -17,6 +17,18 @@
   })();
   const apiRoot = configuredApiRoot.href.replace(/\/+$/, '');
   const headers = () => ({'Content-Type':'application/json'});
+  function setFormBusy(form,busy){
+    form.setAttribute('aria-busy',String(busy));
+    for(const button of form.querySelectorAll('button[type="submit"]')){
+      if(busy){button.dataset.originalLabel=button.textContent;button.disabled=true;button.textContent='Saving…'}
+      else{button.disabled=false;if(button.dataset.originalLabel){button.textContent=button.dataset.originalLabel;delete button.dataset.originalLabel}}
+    }
+  }
+  function showFormError(form,message){
+    let alert=form.querySelector('[data-form-error]');
+    if(!alert){alert=document.createElement('p');alert.dataset.formError='true';alert.setAttribute('role','alert');alert.className='form-error';form.querySelector('.modal-body')?.prepend(alert)}
+    if(alert)alert.textContent=message;
+  }
   const standingsState = {status:'signed-out', tournamentID:'', tournaments:[], rows:[], message:''};
   window.DRUKLEAGUE_STANDINGS_STATE = standingsState;
   async function renew() {
@@ -71,6 +83,7 @@
       } catch (error) {
         standingsState.status = 'error';
         standingsState.message = error.message || 'Could not load standings.';
+        window.DRUKLEAGUE_DASHBOARD_STATE = {status:'error',message:standingsState.message};
       }
     }
     if (renderPage && activePage === 'standings') render(activePage);
@@ -123,8 +136,15 @@
     if (['dashboard','standings','teams','matches','tournaments'].includes(activePage)) render(activePage);
     try {
       const [remoteTeams, remoteTournaments, remoteMatches] = await Promise.all([request('/teams'),request('/tournaments'),request('/matches')]);
+      if (![remoteTeams,remoteTournaments,remoteMatches].every(Array.isArray)) throw new Error('The API returned an unexpected record list.');
       const standingsTournamentID=safeUUID(remoteTournaments.find(t=>t.id===standingsState.tournamentID)?.id || remoteTournaments[0]?.id);
+      const seasons=remoteTournaments.map(t=>String(t.season||'')).filter(Boolean).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}));
+      const activeSeason=seasons[0]||String(new Date().getFullYear());
+      window.DRUKLEAGUE_ACTIVE_SEASON=activeSeason;
+      const seasonButton=document.getElementById('season-button');
+      if(seasonButton) seasonButton.innerHTML=`<span class="season-dot"></span> ${activeSeason} season <span aria-hidden="true">⌄</span>`;
       standingsState.tournaments = remoteTournaments.map(t=>({id:safeUUID(t.id),name:t.name,season:t.season})).filter(t=>t.id);
+      standingsState.status = standingsState.tournaments.length ? 'loading' : 'no-tournaments';
       const tableState=await loadStandings(standingsTournamentID, {renderPage:false});
       const table=tableState.status==='loaded'?tableState.rows.map(row=>({team_id:row.team_id,played:row.played,won:row.w,drawn:row.d,lost:row.l,goals_for:row.gf,goals_against:row.ga,goal_difference:row.gd,points:row.pts})):[];
       const byTeam=new Map(table.map(row=>[row.team_id,row]));
@@ -138,10 +158,10 @@
       window.DRUKLEAGUE_DASHBOARD_STATE = {status:'loaded'};
       render(activePage);
     } catch (error) {
-      window.DRUKLEAGUE_DASHBOARD_STATE = {status:'error',message:error.message};
+      window.DRUKLEAGUE_DASHBOARD_STATE = {status:'error',message:error.message || 'Could not load saved project data.'};
       standingsState.status = 'error';
       standingsState.message = error.message || 'Could not load saved project data.';
-      if (['dashboard','standings','teams','matches','tournaments'].includes(activePage)) render(activePage);
+    if (['dashboard','standings','teams','matches','tournaments'].includes(activePage)) render(activePage);
       toast(`Could not load saved project data: ${error.message}`);
     }
   }
@@ -205,14 +225,18 @@
     if (!token()) return;
     if (['tournament-form','team-form','score-form'].includes(form.id)) event.preventDefault();
     if (form.id==='tournament-form') {
-      const name=form.elements.name.value.trim(), sport=form.elements.sport.value.split('·')[0].trim().toLowerCase(), starts=form.querySelector('#t-start').value;
-      try { await request('/tournaments',{method:'POST',body:JSON.stringify({name,sport,season:'2025',starts_at:starts,dzongkhag:form.elements.dz.value})}); await refresh(); }
-      catch(error){toast(`Could not save tournament: ${error.message}`);}
+      const name=form.elements.name.value.trim(), sport=form.elements.sport.value.split('·')[0].trim().toLowerCase(), starts=form.querySelector('#t-start').value, season=form.elements.season.value;
+      setFormBusy(form,true);
+      try { await request('/tournaments',{method:'POST',body:JSON.stringify({name,sport,season,starts_at:starts,dzongkhag:form.elements.dz.value})}); await refresh(); document.getElementById('modal-root').innerHTML='';toast(`${name} saved.`); }
+      catch(error){showFormError(form,`Could not save tournament: ${error.message}`);toast(`Could not save tournament: ${error.message}`);}
+      finally{setFormBusy(form,false)}
     } else if (form.id==='team-form') {
       const name=form.elements.name.value.trim(), dz=form.elements.dz.value, tournamentID=safeUUID(form.elements.tournament_id.value), tournament=tournaments.find(t=>t.id===tournamentID);
       if(!tournament){toast('Choose a valid tournament before registering the team.');return;}
-      try { await request('/teams',{method:'POST',body:JSON.stringify({name,short_code:initials(name),dzongkhag:dz,...(tournament?.id?{tournament_id:tournament.id}:{})})}); await refresh(); }
-      catch(error){toast(`Could not save team: ${error.message}`);}
+      setFormBusy(form,true);
+      try { await request('/teams',{method:'POST',body:JSON.stringify({name,short_code:initials(name),dzongkhag:dz,tournament_id:tournament.id})}); await refresh(); document.getElementById('modal-root').innerHTML='';toast(`${name} registered.`); }
+      catch(error){showFormError(form,`Could not register team: ${error.message}`);toast(`Could not save team: ${error.message}`);}
+      finally{setFormBusy(form,false)}
     } else if (form.id==='score-form') {
       const match=fixtureData[Number(form.dataset.matchIndex)],matchID=safeUUID(match?.id); if (!matchID) {toast('This demo fixture is not saved in the database.');return;}
       const body=JSON.stringify({home:Number(form.elements.home.value),away:Number(form.elements.away.value)}),final=event.submitter?.value==='finalize';
@@ -232,6 +256,7 @@
   document.addEventListener('change', event => {
     if (event.target.id === 'standings-tournament') void loadStandings(event.target.value);
     if (event.target.id === 'fixtures-tournament') { window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID=event.target.value||'all'; render('matches'); }
+    if (event.target.id === 'tournament-season-filter') { tournamentSeasonFilter=event.target.value||'all'; render('tournaments'); }
   });
   document.querySelector('.top-avatar').classList.add('auth-button');
   window.DRUKLEAGUE_AUTHENTICATED = false;
