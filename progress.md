@@ -586,14 +586,14 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added role checks to UI click and form submission paths so manually invoked hidden actions are rejected with a user-facing message. The authenticated API/server remains the security boundary; these browser checks are presentation behavior only.
 - Updated `app.js` and `api.js`. No local tests or build checks were run. Committed as `55dc688` and `22210cc`, then merged to `development` in PR [#16](https://github.com/Norbu-d/Druk_League_Final_project/pull/16) at merge commit `666d197` on 5 Nov 2026. All 11 CI checks passed. Jira was initially To Do and Namgay confirmed it was changed to Done on 5 Nov 2026.
 
-## 21. SCRUM-24 — Testing pyramid (Namgay contribution merged, 6 Nov 2026)
+## 21. SCRUM-24 — Testing pyramid (Namgay work paused, Jira checked 21 Nov 2026)
 
-- Jira shows the parent assigned to Namgay in Sprint 8 (*Integration & QA*), In Progress, with two of three children Done. SCRUM-55, integration and contract tests, remains In Progress and assigned to Norbu.
+- Live Jira check on 21 Nov: SCRUM-24 remains In Progress and assigned to Namgay in Sprint 8. Execution is paused at Namgay’s request. SCRUM-55 remains In Progress and assigned to Norbu; reconcile its completion evidence with Norbu before resuming the parent.
 - Extracted the four-role page/action permission policy into `role-permissions.js`, added four Node unit tests for page access, fallback roles, mutation permissions and read-only export, and added a CI job to run them. Updated `docs/swe302-test-plan.md` with case T-17 and its evidence.
 - Added Audit Log unit tests for event validation and conversion, authorization and pagination, JetStream message handling, and gRPC request/response mapping. Added PostgreSQL repository tests for event idempotency, filtered/paginated reads, and database errors; these run automatically in CI's PostgreSQL-backed test job.
 - PR [#26](https://github.com/Norbu-d/Druk_League_Final_project/pull/26) merged to `development` at `0362590` on 6 Nov. All PR checks passed, including Go lint/build/test/80% coverage, security, image scan, notification and audit E2E, frontend permissions, protobuf, and performance.
 - Local verification on 6 Nov: the audit-log Go packages pass, and combined `internal/...` coverage is 80.6% against the 80% gate. PostgreSQL integration cases were skipped locally because `TEST_DATABASE_URL` is unset. The previously added four Node permission tests and syntax checks passed. The full Compose E2E remains assigned to SCRUM-56 (Done); cross-service integration and contract tests remain in Norbu's open SCRUM-55.
-- SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 is Done.
+- SCRUM-24 remains In Progress in Jira and paused per Namgay’s request. Resume only after reconciling the full story acceptance and SCRUM-55 evidence. Jira shows SCRUM-68 Done.
 
 ## 22. SCRUM-103 — Nginx hardening (in progress, 6 Nov 2026)
 
@@ -660,7 +660,7 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - SCRUM-21 is assigned to Namgay. Existing role-based page and action visibility is retained; the sidebar and header show signed-in username and role, and signing out restores Public viewer / Viewer. `role-permissions.js` centralizes role labels, profile formatting, and Viewer fallback.
 - The local `file:///` launch uses the API at `127.0.0.1:8080`; failed sign-ins show an inline error. The recommended full-app launch remains Docker Compose at `http://localhost:4173`.
 - Verification recorded on the feature branch: all 6 Node role-permission/profile tests passed; `node --check` passed for `role-permissions.js`, `app.js`, and `api.js`; `git diff --check` passed. Browser reproduction remains pending, and backend authorization remains the security boundary.
-- PR #28 merged into `development` at `db8e8db`. The last recorded Jira status was To Do; refresh its acceptance criteria and status. SCRUM-24 remains open.
+- Live Jira check on 21 Nov: SCRUM-21 is Done in Sprint 8; SCRUM-48 and SCRUM-49 are also Done. PR #28 merged into `development` at `db8e8db`; all checks passed. SCRUM-24 remains In Progress and paused separately.
 
 ## 33. Sync with `development` (9 Nov 2026)
 
@@ -801,12 +801,19 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added durable Search consumers and transactional Team, Player, and Tournament outboxes, including initial events for existing records and a replay procedure.
 - The four service images started successfully; Search indexed 20 teams and 5 tournaments, and an authenticated Search RPC returned the requested team. The Player database currently has no records.
 
-## SCRUM-46 — Registration and fixtures views (Namgay)
+## SCRUM-20 — Web client follow-up (Namgay, 22 Nov 2026)
 
-- Jira: [SCRUM-46](https://rub-team-da9meulc.atlassian.net/browse/SCRUM-46), In Progress. Scope: screens for team/tournament registration and fixture browsing using the API gateway.
-- Branch: `feature/namgay-SCRUM-46-registration-fixtures`. PR: [#38](https://github.com/Norbu-d/Druk_League_Final_project/pull/38), open against `development`.
+- Jira check on 22 Nov: SCRUM-20 is assigned to Namgay, In Progress in active Sprint 8 (Integration & QA); SCRUM-47 is Done. Its remaining child SCRUM-46 was moved to To Do at Namgay's request while browser acceptance waits for an identified test tournament. SCRUM-24 remains set aside per Namgay's earlier pause request; SCRUM-55 integration/contract work is owned by Norbu.
+- On `feature/namgay-SCRUM-20-web-client-followup`, removed sample teams/tournaments/fixtures from the runtime data lists and added role-neutral loading, empty, signed-out and retry states for saved-data views; dashboard no longer claims hard-coded activity is live API data. Tournament cards now escape API content and show the exact fixture count (including zero); the tournament season filter works, the create form chooses a season, and the header season is derived from live tournament data instead of hard-coded 2025.
+- Team, tournament and fixture list empty states are explicit. API save failures for tournament/team forms now remain visible in the form, submit buttons show a busy state, and successful saves close the form and refresh live data.
+- No tournament, team, or match records were created or modified. Local syntax checks (`node --check app.js`, `node --check api.js`) and `git diff --check` passed; no automated test suite or full browser acceptance was run locally. Draft PR [#42](https://github.com/Norbu-d/Druk_League_Final_project/pull/42) is open against `development` from this branch; required GitHub checks are still running. Remaining SCRUM-20 acceptance includes end-to-end signed-in role checks and confirmation of the full screen set against the backend; a test tournament is still needed to exercise team registration safely.
+
+## SCRUM-46 — Registration and fixtures views (Namgay; paused, 22 Nov 2026)
+
+- Jira: [SCRUM-46](https://rub-team-da9meulc.atlassian.net/browse/SCRUM-46), To Do at Namgay's request while signed-in acceptance awaits a confirmed test tournament. Scope: screens for team/tournament registration and fixture browsing using the API gateway.
+- Branch: `feature/namgay-SCRUM-46-registration-fixtures`. [PR #38](https://github.com/Norbu-d/Druk_League_Final_project/pull/38) merged into `development` on 21 Nov 2026; all 17 GitHub checks passed.
 - Added live counts to tournament cards from saved team and match records; removed hard-coded team registration counts and standings-only team assumptions from the team list.
 - The team registration form requires a saved tournament and submits its ID with the team record. Team rows show their linked tournament and standings values.
 - Added a tournament selector for fixtures and display of saved kickoff date/time, venue, tournament, and current match status/result.
 - The gateway currently exposes team creation/listing and fixture generation/listing, but no separate registration-service routes. This implementation follows the gateway contract and treats a team linked to a tournament as the current registration flow; approval/review workflow remains unavailable through this API.
-- Verification: `node --check app.js` and `node --check api.js` passed. Docker is unavailable in this environment and local API ports 8079/8080 did not respond, so signed-in browser/API behavior could not be checked. No competition records were created or modified; verify on a confirmed test-only database before exercising record-changing flows.
+- Verification: `node --check app.js`, `node --check api.js`, `git diff --check`, SonarCloud, and all 17 GitHub checks passed. Runtime: Compose services started using a local port override (`web` on 4173, BFF on 8082; existing services on 3000/8080 were left running); web and BFF health checks returned HTTP 200. Signed-in Chrome confirmed `admin` / Super Admin, but the Tournaments page showed no tournaments, so the team registration acceptance check is blocked until Norbu or Sonam identifies a test tournament or confirms test-only data creation. No competition records were created or modified.
