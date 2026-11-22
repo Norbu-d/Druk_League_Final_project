@@ -114,6 +114,24 @@ func TestScheduleErrors(t *testing.T) {
 	}
 }
 
+func TestScheduleOddTeamCount(t *testing.T) {
+	fixtures, err := Schedule("t", teams(5), []Venue{{ID: "v1", Name: "First"}}, start, FormatRoundRobin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fixtures) != 10 {
+		t.Fatalf("5-team round robin: got %d fixtures, want 10", len(fixtures))
+	}
+	for _, fixture := range fixtures {
+		if fixture.VenueID != "v1" || fixture.VenueName != "First" {
+			t.Fatalf("venue not applied: %+v", fixture)
+		}
+		if fixture.HomeTeamID == fixture.AwayTeamID {
+			t.Fatalf("bye team scheduled: %+v", fixture)
+		}
+	}
+}
+
 func TestFormatsAndDefaultStart(t *testing.T) {
 	for input, want := range map[string]string{"": FormatRoundRobin, "league": FormatRoundRobin, "round robin": FormatRoundRobin, "home_and_away": FormatDoubleRoundRobin, FormatDoubleRoundRobin: FormatDoubleRoundRobin} {
 		if got, err := NormalizeFormat(input); err != nil || got != want {
