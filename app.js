@@ -1,99 +1,1204 @@
-const icons={grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',trophy:'<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v2a4 4 0 0 0 4 4m9-6h3v2a4 4 0 0 1-4 4"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M17 11a4 4 0 0 0 0-8m4 18v-2a4 4 0 0 0-3-3.87"/>',calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',chart:'<path d="M3 3v18h18M8 15l4-4 4 3 5-7"/>',shield:'<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/>',pin:'<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8m-8 4h8"/>',search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 13h4"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',plus:'<path d="M12 5v14m-7-7h14"/>',arrow:'<path d="M5 12h14m-7-7 7 7-7 7"/>',filter:'<path d="M4 7h16M7 12h10m-7 5h4"/>',download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/>',dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',calendarSmall:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>'};
-const svg=(name)=>`<svg viewBox="0 0 24 24" aria-hidden="true">${icons[name]||icons.grid}</svg>`;
-document.querySelectorAll('[data-icon]').forEach(el=>el.innerHTML=svg(el.dataset.icon));
-const seasonButton=document.getElementById('season-button');if(seasonButton)seasonButton.innerHTML=`<span class="season-dot"></span> ${new Date().getFullYear()} season <span class="chevron">⌄</span>`;
-const teams=[];
-let tournaments=[];
-let activePage='dashboard';let matchTab='all';let query='';let tournamentSeasonFilter='all';window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID='all';
-const fixtureData=[];
-function pageHeading(kicker,title,desc,actions=''){return `<div class="page-heading"><div><div class="eyebrow">${kicker}</div><h1>${title}</h1><p>${desc}</p></div><div class="heading-actions">${actions}</div></div>`}
-function btn(label,cls='button',icon=''){const action=label==='New tournament'?'new-tournament':label==='Add a team'?'new-team':['Export report','Download table','Export all data'].includes(label)?'export':label==='Generate fixtures'?'generate-fixtures':label==='Add official'?'manage-officials':label==='Add venue'?'manage-venues':'';return `<button class="${cls}" ${action?`data-action="${action}" data-role-action="${action}"`:''}>${icon?svg(icon):''}${label}</button>`}
-function metric(label,value,foot,icon,positive=''){return `<article class="metric-card"><div class="metric-top"><span>${label}</span><span class="metric-icon">${svg(icon)}</span></div><div class="metric-value">${value}</div><div class="metric-foot">${positive?`<span class="positive">${positive}</span> · `:''}${foot}</div></article>`}
-function formPips(form){return `<span class="form-pips">${form.map(x=>`<i class="${x==='L'?'loss':''}">${x}</i>`).join('')}</span>`}
-function teamTable(rows=teams.slice(0,5)){const ranked=[...rows].sort((a,b)=>b.pts-a.pts||Number.parseInt(b.gd)-Number.parseInt(a.gd));return `<div class="panel table-wrap"><table class="data-table"><thead><tr><th>#</th><th>TEAM</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>PTS</th><th>FORM</th></tr></thead><tbody>${ranked.map((t,i)=>`<tr><td class="rank-cell">${String(i+1).padStart(2,'0')}</td><td class="club-cell"><span class="club-logo ${escapeHtml(t.color||'')}">${escapeHtml(t.short)}</span>${escapeHtml(t.name)}</td><td>${t.played}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td><td>${escapeHtml(String(t.gd))}</td><td class="points-cell">${t.pts}</td><td>${formPips(t.form)}</td></tr>`).join('')}</tbody></table></div>`}
-function liveStandingsTable(rows){const ranked=[...rows].sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.gf-a.gf||a.name.localeCompare(b.name));return `<div class="panel table-wrap"><table class="data-table"><thead><tr><th>#</th><th>TEAM</th><th>DZONGKHAG</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>PTS</th></tr></thead><tbody>${ranked.map((t,i)=>`<tr><td class="rank-cell">${String(i+1).padStart(2,'0')}</td><td class="club-cell"><span class="club-logo">${escapeHtml(t.name.split(/\s+/).map(word=>word[0]||'').join('').slice(0,2).toUpperCase())}</span>${escapeHtml(t.name)}</td><td>${escapeHtml(t.dz)}</td><td>${t.played}</td><td>${t.w}</td><td>${t.d}</td><td>${t.l}</td><td>${t.gf}</td><td>${t.ga}</td><td>${t.gd>0?'+':''}${t.gd}</td><td class="points-cell">${t.pts}</td></tr>`).join('')}</tbody></table></div>`}
-function fixtureList(rows=fixtureData){return `<div class="fixtures-list">${rows.map(m=>`<div class="fixture"><div class="fixture-time"><strong>${escapeHtml(m.time||'TBD')}</strong><small>${escapeHtml(m.period||'UPCOMING')}</small></div><div><div class="fixture-teams"><span class="team-badge ${m.hColor||''}">${escapeHtml(m.h||'')}</span>${escapeHtml(m.home)}<span class="vs">vs</span><span class="team-badge ${m.aColor||''}">${escapeHtml(m.a||'')}</span>${escapeHtml(m.away)}</div><div class="fixture-venue">${escapeHtml(m.venue||'Venue TBD')}</div></div><span class="status ${m.status==='LIVE'?'status-live':m.status==='COMPLETED'?'status-completed':'status-upcoming'}">${m.status==='LIVE'||m.status==='COMPLETED'?escapeHtml(m.score):escapeHtml(m.status)}</span></div>`).join('')}</div>`}
-function chart(){return `<div class="chart-wrap"><div class="chart-summary">Registrations this season <strong>248</strong><em>↗ 18.6%</em><div class="chart-legend"><span class="legend-item"><i></i>Teams</span><span class="legend-item"><i></i>Players</span></div></div><svg class="chart-svg" viewBox="0 0 620 190" preserveAspectRatio="none" role="img" aria-label="Registrations trend, January through July"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6b9871" stop-opacity=".17"/><stop offset="1" stop-color="#6b9871" stop-opacity="0"/></linearGradient></defs><line class="grid-line" x1="38" y1="20" x2="610" y2="20"/><line class="grid-line" x1="38" y1="62" x2="610" y2="62"/><line class="grid-line" x1="38" y1="104" x2="610" y2="104"/><line class="grid-line" x1="38" y1="146" x2="610" y2="146"/><text x="0" y="23">300</text><text x="0" y="65">200</text><text x="0" y="107">100</text><text x="11" y="149">0</text><path class="chart-area" d="M45 130 C85 125 88 116 130 118 S190 100 225 104 S290 76 322 81 S380 64 418 69 S474 43 515 49 S566 24 602 31 L602 146 L45 146Z"/><path class="line-main" d="M45 130 C85 125 88 116 130 118 S190 100 225 104 S290 76 322 81 S380 64 418 69 S474 43 515 49 S566 24 602 31"/><path class="line-secondary" d="M45 139 C85 132 93 128 130 129 S186 121 225 123 S284 115 322 115 S380 102 418 106 S476 97 515 93 S570 79 602 82"/><text x="39" y="170">JAN</text><text x="129" y="170">FEB</text><text x="221" y="170">MAR</text><text x="314" y="170">APR</text><text x="407" y="170">MAY</text><text x="500" y="170">JUN</text><text x="588" y="170">JUL</text></svg></div>`}
-let latestActivity=null;
-function activity(){const live=window.DRUKLEAGUE_DASHBOARD_STATE?.status==='loaded';return `<div class="activity-list">${latestActivity?`<div class="activity-item"><span class="activity-icon">✓</span><div class="activity-copy"><strong>${escapeHtml(latestActivity.title)}</strong> · ${escapeHtml(latestActivity.detail)}<small>Just now · ${escapeHtml(latestActivity.actor)}</small></div></div>`:''}${live?'<div class="empty-state"><strong>Activity feed unavailable</strong>The API does not currently expose saved activity events.</div>':window.DRUKLEAGUE_DASHBOARD_STATE?.status==='error'?'<div class="empty-state" role="alert"><strong>Dashboard data unavailable</strong>Reconnect to the API to load workspace activity.</div>':'<div class="empty-state"><strong>Sign in to view updates</strong>Activity shown here will come from your saved workspace data.</div>'}</div>`}
-window.DRUKLEAGUE_DASHBOARD_STATE = {status:'loading'};
-function collectionEmptyState(label,totalCount,searchTerm=''){
-  const state=window.DRUKLEAGUE_DASHBOARD_STATE?.status||'loading';
-  let title='No saved records',message='There are no records to show yet.',role='status',action='';
-  if(state==='loaded'&&totalCount>0&&searchTerm){title=`No ${label} match this selection`;message='Change the search or filter to see other records.'}
-  else if(state==='loaded'&&totalCount>0){title=`No ${label} match this selection`;message='Change the filter to see other records.'}
-  else if(state==='loading'){title=`Loading ${label}…`;message='Fetching saved data.'}
-  else if(state==='error'){title=`Could not load ${label}`;message=window.DRUKLEAGUE_DASHBOARD_STATE.message||'Check the API connection and retry.';role='alert';action='<button class="button" type="button" data-action="refresh-dashboard">Retry</button>'}
-  else if(state==='signed-out'){title=`Sign in to load ${label}`;message='Saved competition data appears after you sign in.';action='<button class="button button-primary" type="button" data-action="standings-login">Sign in</button>'}
-  else if(searchTerm){title=`No ${label} match this search`;message='Try a different search term.'}
-  else if(totalCount>0){title=`No ${label} match this selection`;message='Change the filter to see other records.'}
-  else {title=`No ${label} yet`;message='Saved records will appear here when they are added.'}
-  return `<div class="empty-state" role="${role}"><strong>${escapeHtml(title)}</strong>${escapeHtml(message)}${action?`<br>${action}`:''}</div>`;
+// DrukLeague workspace: screens, navigation and forms.
+// Data and sign-in live in api.js (window.DrukAPI); this file renders `store` and handles UI events.
+// The server checks every role again; hiding a control here is presentation only.
+
+/* ---------------------------------------------------------------- icons */
+const ICONS = {
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v2a4 4 0 0 0 4 4m9-6h3v2a4 4 0 0 1-4 4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M17 11a4 4 0 0 0 0-8m4 18v-2a4 4 0 0 0-3-3.87"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+  chart: '<path d="M3 3v18h18M8 15l4-4 4 3 5-7"/>',
+  shield: '<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/>',
+  pin: '<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8m-8 4h8"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  plus: '<path d="M12 5v14m-7-7h14"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 9.2-9.2m-3 3 2 2m-5 1 2 2"/>',
+  login: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
+  whistle: '<circle cx="9" cy="14" r="5"/><path d="M13 11 21 7v4l-6 2M9 14h.01"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4m0-4h.01"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  refresh: '<path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8M21 4v5h-5M3 20v-5h5"/>',
+  home: '<path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z"/>',
+  shirt: '<path d="M8 3 3 6l2 5 3-1v11h8V10l3 1 2-5-5-3a4 4 0 0 1-8 0Z"/>',
+  flag: '<path d="M5 21V4m0 0h11l-2 4 2 4H5"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
+  userplus: '<path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6m-3-3h6"/>'
+};
+const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.grid}</svg>`;
+document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
+
+/* ---------------------------------------------------------------- state */
+// Filled by api.js. Shapes are normalised there.
+const store = {
+  session: { status: 'checking', user: null },      // checking | signed-out | signed-in
+  data: { status: 'idle', message: '' },            // idle | loading | loaded | error
+  tournaments: [], teams: [], matches: [],
+  users: [], usersStatus: 'idle',                   // admin only
+  registrations: [], registrationsStatus: 'idle',   // admin: all; team manager: their own
+  venues: [], venuesStatus: 'idle',                 // admin only
+  players: {},                                      // team id -> { status, rows, message }
+  standings: { tournamentId: '', status: 'idle', rows: [], message: '', updatedAt: '' }
+};
+const ui = { page: 'dashboard', query: '', matchTab: 'all', matchTournament: 'all', season: 'all', teamScope: 'all', userRole: 'all', squadTeam: '', regTab: 'pending' };
+
+const { rolePages, currentRole, canRoleAction, roleLabels } = window.DrukLeaguePermissions;
+const ROLE_INFO = {
+  super_admin: { icon: 'key', title: 'Super Admin', can: ['Create tournaments, venues and fixtures', 'Approve team registrations', 'Create accounts and assign officials'] },
+  match_official: { icon: 'whistle', title: 'Match Official', can: ['See the matches assigned to you', 'Update the live score during play', 'Finalise the result at full time'] },
+  team_manager: { icon: 'users', title: 'Team Manager', can: ['Enter teams into open tournaments', 'Build your squad list', 'Follow approval, fixtures and results'] },
+  viewer: { icon: 'eye', title: 'Viewer', can: ['Follow fixtures, results and standings', 'Browse teams and their squads', 'Download tables as CSV'] }
+};
+const DZONGKHAGS = ['Bumthang', 'Chhukha', 'Dagana', 'Gasa', 'Haa', 'Lhuentse', 'Mongar', 'Paro', 'Pema Gatshel', 'Punakha', 'Samdrup Jongkhar', 'Samtse', 'Sarpang', 'Thimphu', 'Trashigang', 'Trashiyangtse', 'Trongsa', 'Tsirang', 'Wangdue Phodrang', 'Zhemgang'];
+const SPORTS = ['Football', 'Futsal', 'Basketball', 'Volleyball', 'Archery'];
+const PAGE_LABELS = { dashboard: 'Overview', tournaments: 'Tournaments', teams: 'Teams', squads: 'Squads', registrations: 'Registrations', matches: 'Matches & scores', standings: 'Standings', officials: 'Officials', users: 'Users & roles', venues: 'Venues', reports: 'Reports' };
+// Pages a visitor can read without an account (served by the BFF's public routes).
+const PUBLIC_PAGES = ['dashboard', 'tournaments', 'teams', 'matches', 'standings'];
+
+/* ---------------------------------------------------------------- helpers */
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-function dashboardMetrics(){
-  const state=window.DRUKLEAGUE_DASHBOARD_STATE||{status:'loading'};
-  if(state.status!=='loaded'){
-    const message=state.status==='signed-out'
-      ? 'Sign in to load live dashboard counts.'
-      : state.status==='error'
-        ? `Could not load live dashboard counts. ${escapeHtml(state.message||'Please try again.')}`
-        : 'Loading live dashboard counts…';
-    const role=state.status==='error'?'alert':'status';
-    const retry=state.status==='error'?'<button class="button" type="button" data-action="refresh-dashboard">Retry</button>':'';
-    return `<div class="panel dashboard-data-notice" role="${role}" aria-live="polite"><span>${message}</span>${retry}</div><section class="metrics-grid">${metric('ACTIVE TOURNAMENTS','—','Live data','trophy')}${metric('REGISTERED TEAMS','—','Live data','users')}${metric('MATCHES PLAYED','—','Live data','calendar')}${metric('SCHEDULED / LIVE','—','Live data','chart')}</section>`;
+const initials = (name) => String(name || '?').split(/\s+/).map((w) => w[0] || '').join('').slice(0, 2).toUpperCase() || '?';
+const me = () => store.session.user || { id: '', username: '', role: 'viewer' };
+const role = () => (store.session.status === 'signed-in' ? currentRole() : 'viewer');
+const signedIn = () => store.session.status === 'signed-in';
+const loaded = () => store.data.status === 'loaded';
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const byId = (list, id) => list.find((item) => item.id === id);
+const tournamentName = (id) => byId(store.tournaments, id)?.name || 'No tournament';
+const userName = (id) => byId(store.users, id)?.username || '';
+const officials = () => store.users.filter((u) => u.role === 'match_official');
+const teamName = (id) => byId(store.teams, id)?.name || 'Unknown team';
+// Registrations: fixture generation only uses approved entries.
+const registrationFor = (teamId, tournamentId) => store.registrations.find((r) => r.teamId === teamId && r.tournamentId === tournamentId);
+const approvedIn = (tournamentId) => store.registrations.filter((r) => r.tournamentId === tournamentId && r.status === 'approved');
+const pendingRegistrations = () => store.registrations.filter((r) => r.status === 'pending');
+const tracksRegistrations = () => ['super_admin', 'team_manager'].includes(role()) && store.registrationsStatus === 'loaded';
+// Teams that play in a tournament: linked on the team record or entered through a registration.
+function teamsIn(tournamentId) {
+  const ids = new Set(store.registrations.filter((r) => r.tournamentId === tournamentId && r.status !== 'rejected').map((r) => r.teamId));
+  return store.teams.filter((t) => t.tournamentId === tournamentId || ids.has(t.id));
+}
+const canEditSquad = (team) => Boolean(team) && (role() === 'super_admin' || (role() === 'team_manager' && team.managerId === me().id));
+function registrationBadge(reg) {
+  if (!reg) return '<span class="status status-none">Not entered</span>';
+  if (reg.status === 'approved') return '<span class="status status-completed">Approved</span>';
+  if (reg.status === 'rejected') return '<span class="status status-rejected">Rejected</span>';
+  return '<span class="status status-pending">Waiting for approval</span>';
+}
+
+function dateParts(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.valueOf())) return { mon: 'TBD', day: '—', wk: '', time: 'Time TBD', long: 'Date to be confirmed' };
+  return {
+    mon: date.toLocaleDateString(undefined, { month: 'short' }),
+    day: date.toLocaleDateString(undefined, { day: '2-digit' }),
+    wk: date.toLocaleDateString(undefined, { weekday: 'short' }),
+    time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    long: date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+  };
+}
+const formatDate = (date) => (date instanceof Date && !Number.isNaN(date.valueOf()) ? date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set');
+
+function matchScore(m) {
+  if (m.status === 'completed' && m.resultHome != null) return [m.resultHome, m.resultAway];
+  if (m.liveHome != null) return [m.liveHome, m.liveAway];
+  return null;
+}
+const isMine = (m) => Boolean(m.officialId) && m.officialId === me().id;
+const myTeams = () => store.teams.filter((t) => t.managerId && t.managerId === me().id);
+function sortByKickoff(list) {
+  return [...list].sort((a, b) => (a.kickoff?.valueOf() ?? Infinity) - (b.kickoff?.valueOf() ?? Infinity));
+}
+function teamStats(teamId) {
+  const s = { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 };
+  for (const m of store.matches) {
+    if (m.status !== 'completed' || m.resultHome == null) continue;
+    let mine; let theirs;
+    if (m.homeId === teamId) { mine = m.resultHome; theirs = m.resultAway; } else if (m.awayId === teamId) { mine = m.resultAway; theirs = m.resultHome; } else continue;
+    s.p += 1; s.gf += mine; s.ga += theirs;
+    if (mine > theirs) s.w += 1; else if (mine < theirs) s.l += 1; else s.d += 1;
   }
-  const activeTournaments=tournaments.filter(t=>t.status==='In progress'||t.status==='Registration open').length;
-  const completedMatches=fixtureData.filter(m=>m.status==='COMPLETED').length;
-  const scheduledMatches=fixtureData.length-completedMatches;
-  return `<section class="metrics-grid">${metric('ACTIVE TOURNAMENTS',activeTournaments,String(activeTournaments?`${activeTournaments} currently open`:'No active tournaments'),'trophy')}${metric('REGISTERED TEAMS',teams.length,String(teams.length?`${teams.length} loaded from the API`:'No teams registered yet'),'users')}${metric('MATCHES PLAYED',completedMatches,String(completedMatches?`${completedMatches} completed matches`:'No completed matches yet'),'calendar')}${metric('SCHEDULED / LIVE',scheduledMatches,String(scheduledMatches?`${scheduledMatches} upcoming or live`:'No scheduled matches'),'chart')}</section>`;
+  s.gd = s.gf - s.ga; s.pts = s.w * 3 + s.d;
+  return s;
 }
-function dashboard(){const state=window.DRUKLEAGUE_DASHBOARD_STATE||{status:'loading'};const live=state.status==='loaded';const tournamentName=tournaments[0]?.name||'your tournaments';const fixtures=live?fixtureData.slice(0,3):[];const rows=live?teams.slice(0,5):[];return `${pageHeading(new Date().toLocaleDateString(undefined,{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).toUpperCase(),`Good morning, ${escapeHtml(sessionStorage.getItem('drukleague-username')||'there')} <span style="font-size:22px">✳</span>`,'Here’s what’s happening across Bhutanese sport today.',`${btn('Export report','button','download')}${btn('New tournament','button button-primary','plus')}`)}<section class="welcome-banner"><div class="welcome-copy"><div class="welcome-kicker"><span>✳</span> ${escapeHtml(String(tournaments[0]?.season||'NATIONAL'))} NATIONAL SEASON</div><h2>The next chapter of Bhutanese sport starts here.</h2><p>Keep every team, fixture, and result moving in the right direction.</p></div><div class="welcome-right"><button class="banner-link" data-page="tournaments">View season overview&nbsp; ↗</button></div></section>${dashboardMetrics()}<section class="dashboard-grid"><article class="panel"><div class="panel-head"><div><div class="panel-title">Registration overview</div><div class="panel-subtitle">Registration totals will appear when analytics is connected.</div></div></div>${collectionEmptyState('registration analytics',0)}</article><article class="panel fixtures-panel"><div class="panel-head"><div><div class="panel-title">Today’s fixtures</div><div class="panel-subtitle">${live?`${fixtures.length} saved fixtures in ${escapeHtml(tournamentName)}`:'Live fixtures from saved match records'}</div></div><a class="section-link" href="#matches" data-page="matches">Full schedule&nbsp; ↗</a></div>${fixtures.length?fixtureList():collectionEmptyState('fixtures',fixtureData.length)}</article></section><section class="lower-grid"><article class="panel"><div class="panel-head"><div><div class="panel-title">${escapeHtml(tournamentName)} standings</div><div class="panel-subtitle">${live?'Saved team standings':'Standings load after sign-in'}</div></div><a class="section-link" href="#standings" data-page="standings">Full table&nbsp; ↗</a></div>${rows.length?teamTable(rows):collectionEmptyState('standings',0)}</article><article class="panel"><div class="panel-head"><div><div class="panel-title">Recent activity</div><div class="panel-subtitle">Updates from your workspace</div></div></div>${activity()}</article></section>`}
-function tournamentsPage(){const filtered=tournaments.filter(t=>t.name.toLowerCase().includes(query.toLowerCase())&&(tournamentSeasonFilter==='all'||String(t.season)===tournamentSeasonFilter));return `${pageHeading('COMPETITIONS','Tournaments','Create, organize, and follow every competition across the season.',btn('New tournament','button button-primary','plus'))}<div class="page-toolbar"><button class="filter-button">${svg('filter')} All tournaments&nbsp;⌄</button><label class="filter-button">Season <select id="tournament-season-filter" class="select-small"><option value="all" ${tournamentSeasonFilter==='all'?'selected':''}>All seasons</option>${[...new Set(tournaments.map(t=>String(t.season||'')).filter(Boolean))].sort((a,b)=>b.localeCompare(a,undefined,{numeric:true})).map(season=>`<option value="${escapeHtml(season)}" ${season===tournamentSeasonFilter?'selected':''}>${escapeHtml(season)} season</option>`).join('')}</select></label><div class="toolbar-spacer"></div><label class="search-inline">${svg('search')}<input id="page-search" placeholder="Find a tournament..." value="${escapeHtml(query)}"></label></div><div class="tournament-grid">${filtered.length?filtered.map(t=>`<article class="tournament-card" data-searchable="${escapeHtml(t.name.toLowerCase())}"><div class="tournament-cover ${t.theme}"><span class="cover-pattern"></span><div class="cover-info"><div class="cover-sport">${escapeHtml(t.sport)}</div><div class="cover-title">${escapeHtml(t.name)}</div></div><span class="cover-season">${escapeHtml(String(t.season||'Season'))} SEASON</span></div><div class="tournament-body"><p class="tournament-description">${escapeHtml(t.description)}</p><div class="tournament-meta"><span class="meta-stat"><strong>${t.teams}</strong>Registered teams</span><span class="meta-stat"><strong>${t.fixtures}</strong>Fixtures</span><span class="status ${t.status==='In progress'?'status-live':t.status==='Completed'?'status-completed':'status-upcoming'}">${escapeHtml(t.status)}</span></div><div class="progress-row"><div class="progress-track"><i style="width:${t.fill}%"></i></div><span class="progress-label">${t.fill}% team capacity</span></div></div></article>`).join(''):collectionEmptyState('tournaments',tournaments.length,query|| (tournamentSeasonFilter==='all'?'':tournamentSeasonFilter))}</div>`}
-function teamsPage(){let rows=teams.filter(t=>`${t.name} ${t.dz} ${t.tournamentName||''}`.toLowerCase().includes(query.toLowerCase()));const districts=new Set(teams.map(t=>t.dz).filter(Boolean));const empty=collectionEmptyState('teams',teams.length,query);return `${pageHeading('THE COMMUNITY','Teams & dzongkhags','Register teams to a tournament and see their current standings.',btn('Add a team','button button-primary','plus'))}<section class="metrics-grid">${metric('REGISTERED TEAMS',String(teams.length),'saved team records','users')}${metric('DZONGKHAGS',String(districts.size),'represented by saved teams','pin')}${metric('TOURNAMENTS',String(tournaments.length),'available for registration','shield')}${metric('MATCHES PLAYED',String(teams.reduce((n,t)=>n+(t.played||0),0)),'from finalized results','calendar')}</section><div class="page-toolbar"><span class="filter-button">${svg('filter')} Registered teams</span><div class="toolbar-spacer"></div><label class="search-inline">${svg('search')}<input id="page-search" placeholder="Search teams or tournaments..." value="${escapeHtml(query)}"></label></div>${rows.length?`<div class="panel team-table"><table class="data-table"><thead><tr><th>TEAM</th><th>DZONGKHAG</th><th>TOURNAMENT</th><th>PLAYED</th><th>W–D–L</th><th>GOALS</th><th>GOAL DIFF.</th><th>POINTS</th></tr></thead><tbody>${rows.map(t=>`<tr><td><div class="team-identity"><span class="club-logo ${t.color}">${escapeHtml(t.short)}</span><span class="team-name">${escapeHtml(t.name)}</span></div></td><td>${escapeHtml(t.dz||'—')}</td><td>${escapeHtml(t.tournamentName||'Not registered to a tournament')}</td><td>${t.played}</td><td>${t.w}–${t.d}–${t.l}</td><td>${t.gf} : ${t.ga}</td><td>${t.gd}</td><td class="points-cell">${t.pts}</td></tr>`).join('')}</tbody></table></div>`:empty}</div>`}
-function scoreCard(m,i){return `<article class="score-card"><div class="score-date">${escapeHtml(m.dateMonth||'—')}<strong>${escapeHtml(m.dateDay||'—')}</strong>${escapeHtml(m.dateWeekday||'TBD')}</div><div class="score-divider"></div><div class="score-teams"><div class="score-team"><span class="team-badge ${m.hColor||''}">${escapeHtml(m.h)}</span>${escapeHtml(m.home)}<strong>${m.score?escapeHtml(m.score.split(' — ')[0]):'–'}</strong></div><div class="score-team"><span class="team-badge ${m.aColor}">${escapeHtml(m.a)}</span>${escapeHtml(m.away)}<strong>${m.score?escapeHtml(m.score.split(' — ')[1]):'–'}</strong></div></div><div class="score-meta">${escapeHtml(m.tournamentName||m.venue||'Venue to be confirmed')}<small>${escapeHtml(m.time||'Time to be confirmed')} · ${escapeHtml(m.venue||'Venue to be confirmed')}</small></div><span class="status ${m.status==='LIVE'?'status-live':m.status==='UPCOMING'?'status-upcoming':'status-completed'}">${m.status}</span><div class="score-actions"><button class="outline-mini" data-action="${m.status==='LIVE'?'update-score':'match-details'}" ${m.status==='LIVE'?'data-role-action="update-score"':''} data-match-index="${fixtureData.indexOf(m)}">${m.status==='LIVE'?'Update score':m.status==='COMPLETED'?'Final result':'Details'}</button></div></article>`}
-function matchesPage(){let data=fixtureData.filter(m=>(matchTab==='all'||m.status.toLowerCase()===matchTab)&&(window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID==='all'||m.tournamentId===window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID)&&`${m.home} ${m.away} ${m.venue}`.toLowerCase().includes(query.toLowerCase()));return `${pageHeading('ON THE PITCH','Matches & scores','Browse saved fixtures by tournament and follow match results.',btn('Generate fixtures','button button-primary','calendar'))}<div class="page-toolbar"><label class="standings-select-label">Tournament<select id="fixtures-tournament" class="select-small"><option value="all" ${window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID==='all'?'selected':''}>All tournaments</option>${tournaments.map(t=>`<option value="${escapeHtml(t.id||'')}" ${window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID===t.id?'selected':''}>${escapeHtml(t.name)} · ${escapeHtml(t.season||'')}</option>`).join('')}</select></label><div class="toolbar-spacer"></div><label class="search-inline">${svg('search')}<input id="page-search" placeholder="Search matches..." value="${escapeHtml(query)}"></label></div><div class="panel" style="margin-bottom:13px"><div class="panel-head"><div><div class="panel-title">Fixtures</div><div class="panel-subtitle">${data.length} saved ${data.length===1?'match':'matches'}${window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID==='all'?' across all tournaments':''}</div></div><div class="panel-tools">${[['all','All matches'],['live','Live now'],['upcoming','Upcoming'],['completed','Completed']].map(([k,v])=>`<button class="filter-button ${matchTab===k?'tab-active':''}" data-match-tab="${k}">${k==='live'?'<span class="live-dot" style="margin:0 2px"></span>':''}${v}</button>`).join('')}</div></div></div>${data.length?data.map(scoreCard).join(''):collectionEmptyState('fixtures',fixtureData.length,query|| (matchTab==='all'?'':matchTab))}`}
-function standingsPage(){const state=window.DRUKLEAGUE_STANDINGS_STATE||{status:window.DRUKLEAGUE_AUTHENTICATED?'loading':'signed-out',tournamentID:'',tournaments:[],rows:[],message:''};const selected=state.tournaments.find(t=>t.id===state.tournamentID);const selector=state.tournaments.length?`<label class="standings-select-label" for="standings-tournament">Tournament<select class="filter-button" id="standings-tournament" aria-label="Choose tournament">${state.tournaments.map(t=>`<option value="${escapeHtml(t.id)}" ${t.id===state.tournamentID?'selected':''}>${escapeHtml(t.name)}${t.season?` · ${escapeHtml(String(t.season))}`:''}</option>`).join('')}</select></label>`:'';let content='';if(state.status==='signed-out'){content='<div class="empty-state"><strong>Sign in to view standings</strong>Standings are loaded from your saved tournament results.<br><button class="button button-primary" data-action="standings-login" style="margin-top:14px">Sign in</button></div>'}else if(state.status==='loading'){content='<div class="empty-state" role="status"><strong>Loading standings…</strong>Fetching the selected tournament table.</div>'}else if(state.status==='error'){content=`<div class="empty-state" role="alert"><strong>Could not load standings</strong>${escapeHtml(state.message||'Please retry in a moment.')}<br><button class="button" data-action="refresh-standings" style="margin-top:14px">Try again</button></div>`}else if(state.status==='no-tournaments'){content='<div class="empty-state"><strong>No tournaments yet</strong>Create a tournament and record finalized matches to build its standings.</div>'}else if(!state.rows.length){content='<div class="empty-state"><strong>No standings yet</strong>This tournament has no standings rows. Finalized match results populate the table.</div>'}else{content=liveStandingsTable(state.rows)}const updated=state.status==='loaded'&&state.updatedAt?`Updated ${new Date(state.updatedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'Live table';return `${pageHeading('THE RACE FOR THE TITLE','Standings','Official standings from finalized results, grouped by tournament.',btn('Download table','button','download'))}<div class="page-toolbar standings-toolbar">${selector}<div class="toolbar-spacer"></div><span class="status status-completed">${updated}</span></div><section class="standings-panel"><div class="standings-header"><strong>${escapeHtml(selected?.name||'League table')}</strong><span>${state.status==='loaded'?`${state.rows.length} teams`:state.status==='loading'?'Loading…':'Tournament standings'}</span></div>${content}</section><div class="standings-footnote">P played · W won · D drawn · L lost · GF goals for · GA goals against · GD goal difference · PTS points</div>`}
-function officialsPage(){let people=[['KS','Karma Sonam','Head referee','Thimphu','12'],['TN','Tashi Norbu','Match official','Paro','08'],['PW','Pema Wangchuk','Match official','Punakha','11'],['DW','Deki Wangmo','Assistant referee','Bumthang','07'],['JL','Jigme Lhendup','Match official','Trongsa','09'],['SC','Sonam Choki','Competition manager','Thimphu','—']];return `${pageHeading('THE PEOPLE BEHIND THE GAME','Officials','Assign trusted officials and keep match days running smoothly.',btn('Add official','button button-primary','plus'))}<div class="page-toolbar"><button class="filter-button">${svg('filter')} All roles&nbsp;⌄</button><button class="filter-button">All dzongkhags&nbsp;⌄</button><div class="toolbar-spacer"></div><label class="search-inline">${svg('search')}<input id="page-search" placeholder="Search officials..." value="${escapeHtml(query)}"></label></div><div class="official-grid">${people.filter(p=>p.join(' ').toLowerCase().includes(query.toLowerCase())).map((p,i)=>`<article class="official-card"><div class="official-top"><span class="official-avatar ${i%3===1?'blue':i%3===2?'warm':''}">${p[0]}</span><span><div class="official-name">${p[1]}</div><div class="official-role">${p[2]}</div></span><span class="status status-upcoming" style="margin-left:auto">ACTIVE</span></div><div class="official-meta"><span>${p[3]} dzongkhag</span><span><strong>${p[4]}</strong> matches this season</span></div></article>`).join('')}</div>`}
-function venuesPage(){return `${pageHeading('WHERE IT HAPPENS','Venues','Keep grounds, facilities, and match locations in one place.',btn('Add venue','button button-primary','plus'))}<section class="metrics-grid">${metric('ACTIVE VENUES','24','across 18 dzongkhags','pin')}${metric('MATCHES THIS WEEK','12','scheduled this week','calendar')}${metric('CAPACITY','16,400','combined seats','users')}${metric('NEEDS ATTENTION','02','facility checks due','shield')}</section><div class="panel"><table class="data-table"><thead><tr><th>VENUE</th><th>DZONGKHAG</th><th>CAPACITY</th><th>FACILITIES</th><th>UPCOMING</th><th>STATUS</th></tr></thead><tbody>${[['Changlimithang Stadium','Thimphu','15,000','Floodlights · Dressing rooms','6','Available'],['Punakha Sports Ground','Punakha','2,500','Dressing rooms · Parking','3','Available'],['Paro College Ground','Paro','1,800','Dressing rooms · Parking','2','Available'],['Trongsa Municipal Ground','Trongsa','1,200','Basic facilities','1','Inspection due']].map(v=>`<tr><td class="club-cell"><span class="club-logo">${v[0][0]}S</span>${v[0]}</td><td>${v[1]}</td><td>${v[2]}</td><td>${v[3]}</td><td>${v[4]} matches</td><td><span class="status ${v[5]==='Available'?'status-completed':'status-live'}">${v[5]}</span></td></tr>`).join('')}</tbody></table></div>`}
-function reportsPage(){return `${pageHeading('INSIGHTS & EXPORTS','Reports','A clear picture of participation and play across the season.',btn('Export all data','button button-primary','download'))}<section class="metrics-grid">${metric('SEASON PARTICIPANTS','1,296','48 teams · 1,248 players','users','↑ 18.6%')}${metric('MATCH COMPLETION','92%','169 of 184 fixtures','chart')}${metric('DZONGKHAG REACH','20 / 20','all districts represented','pin')}${metric('OFFICIALS ACTIVE','24','across 3 competitions','shield')}</section><section class="dashboard-grid"><article class="panel"><div class="panel-head"><div><div class="panel-title">Registration overview</div><div class="panel-subtitle">Season participation at a glance</div></div><div class="panel-tools"><select class="select-small"><option>This season</option></select></div></div>${chart()}</article><article class="panel"><div class="panel-head"><div><div class="panel-title">Available reports</div><div class="panel-subtitle">Download a current snapshot</div></div></div><div class="activity-list">${[['Team registration summary','48 teams · CSV'],['Match results & scores','126 results · CSV'],['Dzongkhag participation','20 districts · PDF'],['Official assignments','24 officials · CSV']].map(x=>`<div class="activity-item"><span class="activity-icon">${svg('file')}</span><div class="activity-copy"><strong>${x[0]}</strong><small>${x[1]}</small></div><button class="icon-only" style="margin-left:auto" data-action="export">↓</button></div>`).join('')}</div></article></section>`}
-function escapeHtml(s=''){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-const {rolePages,currentRole,canRoleAction}=window.DrukLeaguePermissions;
-function applyRoleVisibility(){document.querySelectorAll('[data-role-action]').forEach(control=>{const allowed=canRoleAction(control.dataset.roleAction);control.hidden=!allowed;control.setAttribute('aria-hidden',String(!allowed))})}
-function render(page=activePage,options={}){const labels={dashboard:'Overview',tournaments:'Tournaments',teams:'Teams & dzongkhags',matches:'Matches & scores',standings:'Standings',officials:'Officials',venues:'Venues',reports:'Reports'};const renderers={dashboard,tournaments:tournamentsPage,teams:teamsPage,matches:matchesPage,standings:standingsPage,officials:officialsPage,venues:venuesPage,reports:reportsPage};const role=currentRole();const allowedPages=rolePages[role];document.querySelectorAll('.nav-link').forEach(a=>{const allowed=allowedPages.includes(a.dataset.page);a.hidden=!allowed;a.setAttribute('aria-hidden',String(!allowed))});if(!renderers[page])page='dashboard';if(!allowedPages.includes(page)){const requested=page;page=role==='match_official'?'matches':role==='team_manager'?'teams':'dashboard';if(!allowedPages.includes(page))page='dashboard';if(requested!==page)toast(`Your ${role.replace('_',' ')} role cannot open that page. Showing ${labels[page]}.`)}if(options.history!==false&&location.hash!==`#${page}`)history.pushState({page},'',`#${page}`);else if(options.history===false&&location.hash!==`#${page}`)history.replaceState({page},'',`#${page}`);activePage=page;query='';document.querySelectorAll('.nav-link').forEach(a=>a.classList.toggle('active',a.dataset.page===page));document.getElementById('crumb-current').textContent=labels[page];document.getElementById('page-content').innerHTML=renderers[page]();applyRoleVisibility();document.getElementById('sidebar').classList.remove('open');window.scrollTo({top:0,behavior:'smooth'})}
-window.addEventListener('hashchange',()=>render(location.hash.slice(1)||'dashboard',{history:false}));
-function toast(message,tone='info'){const kind=['success','error','info'].includes(tone)?tone:'info';const node=document.createElement('div');node.className=`toast toast-${kind}`;if(kind==='error')node.setAttribute('role','alert');node.textContent=message;document.getElementById('toast-region').append(node);setTimeout(()=>node.remove(),kind==='error'?6000:3200)}
-function openTournamentModal(){const currentYear=String(new Date().getFullYear());const years=[...new Set([currentYear,...tournaments.map(t=>String(t.season||''))].filter(Boolean))].sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}));document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header class="modal-head"><div><h2 id="modal-title">Create a tournament</h2><p>Choose the competition season and start date.</p></div><button class="modal-close" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="tournament-form"><div class="modal-body"><div class="form-grid"><div class="form-field full"><label for="t-name">Tournament name</label><input id="t-name" name="name" placeholder="e.g. Wangdue Summer Cup" required maxlength="70" /></div><div class="form-field"><label for="t-sport">Sport</label><select id="t-sport" name="sport"><option>Football · Men</option><option>Football · Women</option><option>Basketball · Open</option><option>Futsal · Open</option><option>Volleyball · Open</option></select></div><div class="form-field"><label for="t-season">Season</label><select id="t-season" name="season">${years.map(y=>`<option value="${escapeHtml(y)}" ${y===currentYear?'selected':''}>${escapeHtml(y)}</option>`).join('')}</select></div><div class="form-field"><label for="t-format">Competition format</label><select id="t-format"><option>League + knockout</option><option>Round robin</option><option>Knockout</option></select></div><div class="form-field"><label for="t-start">Start date</label><input type="date" id="t-start" required /></div><div class="form-field"><label for="t-dzongkhag">Dzongkhag</label><select id="t-dzongkhag" name="dz"><option>Bumthang</option><option>Chhukha</option><option>Dagana</option><option>Gasa</option><option>Haa</option><option>Lhuntse</option><option>Mongar</option><option>Paro</option><option>Pema Gatshel</option><option>Punakha</option><option>Samdrup Jongkhar</option><option>Samtse</option><option>Sarpang</option><option>Thimphu</option><option>Trashigang</option><option>Trashiyangtse</option><option>Trongsa</option><option>Tsirang</option><option>Wangdue Phodrang</option><option>Zhemgang</option></select></div><div class="form-field"><label for="t-capacity">Team capacity</label><select id="t-capacity"><option>8 teams</option><option selected>12 teams</option><option>16 teams</option><option>20 teams</option></select></div></div></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" class="button button-primary">Create tournament</button></footer></form></section></div>`;document.getElementById('t-name').focus()}
-function openScoreModal(index){const m=fixtureData[index];if(!m)return;if(m.matchResult){toast(`Final result locked: ${m.home} ${m.matchResult.homeGoals}–${m.matchResult.awayGoals} ${m.away}.`);return}const [home,away]=(m.score||'0 — 0').split(' — ').map(Number);document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="score-title"><header class="modal-head"><div><h2 id="score-title">Update live score</h2><p>${escapeHtml(m.venue)} · Assigned official: ${escapeHtml(m.official)}</p></div><button class="modal-close" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="score-form" data-match-index="${index}"><div class="modal-body"><p class="score-team-label">${escapeHtml(m.home)} <span>HOME</span></p><div class="score-input-row"><button type="button" class="score-step" data-score-step="home" data-step="-1" aria-label="Decrease home score">−</button><input aria-label="Home score" name="home" type="number" min="0" max="99" value="${home}" required><button type="button" class="score-step" data-score-step="home" data-step="1" aria-label="Increase home score">+</button></div><p class="score-team-label">${escapeHtml(m.away)} <span>AWAY</span></p><div class="score-input-row"><button type="button" class="score-step" data-score-step="away" data-step="-1" aria-label="Decrease away score">−</button><input aria-label="Away score" name="away" type="number" min="0" max="99" value="${away}" required><button type="button" class="score-step" data-score-step="away" data-step="1" aria-label="Increase away score">+</button></div><p class="score-note">Finalizing locks this result. Standings update from the official result.</p></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" name="intent" value="save" class="button">Save live score</button><button type="submit" name="intent" value="finalize" class="button button-primary">Finalize result</button></footer></form></section></div>`}
-function openTeamModal(){const savedTournaments=tournaments.filter(t=>t.id);document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="team-modal-title"><header class="modal-head"><div><h2 id="team-modal-title">Register a team</h2><p>Choose a saved tournament to link this team to its competition.</p></div><button class="modal-close" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="team-form"><div class="modal-body"><div class="form-grid"><div class="form-field full"><label for="team-name-input">Team name</label><input id="team-name-input" name="name" required maxlength="70" placeholder="e.g. Wangdue Rovers"></div><div class="form-field"><label for="team-dzongkhag">Dzongkhag</label><select id="team-dzongkhag" name="dz"><option>Bumthang</option><option>Chhukha</option><option>Dagana</option><option>Gasa</option><option>Haa</option><option>Lhuntse</option><option>Mongar</option><option>Paro</option><option>Pema Gatshel</option><option>Punakha</option><option>Samdrup Jongkhar</option><option>Samtse</option><option>Sarpang</option><option>Thimphu</option><option>Trashigang</option><option>Trashiyangtse</option><option>Trongsa</option><option>Tsirang</option><option>Wangdue Phodrang</option><option>Zhemgang</option></select></div><div class="form-field"><label for="team-tournament">Competition</label><select id="team-tournament" name="tournament_id" required ${savedTournaments.length?'':'disabled'}>${savedTournaments.length?savedTournaments.map(t=>`<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)} · ${escapeHtml(t.season||'')}</option>`).join(''):'<option value="">Load or create a saved tournament first</option>'}</select></div></div></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" class="button button-primary" ${savedTournaments.length?'':'disabled'}>Register team</button></footer></form></section></div>`;document.getElementById('team-name-input').focus()}
-function applyFinalResult(match,homeGoals,awayGoals){if(match.matchResult)return false;match.matchResult=Object.freeze({homeGoals,awayGoals,finalizedAt:new Date().toISOString(),official:match.official});match.score=`${homeGoals} — ${awayGoals}`;match.status='COMPLETED';const homeTeam=teams.find(t=>t.short===match.h),awayTeam=teams.find(t=>t.short===match.a);if(homeTeam&&awayTeam){homeTeam.played++;awayTeam.played++;homeTeam.gf+=homeGoals;homeTeam.ga+=awayGoals;awayTeam.gf+=awayGoals;awayTeam.ga+=homeGoals;if(homeGoals>awayGoals){homeTeam.w++;awayTeam.l++;homeTeam.pts+=3;homeTeam.form.unshift('W');awayTeam.form.unshift('L')}else if(homeGoals<awayGoals){awayTeam.w++;homeTeam.l++;awayTeam.pts+=3;awayTeam.form.unshift('L');homeTeam.form.unshift('W')}else{homeTeam.d++;awayTeam.d++;homeTeam.pts++;awayTeam.pts++;homeTeam.form.unshift('D');awayTeam.form.unshift('D')}for(const team of [homeTeam,awayTeam]){team.gd=(team.gf-team.ga>0?'+':'')+String(team.gf-team.ga);team.form=team.form.slice(0,5)}}latestActivity={title:'Match finalized',detail:`${match.home} ${homeGoals}–${awayGoals} ${match.away}`,actor:match.official};return true}
-function exportStandings(){const state=window.DRUKLEAGUE_STANDINGS_STATE;const liveRows=activePage==='standings'&&state?.status==='loaded'?state.rows:null;const source=liveRows||teams;const rows=[['Rank','Team','Dzongkhag','Played','Won','Drawn','Lost','Goals For','Goals Against','Goal Difference','Points'],...source.map((t,i)=>[i+1,t.name,t.dz,t.played,t.w,t.d,t.l,t.gf,t.ga,t.gd,t.pts])];const csv=rows.map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n');const link=document.createElement('a');link.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const tournament=state?.tournaments?.find(t=>t.id===state.tournamentID);const filename=(tournament?.name||'drukleague').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'drukleague';link.download=`${filename}-standings.csv`;link.click();URL.revokeObjectURL(link.href);toast(liveRows?'Standings CSV downloaded.':'Current table snapshot downloaded.','success')}
-document.addEventListener('click',e=>{
-  const nav=e.target.closest('[data-page]');if(nav){e.preventDefault();render(nav.dataset.page);return}
-  const step=e.target.closest('[data-score-step]');if(step){const form=step.closest('form');const field=form?.elements[step.dataset.scoreStep];if(field)field.value=Math.max(0,Math.min(99,Number(field.value)+Number(step.dataset.step)));return}
-  const action=e.target.closest('[data-action]')?.dataset.action;
-  if(action==='standings-login'){document.getElementById('auth-button').click();return}
-  if(action==='refresh-standings'){void window.DRUKLEAGUE_LOAD_STANDINGS?.(window.DRUKLEAGUE_STANDINGS_STATE?.tournamentID);return}
-  if(action==='new-tournament'){if(!canRoleAction(action)){toast('Only Super Admins can create tournaments.');return}openTournamentModal();return}
-  if(action==='new-team'){if(!canRoleAction(action)){toast('Your role cannot register teams.');return}openTeamModal();return}
-  if(action==='update-score'){if(!canRoleAction(action)){toast('Only Match Officials can update scores.');return}openScoreModal(Number(e.target.closest('[data-match-index]').dataset.matchIndex));return}
-  if(action==='dismiss-modal'){if(e.target.classList.contains('modal-backdrop')||e.target.closest('.modal-close')||e.target.closest('button[type="button"]'))document.getElementById('modal-root').innerHTML='';return}
-  if(action==='match-details'){const m=fixtureData[Number(e.target.closest('[data-match-index]')?.dataset.matchIndex)];toast(m?.matchResult?`Final result locked: ${m.home} ${m.matchResult.homeGoals}–${m.matchResult.awayGoals} ${m.away}.`:`${m?.venue||'Match'} · Official: ${m?.official||'to be assigned'}`);return}
-  if(action==='export'){if(!canRoleAction(action)){toast('Your role cannot export reports.');return}exportStandings();return}
-  if(action==='generate-fixtures'){if(!canRoleAction(action)){toast('Only Super Admins can generate fixtures.');return}toast('Fixtures can be generated after teams are registered and tournament rules are set.');return}
-  const tab=e.target.closest('[data-match-tab]');if(tab){matchTab=tab.dataset.matchTab;const search=document.getElementById('page-search')?.value||'';query=search;document.getElementById('page-content').innerHTML=matchesPage();applyRoleVisibility();return}
-  if(e.target.closest('#menu-button')){document.getElementById('sidebar').classList.toggle('open');return}
-  if(e.target.closest('#help-button')){toast('Quick guide: create a tournament, register teams, then publish fixtures.');return}
-  if(e.target.closest('#season-button')){toast(`You’re viewing the ${window.DRUKLEAGUE_ACTIVE_SEASON||new Date().getFullYear()} national season.`);return}
-  if(e.target.closest('#notifications-button')){toast('You’re all caught up on notifications.');return}
-  if(e.target.closest('.banner-link'))return;
-  if(e.target.closest('.heading-actions .button:not(.button-primary)'))toast('Your season summary is ready to export.');
+const COVERS = ['night-match', 'stadium-dzong', 'bhutan-maldives', 'saff-final', 'hero-stadium', 'scoreboard', 'night-shot', 'sunset-save'];
+function coverFor(t) {
+  const sport = String(t.sport || '').toLowerCase();
+  if (sport.includes('volley')) return 'volleyball';
+  if (sport.includes('arch')) return 'archery-aim';
+  let h = 0;
+  for (const c of String(t.id || t.name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return COVERS[h % COVERS.length];
+}
+const titleCase = (s) => String(s || '').replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+
+/* ---------------------------------------------------------------- building blocks */
+function pageHead(eyebrow, title, desc, actions = '') {
+  return `<header class="page-head"><div><div class="eyebrow">${esc(eyebrow)}</div><h1>${title}</h1>${desc ? `<p>${esc(desc)}</p>` : ''}</div>${actions ? `<div class="page-actions">${actions}</div>` : ''}</header>`;
+}
+function button(label, action, { cls = '', ic = '', data = {}, roleAction = '' } = {}) {
+  if (roleAction && !canRoleAction(roleAction)) return '';
+  const attrs = Object.entries(data).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('');
+  return `<button type="button" class="btn ${cls}" data-action="${action}"${attrs}>${ic ? icon(ic) : ''}${esc(label)}</button>`;
+}
+function metric(label, value, foot, ic) {
+  return `<article class="metric"><div class="metric-top"><span>${esc(label)}</span><span class="icon">${icon(ic)}</span></div><b>${esc(value)}</b><small>${esc(foot)}</small></article>`;
+}
+function empty(title, text, { ic = 'info', action = '' } = {}) {
+  return `<div class="empty"><span class="empty-icon">${icon(ic)}</span><strong>${esc(title)}</strong>${text ? `<p>${esc(text)}</p>` : ''}${action}</div>`;
+}
+function notice(text, warn = false) {
+  return `<div class="notice ${warn ? 'notice-warn' : ''}">${icon(warn ? 'alert' : 'info')}<span>${text}</span></div>`;
+}
+function panel(title, sub, body, tools = '') {
+  return `<section class="panel"><div class="panel-head"><div><h2>${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div>${tools}</div><div class="panel-body">${body}</div></section>`;
+}
+function statusBadge(m) {
+  if (m.status === 'completed') return '<span class="status status-completed">Final</span>';
+  if (m.status === 'live') return '<span class="status status-live">Live</span>';
+  return '<span class="status status-upcoming">Upcoming</span>';
+}
+function tournamentStatus(t) {
+  if (t.status === 'completed') return '<span class="status status-completed">Completed</span>';
+  if (t.status === 'in_progress') return '<span class="status status-live">In progress</span>';
+  return '<span class="status status-open">Registration open</span>';
+}
+function officialLabel(m) {
+  if (!m.officialId) return 'No official yet';
+  if (isMine(m)) return 'You are the official';
+  return userName(m.officialId) || 'Official assigned';
+}
+function roleBadge(r) { return `<span class="badge badge-${esc(r)}">${esc(roleLabels[r] || r)}</span>`; }
+
+function matchCard(m, { compact = false } = {}) {
+  const d = dateParts(m.kickoff);
+  const score = matchScore(m);
+  const actions = [];
+  if (!compact) {
+    if (role() === 'match_official' && isMine(m) && m.status !== 'completed') {
+      actions.push(button(m.status === 'live' ? 'Update score' : 'Start scoring', 'score', { cls: 'btn-primary btn-sm', data: { id: m.id } }));
+    }
+    if (canRoleAction('assign-official') && m.status !== 'completed') {
+      actions.push(button(m.officialId ? 'Change official' : 'Assign official', 'assign', { cls: 'btn-sm', ic: 'whistle', data: { id: m.id } }));
+    }
+  }
+  return `<article class="match-card ${isMine(m) && role() === 'match_official' ? 'is-mine' : ''}">
+    <div class="match-date"><small>${esc(d.mon)}</small><strong>${esc(d.day)}</strong><small>${esc(d.wk)}</small></div>
+    <div class="match-teams">
+      <div class="match-team"><span class="crest">${esc(initials(m.home))}</span><span>${esc(m.home)}</span><span class="score">${score ? esc(score[0]) : ''}</span></div>
+      <div class="match-team"><span class="crest alt">${esc(initials(m.away))}</span><span>${esc(m.away)}</span><span class="score">${score ? esc(score[1]) : ''}</span></div>
+    </div>
+    <div class="match-meta">${statusBadge(m)}<span>${esc(d.time)} · ${esc(m.venue || 'Venue TBD')}</span>${compact ? '' : `<span>${esc(tournamentName(m.tournamentId))}</span>${signedIn() ? `<span class="official">${icon('whistle')}${esc(officialLabel(m))}</span>` : ''}`}</div>
+    ${actions.length ? `<div class="match-actions">${actions.join('')}</div>` : ''}
+  </article>`;
+}
+function standingsTable(rows, limit = 0) {
+  const ranked = [...rows].sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.name.localeCompare(b.name));
+  const shown = limit ? ranked.slice(0, limit) : ranked;
+  return `<div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">D</th><th class="num">L</th>${limit ? '' : '<th class="num">GF</th><th class="num">GA</th>'}<th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${shown.map((t, i) => `<tr><td><span class="rank">${i + 1}</span></td><td><div class="who"><span class="crest">${esc(initials(t.name))}</span><span><strong>${esc(t.name)}</strong><small>${esc(t.dz)}</small></span></div></td><td class="num">${t.played}</td><td class="num">${t.w}</td><td class="num">${t.d}</td><td class="num">${t.l}</td>${limit ? '' : `<td class="num">${t.gf}</td><td class="num">${t.ga}</td>`}<td class="num">${t.gd > 0 ? '+' : ''}${t.gd}</td><td class="num pts">${t.pts}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ---------------------------------------------------------------- gates */
+function loadingBlock(text) {
+  return `<section class="panel">${empty(text, 'This only takes a moment.', { ic: 'refresh' })}</section>`;
+}
+const accountButtons = (light = false) => `${button('Create free account', 'signup', { cls: light ? 'btn-light' : 'btn-primary', ic: 'userplus' })}${button('Sign in', 'signin', { cls: light ? 'btn-ghost' : '', ic: 'login' })}`;
+function signedOutPage(label, eyebrow) {
+  return `${pageHead(eyebrow, esc(label), '')}<section class="panel">${empty(`Sign in to see ${label.toLowerCase()}`, 'Create a free viewer account in a few seconds, or sign in with the account your league admin gave you.', { ic: 'lock', action: `<div class="hero-actions">${accountButtons()}</div>` })}</section>`;
+}
+// Returns a full page when the normal page cannot be shown yet, or '' to continue.
+// Visitors can read the public pages; their data comes from the BFF's public routes.
+function gate(label, eyebrow) {
+  if (store.session.status === 'checking') return loadingBlock('Checking your session…');
+  if (!signedIn() && !PUBLIC_PAGES.includes(ui.page)) return signedOutPage(label, eyebrow);
+  if (store.data.status === 'error' && !loaded()) {
+    return `${pageHead(eyebrow, esc(label), '')}<section class="panel">${empty('Could not load saved data', store.data.message || 'Check that the API is running, then try again.', { ic: 'alert', action: button('Try again', 'reload', { cls: 'btn-primary', ic: 'refresh' }) })}</section>`;
+  }
+  if (!loaded()) return loadingBlock(`Loading ${label.toLowerCase()}…`);
+  return '';
+}
+
+/* ---------------------------------------------------------------- pages */
+function dashboardPage() {
+  if (store.session.status === 'checking') return loadingBlock('Checking your session…');
+  const blocked = gate('Overview', 'Overview');
+  if (blocked) return blocked;
+  if (!signedIn()) return publicDashboard();
+  if (role() === 'super_admin') return adminDashboard();
+  if (role() === 'match_official') return officialDashboard();
+  if (role() === 'team_manager') return managerDashboard();
+  return viewerDashboard();
+}
+
+function hero(img, chip, title, text, actions = '') {
+  return `<section class="hero-banner"><img src="./assets/landing/${img}" alt="" decoding="async" /><span class="chip">${icon(ROLE_INFO[role()]?.icon || 'eye')}${esc(chip)}</span><h2>${title}</h2><p>${esc(text)}</p>${actions ? `<div class="hero-actions">${actions}</div>` : ''}</section>`;
+}
+
+// What a visitor sees without an account: public fixtures, results and standings.
+function publicDashboard() {
+  const upcoming = sortByKickoff(store.matches.filter((m) => m.status !== 'completed')).slice(0, 5);
+  const finished = store.matches.filter((m) => m.status === 'completed');
+  const recent = [...finished].sort((a, b) => (b.kickoff?.valueOf() || 0) - (a.kickoff?.valueOf() || 0)).slice(0, 5);
+  const live = store.matches.filter((m) => m.status === 'live').length;
+  const how = { super_admin: 'The league organiser', match_official: 'Account from the league admin', team_manager: 'Account from the league admin', viewer: 'Create one yourself — free' };
+  const tiles = Object.entries(ROLE_INFO).map(([key, info]) => `<article class="role-tile"><span class="icon">${icon(info.icon)}</span><h3>${esc(info.title)}</h3><p class="role-how">${esc(how[key])}</p><ul>${info.can.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></article>`).join('');
+  const steps = '<ol class="steps" style="grid-template-columns:1fr"><li><strong>The admin opens a tournament</strong>Season, sport, dzongkhag, venues and start date.</li><li><strong>Teams enter, the admin approves</strong>Team managers enter their teams and squads; the admin approves each entry.</li><li><strong>Fixtures and officials</strong>Fixtures are generated for approved teams, with an official for each match.</li><li><strong>Live scores, then the table</strong>The official scores the match live; every final result updates the standings.</li></ol>';
+  return `<section class="hero-banner"><img src="./assets/landing/night-match.jpg" alt="" decoding="async" /><span class="chip">${icon('eye')}Browsing as a guest</span><h2>Follow every <b>match</b>, live</h2><p>Fixtures, live scores and standings are open to everyone. Create a free account to see team squads, or sign in to run your part of the season.</p><div class="hero-actions">${accountButtons(true)}</div></section>
+  <section class="metrics">${metric('Tournaments', store.tournaments.length, 'this season', 'trophy')}${metric('Teams', store.teams.length, 'taking part', 'users')}${metric('Live now', live, live ? 'scores updating' : 'no match in play', 'chart')}${metric('Results', finished.length, 'finalised', 'check')}</section>
+  <section class="grid-2">${panel('Coming up', upcoming.length ? 'Next fixtures' : '', upcoming.length ? `<div class="match-list compact">${upcoming.map((m) => matchCard(m, { compact: true })).join('')}</div>` : empty('No upcoming matches', 'Fixtures appear once the league admin generates them.', { ic: 'calendar' }), '<button type="button" class="link-btn" data-page="matches">All matches →</button>')}${panel('Latest results', '', recent.length ? `<div class="match-list compact">${recent.map((m) => matchCard(m, { compact: true })).join('')}</div>` : empty('No results yet', 'Results appear once officials finalise matches.', { ic: 'check' }))}</section>
+  <section class="grid-2-even">${standingsPreview()}${panel('How a season runs', '', steps)}</section>
+  <header class="page-head"><div><div class="eyebrow">Accounts</div><h1>Who can do <b>what</b></h1><p>Anyone can follow the season. Create a free viewer account yourself; officials and team managers get their accounts from the league admin.</p></div></header>
+  <section class="role-grid">${tiles}</section>`;
+}
+
+function adminChecklist() {
+  const ready = store.tournaments.filter((t) => approvedIn(t.id).length >= 2);
+  const pending = pendingRegistrations().length;
+  const items = [
+    { done: store.tournaments.length > 0, title: 'Create a tournament', text: 'Set the season, sport, dzongkhag and start date.', action: button('New tournament', 'new-tournament', { cls: 'btn-sm' }) },
+    { done: store.venues.length > 0, title: 'Add venues', text: "Fixtures are booked at venues in the tournament's dzongkhag.", action: button('Add venue', 'new-venue', { cls: 'btn-sm' }) },
+    { done: ready.length > 0, title: 'Approve at least two teams', text: 'Fixtures are generated only for approved teams in the same tournament.', action: button('Add a team', 'new-team', { cls: 'btn-sm' }) },
+    { done: store.registrations.length > 0 && pending === 0, title: 'Review team registrations', text: pending ? `${plural(pending, 'entry', 'entries')} waiting for your decision.` : 'Approve or reject the teams that managers enter.', action: '<button type="button" class="btn btn-sm" data-page="registrations">Review</button>' },
+    { done: officials().length > 0, title: 'Create match official accounts', text: 'Officials sign in to score the matches you assign to them.', action: button('Add official', 'new-user', { cls: 'btn-sm', data: { role: 'match_official' } }) },
+    { done: store.matches.length > 0, title: 'Generate fixtures', text: 'Round-robin fixtures with venues and kick-off times.', action: button('Generate', 'generate', { cls: 'btn-sm' }) },
+    { done: store.matches.some((m) => m.officialId), title: 'Assign officials to matches', text: 'Each match needs one official to enter its score.', action: `<button type="button" class="btn btn-sm" data-page="matches" data-tab="unassigned">Open matches</button>` },
+    { done: store.matches.some((m) => m.status === 'completed'), title: 'First result finalised', text: 'Standings update from every final result.', action: '' }
+  ];
+  const done = items.filter((i) => i.done).length;
+  const body = `<div class="progress" aria-label="${done} of ${items.length} steps done"><i style="width:${Math.round((done / items.length) * 100)}%"></i></div>
+    <ol class="checklist" style="margin-top:16px">${items.map((item, i) => `<li class="check-item ${item.done ? 'done' : ''}"><span class="check-dot">${item.done ? icon('check') : i + 1}</span><span><strong>${esc(item.title)}</strong><small>${esc(item.text)}</small></span>${item.done ? '<span class="badge badge-team_manager">Done</span>' : item.action}</li>`).join('')}</ol>`;
+  return panel('Season set-up', `${done} of ${items.length} steps done`, body);
+}
+
+function adminDashboard() {
+  const openT = store.tournaments.filter((t) => t.status !== 'completed').length;
+  const completed = store.matches.filter((m) => m.status === 'completed').length;
+  const dz = new Set(store.teams.map((t) => t.dzongkhag).filter(Boolean)).size;
+  const upcoming = sortByKickoff(store.matches.filter((m) => m.status !== 'completed')).slice(0, 5);
+  const unassigned = sortByKickoff(store.matches.filter((m) => !m.officialId && m.status !== 'completed'));
+  const officialsCount = store.usersStatus === 'loaded' ? String(officials().length) : '—';
+  const pending = pendingRegistrations().length;
+  return `${hero('stadium-dzong.jpg', 'Super Admin', `Welcome back, <b>${esc(me().username)}</b>`, 'Set up tournaments, accounts and fixtures, then follow every result as officials finalise it.', `${button('New tournament', 'new-tournament', { cls: 'btn-light', ic: 'plus' })}${button('Schedule a match', 'new-match', { cls: 'btn-ghost', ic: 'calendar' })}`)}
+  ${pending ? notice(`<b>${plural(pending, 'team entry', 'team entries')}</b> waiting for your approval. <button type="button" class="link-btn" data-page="registrations">Review registrations →</button>`, true) : ''}
+  <section class="metrics">${metric('Tournaments', store.tournaments.length, `${openT} open or in progress`, 'trophy')}${metric('Teams', store.teams.length, `from ${plural(dz, 'dzongkhag')}`, 'users')}${metric('Matches', `${completed}/${store.matches.length}`, 'finalised / scheduled', 'calendar')}${metric('Match officials', officialsCount, 'accounts that can score', 'whistle')}</section>
+  <section class="grid-2">${adminChecklist()}${panel('Coming up', upcoming.length ? 'Next scheduled and live matches' : 'Nothing scheduled yet', upcoming.length ? `<div class="match-list compact">${upcoming.map((m) => matchCard(m, { compact: true })).join('')}</div>` : empty('No upcoming matches', 'Generate fixtures for a tournament with at least two teams.', { ic: 'calendar' }), '<button type="button" class="link-btn" data-page="matches">All matches →</button>')}</section>
+  <section class="grid-2-even">${standingsPreview()}${panel('Needs an official', unassigned.length ? `${plural(unassigned.length, 'match', 'matches')} without an official` : 'Every match has an official', unassigned.length ? `<div class="match-list compact">${unassigned.slice(0, 4).map((m) => matchCard(m, { compact: true })).join('')}</div>` : empty('All set', 'Every scheduled match has an official assigned.', { ic: 'check' }), unassigned.length ? '<button type="button" class="link-btn" data-page="matches" data-tab="unassigned">Assign officials →</button>' : '')}</section>`;
+}
+
+function officialDashboard() {
+  const mine = sortByKickoff(store.matches.filter(isMine));
+  const live = mine.filter((m) => m.status === 'live').length;
+  const toPlay = mine.filter((m) => m.status === 'scheduled').length;
+  const done = mine.filter((m) => m.status === 'completed').length;
+  const open = mine.filter((m) => m.status !== 'completed');
+  return `${hero('goalkeeper-dive.jpg', 'Match Official', `Ready for kick-off, <b>${esc(me().username)}</b>`, 'These are the matches assigned to you. Save the score while play is on, then finalise the result at full time.')}
+  <section class="metrics">${metric('Assigned to you', mine.length, 'matches in total', 'whistle')}${metric('Live now', live, 'scores you are updating', 'chart')}${metric('To play', toPlay, 'not started yet', 'calendar')}${metric('Finalised', done, 'results locked', 'check')}</section>
+  <section class="grid-2">${panel('Your matches', open.length ? 'Open a match to enter its score' : 'Nothing waiting for a score', open.length ? `<div class="match-list">${open.map((m) => matchCard(m)).join('')}</div>` : empty(mine.length ? 'All your matches are finalised' : 'No matches assigned yet', mine.length ? 'Finalised results appear in the standings.' : 'The league admin assigns officials to matches. Once you are assigned, the match appears here.', { ic: 'whistle' }))}
+  ${panel('How scoring works', '', `<ol class="steps" style="grid-template-columns:1fr"><li><strong>Start scoring</strong>Open your match when play begins.</li><li><strong>Save the live score</strong>Update it as goals go in; the result stays open.</li><li><strong>Finalise at full time</strong>The result locks and the standings update. Only an admin correction can change it later.</li></ol>`)}</section>`;
+}
+
+function managerDashboard() {
+  const teams = myTeams();
+  const ids = new Set(teams.map((t) => t.id));
+  const fixtures = sortByKickoff(store.matches.filter((m) => (ids.has(m.homeId) || ids.has(m.awayId)) && m.status !== 'completed')).slice(0, 5);
+  const stats = teams.map((t) => teamStats(t.id));
+  const played = stats.reduce((n, s) => n + s.p, 0);
+  const points = stats.reduce((n, s) => n + s.pts, 0);
+  const entries = store.registrations.filter((r) => ids.has(r.teamId));
+  const approved = entries.filter((r) => r.status === 'approved').length;
+  const waiting = entries.filter((r) => r.status === 'pending').length;
+  const rejected = entries.filter((r) => r.status === 'rejected').length;
+  const table = teams.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Team</th><th>Entry</th><th class="num">P</th><th class="num">W</th><th class="num">Pts</th><th></th></tr></thead><tbody>${teams.map((t, i) => `<tr><td><div class="who"><span class="crest">${esc(t.short)}</span><span><strong>${esc(t.name)}</strong><small>${esc(tournamentName(t.tournamentId))}</small></span></div></td><td>${entryCell(t)}</td><td class="num">${stats[i].p}</td><td class="num">${stats[i].w}</td><td class="num pts">${stats[i].pts}</td><td class="row-actions">${teamActions(t)}</td></tr>`).join('')}</tbody></table></div>`
+    : empty('You have not entered a team yet', 'Create your team and enter it into a tournament that is open for registration. The league admin then approves the entry.', { ic: 'users', action: button('Create a team', 'new-team', { cls: 'btn-primary', ic: 'plus' }) });
+  const steps = '<ol class="steps" style="grid-template-columns:1fr"><li><strong>Create your team</strong>Pick the tournament you want to enter; the team is linked to your account.</li><li><strong>Wait for approval</strong>The league admin approves the entry. Only approved teams get fixtures.</li><li><strong>Build your squad</strong>Add your players and shirt numbers on the Squads page.</li><li><strong>Play</strong>Your fixtures, results and points appear here.</li></ol>';
+  return `${hero('bhutan-maldives.jpg', 'Team Manager', `Your teams, <b>${esc(me().username)}</b>`, 'Enter your teams into open tournaments, build your squads, then follow fixtures, results and points.', button('Create a team', 'new-team', { cls: 'btn-light', ic: 'plus' }))}
+  ${waiting ? notice(`<b>${plural(waiting, 'entry', 'entries')}</b> waiting for the league admin to approve. Fixtures are generated only for approved teams.`) : ''}
+  ${rejected ? notice(`<b>${plural(rejected, 'entry was', 'entries were')} rejected.</b> Ask the league admin for the reason. <button type="button" class="link-btn" data-page="registrations">See entries →</button>`, true) : ''}
+  <section class="metrics">${metric('Your teams', teams.length, 'linked to your account', 'users')}${metric('Approved', approved, waiting ? `${waiting} waiting` : 'tournament entries', 'flag')}${metric('Upcoming', fixtures.length, 'matches to play', 'calendar')}${metric('Points', points, `from ${plural(played, 'match', 'matches')}`, 'chart')}</section>
+  <section class="grid-2">${panel('My teams', teams.length ? 'Entry status and squad' : '', table)}${panel('Next fixtures', '', fixtures.length ? `<div class="match-list compact">${fixtures.map((m) => matchCard(m, { compact: true })).join('')}</div>` : empty('No fixtures yet', 'Fixtures appear after your entry is approved and the admin generates them.', { ic: 'calendar' }))}</section>
+  ${teams.length ? '' : panel('How it works for team managers', '', steps)}`;
+}
+
+// Entry status for a team in its own tournament, for roles that can see registrations.
+function entryCell(team) {
+  if (!tracksRegistrations()) return '';
+  const reg = registrationFor(team.id, team.tournamentId);
+  return registrationBadge(reg);
+}
+// Row buttons: open the squad; enter the team when it has no entry and the role may register it.
+function teamActions(team) {
+  const squad = signedIn() ? `<button type="button" class="btn btn-sm" data-page="squads" data-team="${esc(team.id)}">${icon('shirt')}Squad</button>` : '';
+  const tournament = byId(store.tournaments, team.tournamentId);
+  const reg = registrationFor(team.id, team.tournamentId);
+  // A team is entered once per tournament; the registration service refuses a second entry.
+  const mayEnter = tracksRegistrations() && tournament && tournament.status === 'registration_open' && !reg
+    && (role() === 'super_admin' || team.managerId === me().id);
+  const enter = mayEnter ? button(role() === 'super_admin' ? 'Enter & approve' : 'Enter tournament', 'register-team', { cls: 'btn-sm btn-primary', ic: 'flag', data: { team: team.id, tournament: team.tournamentId }, roleAction: 'register-team' }) : '';
+  return `${enter}${squad}`;
+}
+
+function viewerDashboard() {
+  const upcoming = sortByKickoff(store.matches.filter((m) => m.status !== 'completed')).slice(0, 5);
+  const recent = [...store.matches.filter((m) => m.status === 'completed')].sort((a, b) => (b.kickoff?.valueOf() || 0) - (a.kickoff?.valueOf() || 0)).slice(0, 5);
+  return `${hero('saff-final.jpg', 'Viewer', `Follow the season, <b>${esc(me().username)}</b>`, 'Browse tournaments, fixtures and the latest results across the dzongkhags.')}
+  <section class="metrics">${metric('Tournaments', store.tournaments.length, 'this season', 'trophy')}${metric('Teams', store.teams.length, 'taking part', 'users')}${metric('Upcoming', store.matches.filter((m) => m.status !== 'completed').length, 'matches to play', 'calendar')}${metric('Results', recent.length ? store.matches.filter((m) => m.status === 'completed').length : 0, 'finalised', 'check')}</section>
+  <section class="grid-2">${panel('Coming up', '', upcoming.length ? `<div class="match-list compact">${upcoming.map((m) => matchCard(m, { compact: true })).join('')}</div>` : empty('No upcoming matches', '', { ic: 'calendar' }))}${panel('Latest results', '', recent.length ? `<div class="match-list compact">${recent.map((m) => matchCard(m, { compact: true })).join('')}</div>` : empty('No results yet', 'Results appear once officials finalise matches.', { ic: 'check' }))}</section>
+  <section class="grid-2-even">${standingsPreview()}</section>`;
+}
+
+function standingsPreview() {
+  const s = store.standings;
+  const name = tournamentName(s.tournamentId);
+  let body;
+  if (!store.tournaments.length) body = empty('No tournaments yet', '', { ic: 'trophy' });
+  else if (s.status === 'loading') body = empty('Loading standings…', '', { ic: 'refresh' });
+  else if (s.status === 'error') body = empty('Could not load standings', s.message, { ic: 'alert' });
+  else if (!s.rows.length) body = empty('No standings yet', 'Standings appear after the first result is finalised.', { ic: 'chart' });
+  else body = standingsTable(s.rows, 5);
+  return panel('Standings', store.tournaments.length ? name : '', body, '<button type="button" class="link-btn" data-page="standings">Full table →</button>');
+}
+
+function tournamentsPage() {
+  const blocked = gate('Tournaments', 'Competitions');
+  if (blocked) return blocked;
+  const seasons = [...new Set(store.tournaments.map((t) => String(t.season || '')).filter(Boolean))].sort().reverse();
+  const q = ui.query.toLowerCase();
+  const list = store.tournaments.filter((t) => (ui.season === 'all' || String(t.season) === ui.season) && `${t.name} ${t.sport} ${t.dzongkhag}`.toLowerCase().includes(q));
+  const cards = list.map((t) => {
+    const teams = teamsIn(t.id).length;
+    const matches = store.matches.filter((m) => m.tournamentId === t.id);
+    const played = matches.filter((m) => m.status === 'completed').length;
+    const actions = [
+      `<button type="button" class="btn btn-sm" data-page="matches" data-tournament="${esc(t.id)}">Fixtures</button>`,
+      `<button type="button" class="btn btn-sm" data-page="standings" data-tournament="${esc(t.id)}">Standings</button>`,
+      button('Generate fixtures', 'generate', { cls: 'btn-sm btn-primary', data: { tournament: t.id }, roleAction: 'generate-fixtures' }),
+      role() === 'team_manager' && t.status === 'registration_open' ? button('Enter a team', 'new-team', { cls: 'btn-sm btn-primary', data: { tournament: t.id } }) : ''
+    ].join('');
+    const entries = role() === 'super_admin' && tracksRegistrations() ? `<small class="t-entries">${approvedIn(t.id).length} approved · ${store.registrations.filter((r) => r.tournamentId === t.id && r.status === 'pending').length} waiting</small>` : '';
+    return `<article class="t-card"><div class="t-cover"><img src="./assets/landing/${coverFor(t)}-sm.jpg" alt="" loading="lazy" decoding="async" /><span class="chip">${esc(titleCase(t.sport) || 'Sport')} · ${esc(t.season || 'Season')}</span><h3>${esc(t.name)}</h3></div>
+      <div class="t-body"><div class="t-stats"><div><b>${teams}</b><small>Teams</small></div><div><b>${matches.length}</b><small>Fixtures</small></div><div><b>${played}</b><small>Played</small></div></div>
+      <div class="t-meta"><span>${icon('pin')} ${esc(t.dzongkhag || 'Dzongkhag not set')} · Starts ${esc(formatDate(t.startsAt))}</span>${tournamentStatus(t)}</div>${entries}
+      <div class="t-actions">${actions}</div></div></article>`;
+  }).join('');
+  const emptyState = store.tournaments.length
+    ? empty('No tournaments match', 'Change the season or the search.', { ic: 'search' })
+    : empty('No tournaments yet', canRoleAction('new-tournament') ? 'Create the first tournament of the season.' : 'Tournaments appear here once the league admin creates them.', { ic: 'trophy', action: button('New tournament', 'new-tournament', { cls: 'btn-primary', ic: 'plus', roleAction: 'new-tournament' }) });
+  return `${pageHead('Competitions', 'Tournaments', 'Every competition this season, with its teams, fixtures and results.', button('New tournament', 'new-tournament', { cls: 'btn-primary', ic: 'plus', roleAction: 'new-tournament' }))}
+  <div class="toolbar"><label class="select-wrap">Season<select id="season-filter"><option value="all">All seasons</option>${seasons.map((s) => `<option value="${esc(s)}" ${ui.season === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label><span class="spacer"></span><label class="search">${icon('search')}<input id="page-search" placeholder="Search tournaments…" value="${esc(ui.query)}" /></label></div>
+  ${list.length ? `<div class="card-grid">${cards}</div>` : `<section class="panel">${emptyState}</section>`}`;
+}
+
+function teamsPage() {
+  const blocked = gate('Teams', 'Teams & dzongkhags');
+  if (blocked) return blocked;
+  const isManager = role() === 'team_manager';
+  const scope = isManager ? ui.teamScope : 'all';
+  const base = scope === 'mine' ? myTeams() : store.teams;
+  const q = ui.query.toLowerCase();
+  const rows = base.filter((t) => `${t.name} ${t.dzongkhag} ${tournamentName(t.tournamentId)}`.toLowerCase().includes(q));
+  const showManager = role() === 'super_admin';
+  const dz = new Set(store.teams.map((t) => t.dzongkhag).filter(Boolean)).size;
+  const showEntry = tracksRegistrations();
+  const showActions = signedIn();
+  const table = rows.length ? `<section class="panel"><div class="table-wrap"><table class="table"><thead><tr><th>Team</th><th>Tournament</th>${showManager ? '<th>Manager</th>' : ''}${showEntry ? '<th>Entry</th>' : ''}<th class="num">P</th><th class="num">W</th><th class="num">D</th><th class="num">L</th><th class="num">GD</th><th class="num">Pts</th>${showActions ? '<th></th>' : ''}</tr></thead><tbody>${rows.map((t) => {
+    const s = teamStats(t.id);
+    const mine = isManager && t.managerId === me().id;
+    // A manager sees entry status only for their own teams (registrations are private to them).
+    const entry = showEntry ? `<td>${!isManager || mine ? entryCell(t) : ''}</td>` : '';
+    return `<tr><td><div class="who"><span class="crest">${esc(t.short)}</span><span><strong>${esc(t.name)}</strong>${mine ? ' <span class="badge badge-team_manager">Yours</span>' : ''}<small>${esc(t.dzongkhag)}</small></span></div></td><td>${esc(tournamentName(t.tournamentId))}</td>${showManager ? `<td>${t.managerId ? esc(userName(t.managerId) || 'Team manager') : '<span class="chip">Admin-created</span>'}</td>` : ''}${entry}<td class="num">${s.p}</td><td class="num">${s.w}</td><td class="num">${s.d}</td><td class="num">${s.l}</td><td class="num">${s.gd > 0 ? '+' : ''}${s.gd}</td><td class="num pts">${s.pts}</td>${showActions ? `<td class="row-actions">${teamActions(t)}</td>` : ''}</tr>`;
+  }).join('')}</tbody></table></div></section>`
+    : `<section class="panel">${scope === 'mine' && !myTeams().length
+      ? empty('You have not entered a team yet', 'Create your team and enter it into a tournament that is open for registration.', { ic: 'users', action: button('Create a team', 'new-team', { cls: 'btn-primary', ic: 'plus' }) })
+      : empty(store.teams.length ? 'No teams match the search' : 'No teams yet', store.teams.length ? '' : 'Teams appear here once they are registered for a tournament.', { ic: 'users', action: button('Add a team', 'new-team', { cls: 'btn-primary', ic: 'plus', roleAction: 'new-team' }) })}</section>`;
+  const tabs = isManager ? `<div class="tabs">${[['mine', 'My teams', myTeams().length], ['all', 'All teams', store.teams.length]].map(([k, l, n]) => `<button type="button" class="tab ${ui.teamScope === k ? 'active' : ''}" data-action="team-scope" data-scope="${k}">${l}<span class="count">${n}</span></button>`).join('')}</div>` : '';
+  return `${pageHead('Teams & dzongkhags', 'Teams', 'Teams in each tournament, with their record from finalised results.', button(isManager ? 'Create a team' : 'Add a team', 'new-team', { cls: 'btn-primary', ic: 'plus', roleAction: 'new-team' }))}
+  ${signedIn() ? '' : notice('You are browsing as a guest. <button type="button" class="link-btn" data-action="signup">Create a free account</button> to see each team\'s squad.')}
+  <section class="metrics">${metric('Teams', store.teams.length, 'registered', 'users')}${metric('Dzongkhags', dz, 'represented', 'pin')}${metric('Tournaments', new Set(store.teams.map((t) => t.tournamentId).filter(Boolean)).size, 'with teams', 'trophy')}${metric('Results', store.matches.filter((m) => m.status === 'completed').length, 'finalised matches', 'check')}</section>
+  <div class="toolbar">${tabs}<span class="spacer"></span><label class="search">${icon('search')}<input id="page-search" placeholder="Search teams, dzongkhags…" value="${esc(ui.query)}" /></label></div>${table}`;
+}
+
+function matchesPage() {
+  const blocked = gate('Matches', 'On the pitch');
+  if (blocked) return blocked;
+  const r = role();
+  const q = ui.query.toLowerCase();
+  const inTournament = store.matches.filter((m) => ui.matchTournament === 'all' || m.tournamentId === ui.matchTournament);
+  const tabs = [['all', 'All'], ['live', 'Live'], ['scheduled', 'Upcoming'], ['completed', 'Results']];
+  if (r === 'match_official') tabs.unshift(['mine', 'Assigned to me']);
+  if (canRoleAction('assign-official')) tabs.push(['unassigned', 'Needs official']);
+  const filters = {
+    all: () => true, live: (m) => m.status === 'live', scheduled: (m) => m.status === 'scheduled', completed: (m) => m.status === 'completed',
+    mine: isMine, unassigned: (m) => !m.officialId && m.status !== 'completed'
+  };
+  if (!filters[ui.matchTab] || !tabs.some(([k]) => k === ui.matchTab)) ui.matchTab = 'all';
+  const list = sortByKickoff(inTournament.filter(filters[ui.matchTab]).filter((m) => `${m.home} ${m.away} ${m.venue}`.toLowerCase().includes(q)));
+  const listHtml = list.length ? `<div class="match-list">${list.map((m) => matchCard(m)).join('')}</div>`
+    : `<section class="panel">${store.matches.length
+      ? empty(ui.matchTab === 'mine' ? 'No matches assigned to you' : 'No matches here', ui.matchTab === 'mine' ? 'The league admin assigns officials to matches. Assigned matches appear here.' : 'Try another tab, tournament or search.', { ic: 'calendar' })
+      : empty('No matches yet', canRoleAction('generate-fixtures') ? 'Generate fixtures for a tournament with two or more teams, or schedule a single match.' : 'Fixtures appear once the league admin generates them.', { ic: 'calendar', action: button('Generate fixtures', 'generate', { cls: 'btn-primary', roleAction: 'generate-fixtures' }) })}</section>`;
+  const intro = r === 'match_official' ? notice('You can enter scores only for matches <b>assigned to you</b>. Saving keeps the result open; finalising locks it and updates the standings.')
+    : r === 'super_admin' ? notice('Assign an official to every match. Only the assigned official can enter and finalise its score.') : '';
+  return `${pageHead('On the pitch', 'Matches &amp; scores', 'Fixtures, live scores and final results.', `${button('Schedule a match', 'new-match', { ic: 'calendar', roleAction: 'schedule-match' })}${button('Generate fixtures', 'generate', { cls: 'btn-primary', ic: 'plus', roleAction: 'generate-fixtures' })}`)}
+  ${intro}
+  <div class="toolbar"><div class="tabs">${tabs.map(([k, l]) => `<button type="button" class="tab ${ui.matchTab === k ? 'active' : ''}" data-action="match-tab" data-tab="${k}">${l}<span class="count">${inTournament.filter(filters[k]).length}</span></button>`).join('')}</div><span class="spacer"></span>
+  <label class="select-wrap">Tournament<select id="match-tournament"><option value="all">All tournaments</option>${store.tournaments.map((t) => `<option value="${esc(t.id)}" ${ui.matchTournament === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
+  <label class="search">${icon('search')}<input id="page-search" placeholder="Search teams or venues…" value="${esc(ui.query)}" /></label></div>${listHtml}`;
+}
+
+function standingsPage() {
+  const blocked = gate('Standings', 'The race for the title');
+  if (blocked) return blocked;
+  const s = store.standings;
+  let body;
+  if (!store.tournaments.length) body = empty('No tournaments yet', 'Standings appear once a tournament has finalised results.', { ic: 'trophy' });
+  else if (s.status === 'loading') body = empty('Loading standings…', '', { ic: 'refresh' });
+  else if (s.status === 'error') body = empty('Could not load standings', s.message, { ic: 'alert', action: button('Try again', 'reload-standings', { cls: 'btn-primary' }) });
+  else if (!s.rows.length) body = empty('No standings yet', 'Finalised match results build this table: three points for a win, one for a draw.', { ic: 'chart' });
+  else body = standingsTable(s.rows);
+  const updated = s.status === 'loaded' && s.updatedAt ? `Updated ${new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
+  return `${pageHead('The race for the title', 'Standings', 'Built only from finalised results.', button('Download CSV', 'export-standings', { ic: 'download' }))}
+  <div class="toolbar"><label class="select-wrap">Tournament<select id="standings-tournament">${store.tournaments.map((t) => `<option value="${esc(t.id)}" ${s.tournamentId === t.id ? 'selected' : ''}>${esc(t.name)} · ${esc(t.season || '')}</option>`).join('')}</select></label><span class="spacer"></span>${updated ? `<span class="chip">${icon('refresh')}${esc(updated)}</span>` : ''}</div>
+  <section class="panel"><div class="panel-head"><div><h2>${esc(tournamentName(s.tournamentId))}</h2><p>${s.rows.length ? plural(s.rows.length, 'team') : 'League table'}</p></div></div>${body}</section>
+  <p class="standings-foot">P played · W won · D drawn · L lost · GF goals for · GA goals against · GD goal difference · Pts points</p>`;
+}
+
+function usersNotice() {
+  if (store.usersStatus === 'error') return notice('Could not load the account list. Check that the User service is running, then reload.', true);
+  if (store.usersStatus !== 'loaded') return notice('Loading accounts…');
+  return '';
+}
+
+function officialsPage() {
+  const blocked = gate('Officials', 'The people behind the game');
+  if (blocked) return blocked;
+  const list = officials().filter((u) => u.username.toLowerCase().includes(ui.query.toLowerCase()));
+  const unassigned = store.matches.filter((m) => !m.officialId && m.status !== 'completed').length;
+  const cards = list.map((u) => {
+    const assigned = store.matches.filter((m) => m.officialId === u.id);
+    return `<article class="person"><div class="person-top"><span class="avatar">${esc(initials(u.username))}</span><span><strong>${esc(u.username)}</strong>${roleBadge(u.role)}</span></div>
+      <div class="person-stats"><span><b>${assigned.length}</b>assigned</span><span><b>${assigned.filter((m) => m.status !== 'completed').length}</b>to play</span><span><b>${assigned.filter((m) => m.status === 'completed').length}</b>finalised</span></div></article>`;
+  }).join('');
+  return `${pageHead('The people behind the game', 'Officials', 'Match official accounts and the matches assigned to them.', button('Add official', 'new-user', { cls: 'btn-primary', ic: 'plus', data: { role: 'match_official' }, roleAction: 'manage-users' }))}
+  ${usersNotice()}${unassigned ? notice(`${plural(unassigned, 'match', 'matches')} still need an official. <button type="button" class="link-btn" data-page="matches" data-tab="unassigned">Assign officials →</button>`, true) : ''}
+  <div class="toolbar"><span class="spacer"></span><label class="search">${icon('search')}<input id="page-search" placeholder="Search officials…" value="${esc(ui.query)}" /></label></div>
+  ${list.length ? `<div class="people-grid">${cards}</div>` : `<section class="panel">${empty(officials().length ? 'No officials match the search' : 'No official accounts yet', 'Create a match official account, then assign the official to matches from the Matches page.', { ic: 'whistle', action: button('Add official', 'new-user', { cls: 'btn-primary', data: { role: 'match_official' }, roleAction: 'manage-users' }) })}</section>`}`;
+}
+
+function usersPage() {
+  const blocked = gate('Users & roles', 'Accounts');
+  if (blocked) return blocked;
+  const roles = ['all', 'super_admin', 'match_official', 'team_manager', 'viewer'];
+  const list = store.users.filter((u) => (ui.userRole === 'all' || u.role === ui.userRole) && u.username.toLowerCase().includes(ui.query.toLowerCase()));
+  const rows = list.map((u) => `<tr><td><div class="who"><span class="avatar">${esc(initials(u.username))}</span><span><strong>${esc(u.username)}</strong>${u.id === me().id ? ' <span class="chip">You</span>' : ''}</span></div></td><td>${roleBadge(u.role)}</td><td>${esc((ROLE_INFO[u.role]?.can || []).join(' · '))}</td></tr>`).join('');
+  return `${pageHead('Accounts', 'Users &amp; roles', 'Create accounts for officials, team managers and viewers. The role decides what each person can do.', button('Create account', 'new-user', { cls: 'btn-primary', ic: 'plus', roleAction: 'manage-users' }))}
+  ${usersNotice()}${notice('Accounts cannot be deleted or have their password reset from the web app yet. Give each person their username and password directly.')}
+  <div class="toolbar"><div class="tabs">${roles.map((r) => `<button type="button" class="tab ${ui.userRole === r ? 'active' : ''}" data-action="user-role" data-role="${r}">${r === 'all' ? 'All' : esc(roleLabels[r])}<span class="count">${r === 'all' ? store.users.length : store.users.filter((u) => u.role === r).length}</span></button>`).join('')}</div><span class="spacer"></span><label class="search">${icon('search')}<input id="page-search" placeholder="Search usernames…" value="${esc(ui.query)}" /></label></div>
+  <section class="panel">${list.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Account</th><th>Role</th><th>Can</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('No accounts here', 'Create an account to get started.', { ic: 'users' })}</section>`;
+}
+
+function venuesPage() {
+  const blocked = gate('Venues', 'Where it happens');
+  if (blocked) return blocked;
+  const usage = (name) => {
+    const games = store.matches.filter((m) => (m.venue || '').trim().toLowerCase() === name.toLowerCase());
+    const next = sortByKickoff(games.filter((m) => m.status !== 'completed' && m.kickoff))[0];
+    return { total: games.length, done: games.filter((m) => m.status === 'completed').length, next: next?.kickoff || null };
+  };
+  const q = ui.query.toLowerCase();
+  const list = [...store.venues].sort((a, b) => a.dzongkhag.localeCompare(b.dzongkhag) || a.name.localeCompare(b.name)).filter((v) => `${v.name} ${v.dzongkhag}`.toLowerCase().includes(q));
+  const rows = list.map((v) => {
+    const u = usage(v.name);
+    return `<tr><td><div class="who"><span class="crest">${icon('pin')}</span><span><strong>${esc(v.name)}</strong><small>${esc(v.dzongkhag)}</small></span></div></td><td class="num">${v.capacity ? v.capacity.toLocaleString() : '—'}</td><td class="num">${u.total}</td><td class="num">${u.done}</td><td>${u.next ? esc(`${dateParts(u.next).long}, ${dateParts(u.next).time}`) : '—'}</td></tr>`;
+  }).join('');
+  const covered = new Set(store.venues.map((v) => v.dzongkhag));
+  const missing = store.tournaments.filter((t) => t.status !== 'completed' && t.dzongkhag && !covered.has(t.dzongkhag));
+  const status = store.venuesStatus === 'error' ? notice('Could not load venues. Check that the Venue service is running, then reload.', true) : store.venuesStatus !== 'loaded' ? notice('Loading venues…') : '';
+  return `${pageHead('Where it happens', 'Venues', 'Grounds that fixtures can be booked at. Generated fixtures use the venues in the tournament\'s dzongkhag.', button('Add venue', 'new-venue', { cls: 'btn-primary', ic: 'plus', roleAction: 'manage-venues' }))}
+  ${status}${missing.length ? notice(`No venue yet in ${missing.map((t) => `<b>${esc(t.dzongkhag)}</b>`).filter((v, i, a) => a.indexOf(v) === i).join(', ')} — add one before generating fixtures for ${esc(missing.map((t) => t.name).join(', '))}.`, true) : ''}
+  <section class="metrics">${metric('Venues', store.venues.length, `in ${plural(covered.size, 'dzongkhag')}`, 'pin')}${metric('Capacity', store.venues.reduce((n, v) => n + v.capacity, 0).toLocaleString(), 'seats in total', 'users')}${metric('Matches', store.matches.filter((m) => m.venue).length, 'with a venue', 'calendar')}${metric('Played', store.matches.filter((m) => m.venue && m.status === 'completed').length, 'finalised there', 'check')}</section>
+  <div class="toolbar"><span class="spacer"></span><label class="search">${icon('search')}<input id="page-search" placeholder="Search venues, dzongkhags…" value="${esc(ui.query)}" /></label></div>
+  <section class="panel">${rows ? `<div class="table-wrap"><table class="table"><thead><tr><th>Venue</th><th class="num">Capacity</th><th class="num">Matches</th><th class="num">Played</th><th>Next match</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty(store.venues.length ? 'No venues match the search' : 'No venues yet', 'Add the grounds in each dzongkhag that hosts a tournament.', { ic: 'pin', action: button('Add venue', 'new-venue', { cls: 'btn-primary', ic: 'plus', roleAction: 'manage-venues' }) })}</section>`;
+}
+
+// Squads: everyone signed in can read a team's players; the admin and that team's manager can edit.
+function squadsPage() {
+  const blocked = gate('Squads', 'Players');
+  if (blocked) return blocked;
+  const isManager = role() === 'team_manager';
+  const choices = isManager && myTeams().length ? [...myTeams(), ...store.teams.filter((t) => !myTeams().includes(t))] : store.teams;
+  if (!choices.length) {
+    return `${pageHead('Players', 'Squads', 'Each team\'s players and shirt numbers.', '')}<section class="panel">${empty('No teams yet', isManager ? 'Create your team first, then add its players here.' : 'Squads appear once teams are entered.', { ic: 'shirt', action: isManager ? button('Create a team', 'new-team', { cls: 'btn-primary', ic: 'plus' }) : '' })}</section>`;
+  }
+  if (!byId(store.teams, ui.squadTeam)) ui.squadTeam = choices[0].id;
+  const team = byId(store.teams, ui.squadTeam);
+  const squad = store.players[team.id];
+  if (!squad) setTimeout(() => window.DrukAPI?.loadPlayers(team.id), 0);
+  const editable = canEditSquad(team);
+  const q = ui.query.toLowerCase();
+  const players = (squad?.rows || []).filter((p) => `${p.given} ${p.family} ${p.shirt}`.toLowerCase().includes(q))
+    .sort((a, b) => (Number(a.shirt) || 999) - (Number(b.shirt) || 999) || a.given.localeCompare(b.given));
+  let body;
+  if (!squad || (squad.status === 'loading' && !squad.rows.length)) body = empty('Loading the squad…', '', { ic: 'refresh' });
+  else if (squad.status === 'error') body = empty('Could not load the squad', squad.message, { ic: 'alert', action: button('Try again', 'reload-squad', { cls: 'btn-primary', data: { team: team.id } }) });
+  else if (!squad.rows.length) body = empty('No players yet', editable ? 'Add each player with their shirt number.' : 'The team manager has not added players yet.', { ic: 'shirt', action: editable ? button('Add player', 'new-player', { cls: 'btn-primary', ic: 'plus', data: { team: team.id } }) : '' });
+  else if (!players.length) body = empty('No players match the search', '', { ic: 'search' });
+  else body = `<div class="table-wrap"><table class="table"><thead><tr><th class="num">No.</th><th>Player</th>${editable ? '<th></th>' : ''}</tr></thead><tbody>${players.map((p) => `<tr><td class="num"><span class="shirt">${esc(p.shirt || '–')}</span></td><td><div class="who"><span class="avatar">${esc(initials(`${p.given} ${p.family}`))}</span><strong>${esc(`${p.given} ${p.family}`.trim())}</strong></div></td>${editable ? `<td class="row-actions">${button('Edit', 'edit-player', { cls: 'btn-sm', ic: 'edit', data: { team: team.id, player: p.id } })}</td>` : ''}</tr>`).join('')}</tbody></table></div>`;
+  const options = choices.map((t) => `<option value="${esc(t.id)}" ${t.id === team.id ? 'selected' : ''}>${esc(t.name)}${isManager && t.managerId === me().id ? ' (yours)' : ''}</option>`).join('');
+  const reg = tracksRegistrations() && (!isManager || team.managerId === me().id) ? registrationBadge(registrationFor(team.id, team.tournamentId)) : '';
+  return `${pageHead('Players', 'Squads', editable ? 'Add your players and their shirt numbers. Shirt numbers run from 1 to 99.' : 'Each team\'s players and shirt numbers.', editable ? button('Add player', 'new-player', { cls: 'btn-primary', ic: 'plus', data: { team: team.id } }) : '')}
+  <div class="toolbar"><label class="select-wrap">Team<select id="squad-team">${options}</select></label><span class="spacer"></span><label class="search">${icon('search')}<input id="page-search" placeholder="Search players…" value="${esc(ui.query)}" /></label></div>
+  <section class="panel"><div class="panel-head"><div class="who"><span class="crest">${esc(team.short)}</span><span><h2>${esc(team.name)}</h2><p>${esc(team.dzongkhag)} · ${esc(tournamentName(team.tournamentId))} · ${plural(squad?.rows.length || 0, 'player')}</p></span></div>${reg}</div>${body}</section>`;
+}
+
+// Registrations: the admin approves or rejects entries; a team manager follows their own.
+function registrationsPage() {
+  const blocked = gate('Registrations', 'Tournament entries');
+  if (blocked) return blocked;
+  const admin = role() === 'super_admin';
+  const status = store.registrationsStatus === 'error' ? notice('Could not load registrations. Check that the Registration service is running, then reload.', true) : store.registrationsStatus !== 'loaded' ? notice('Loading registrations…') : '';
+  const tabs = [['pending', 'Waiting'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['all', 'All']];
+  if (!tabs.some(([k]) => k === ui.regTab)) ui.regTab = 'pending';
+  const q = ui.query.toLowerCase();
+  const list = store.registrations.filter((r) => (ui.regTab === 'all' || r.status === ui.regTab) && `${teamName(r.teamId)} ${tournamentName(r.tournamentId)}`.toLowerCase().includes(q))
+    .sort((a, b) => (b.submittedAt?.valueOf() || 0) - (a.submittedAt?.valueOf() || 0));
+  const rows = list.map((r) => {
+    const team = byId(store.teams, r.teamId);
+    const manager = admin ? (team?.managerId ? esc(userName(team.managerId) || 'Team manager') : '<span class="chip">Admin-created</span>') : '';
+    const decide = admin && r.status === 'pending' ? `${button('Approve', 'approve-registration', { cls: 'btn-sm btn-primary', ic: 'check', data: { id: r.id }, roleAction: 'review-registration' })}${button('Reject', 'reject-registration', { cls: 'btn-sm', ic: 'x', data: { id: r.id }, roleAction: 'review-registration' })}` : '';
+    return `<tr><td><div class="who"><span class="crest">${esc(team?.short || initials(teamName(r.teamId)))}</span><span><strong>${esc(teamName(r.teamId))}</strong><small>${esc(team?.dzongkhag || '')}</small></span></div></td><td>${esc(tournamentName(r.tournamentId))}</td>${admin ? `<td>${manager}</td>` : ''}<td>${esc(r.submittedAt ? formatDate(r.submittedAt) : '—')}</td><td>${registrationBadge(r)}</td><td class="row-actions">${decide}</td></tr>`;
+  }).join('');
+  // Teams with a tournament but no entry (for example teams created before registrations were connected).
+  const candidates = (admin ? store.teams : myTeams()).filter((t) => t.tournamentId && !registrationFor(t.id, t.tournamentId));
+  const notEntered = candidates.length ? panel('Not entered yet', `${plural(candidates.length, 'team')} linked to a tournament without an entry. Fixtures skip these teams.`, `<div class="table-wrap"><table class="table"><tbody>${candidates.map((t) => `<tr><td><div class="who"><span class="crest">${esc(t.short)}</span><span><strong>${esc(t.name)}</strong><small>${esc(tournamentName(t.tournamentId))}</small></span></div></td><td class="row-actions">${teamActions(t) || '<span class="chip">Registration closed</span>'}</td></tr>`).join('')}</tbody></table></div>`) : '';
+  const counts = Object.fromEntries(tabs.map(([k]) => [k, k === 'all' ? store.registrations.length : store.registrations.filter((r) => r.status === k).length]));
+  const head = admin
+    ? pageHead('Tournament entries', 'Registrations', 'Approve the teams that may play. Fixtures are generated only for approved teams; a rejection needs a reason.', '')
+    : pageHead('Tournament entries', 'My registrations', 'The tournaments your teams have entered, and whether the league admin has approved them.', button('Create a team', 'new-team', { cls: 'btn-primary', ic: 'plus' }));
+  return `${head}${status}
+  <div class="toolbar"><div class="tabs">${tabs.map(([k, l]) => `<button type="button" class="tab ${ui.regTab === k ? 'active' : ''}" data-action="reg-tab" data-tab="${k}">${l}<span class="count">${counts[k]}</span></button>`).join('')}</div><span class="spacer"></span><label class="search">${icon('search')}<input id="page-search" placeholder="Search teams or tournaments…" value="${esc(ui.query)}" /></label></div>
+  <section class="panel">${rows ? `<div class="table-wrap"><table class="table"><thead><tr><th>Team</th><th>Tournament</th>${admin ? '<th>Manager</th>' : ''}<th>Entered</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : empty(ui.regTab === 'pending' ? 'Nothing waiting' : 'No entries here', ui.regTab === 'pending' ? (admin ? 'New team entries from managers appear here for your decision.' : 'Entries you submit appear here until the admin decides.') : 'Try another tab or search.', { ic: 'flag' })}</section>
+  ${notEntered}`;
+}
+
+function reportsPage() {
+  const blocked = gate('Reports', 'Insights & exports');
+  if (blocked) return blocked;
+  const total = store.matches.length;
+  const done = store.matches.filter((m) => m.status === 'completed').length;
+  const withOfficial = store.matches.filter((m) => m.officialId).length;
+  const dz = new Set(store.teams.map((t) => t.dzongkhag).filter(Boolean)).size;
+  const exports = [
+    ['Standings', `${tournamentName(store.standings.tournamentId)} · ${plural(store.standings.rows.length, 'team')}`, 'export-standings'],
+    ['Fixtures and results', `${plural(total, 'match', 'matches')} · all tournaments`, 'export-fixtures'],
+    ['Teams', `${plural(store.teams.length, 'team')} with their records`, 'export-teams']
+  ];
+  return `${pageHead('Insights & exports', 'Reports', 'Season figures from saved data, and CSV downloads.', '')}
+  <section class="metrics">${metric('Match completion', total ? `${Math.round((done / total) * 100)}%` : '—', `${done} of ${total} finalised`, 'check')}${metric('Officials assigned', total ? `${Math.round((withOfficial / total) * 100)}%` : '—', `${withOfficial} of ${total} matches`, 'whistle')}${metric('Dzongkhags', `${dz} / 20`, 'represented by teams', 'pin')}${metric('Tournaments', store.tournaments.length, 'this season', 'trophy')}</section>
+  ${panel('Downloads', 'CSV files built from the data loaded in this page', `<div class="match-list">${exports.map(([title, sub, action]) => `<div class="check-item"><span class="check-dot">${icon('file')}</span><span><strong>${esc(title)}</strong><small>${esc(sub)}</small></span>${button('Download', action, { cls: 'btn-sm', ic: 'download' })}</div>`).join('')}</div>`)}`;
+}
+
+const PAGES = { dashboard: dashboardPage, tournaments: tournamentsPage, teams: teamsPage, squads: squadsPage, registrations: registrationsPage, matches: matchesPage, standings: standingsPage, officials: officialsPage, users: usersPage, venues: venuesPage, reports: reportsPage };
+
+/* ---------------------------------------------------------------- chrome (sidebar, top bar) */
+function renderChrome() {
+  const r = role();
+  const allowed = rolePages[r];
+  document.querySelectorAll('.nav-link[data-page]').forEach((a) => {
+    const show = allowed.includes(a.dataset.page);
+    a.hidden = !show;
+    a.classList.toggle('active', a.dataset.page === ui.page);
+    if (a.dataset.page === ui.page) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+  });
+  const adminNav = document.getElementById('admin-nav');
+  if (adminNav) adminNav.hidden = ![...adminNav.querySelectorAll('.nav-link')].some((a) => !a.hidden);
+  const teamLabel = document.querySelector('[data-nav-label="teams"]');
+  if (teamLabel) teamLabel.textContent = r === 'team_manager' ? 'My teams' : 'Teams';
+  document.getElementById('crumb-current').textContent = PAGE_LABELS[ui.page] || 'Overview';
+  document.getElementById('footer-year').textContent = String(new Date().getFullYear());
+
+  const seasons = store.tournaments.map((t) => String(t.season || '')).filter(Boolean).sort();
+  document.getElementById('season-label').textContent = `${seasons.at(-1) || new Date().getFullYear()} season`;
+
+  const info = ROLE_INFO[r];
+  const card = document.getElementById('role-card');
+  const profileButton = document.getElementById('profile-button');
+  if (store.session.status === 'checking') {
+    card.innerHTML = '<h3>Checking your session…</h3>';
+  } else if (!signedIn()) {
+    card.innerHTML = `<h3>${icon('eye')}Browsing as a guest</h3><p>Fixtures, results and standings are public. Create a free account to see squads, or sign in to run your part of the season.</p><div class="role-card-actions">${button('Create account', 'signup', { cls: 'btn-light btn-sm', ic: 'userplus' })}${button('Sign in', 'signin', { cls: 'btn-ghost btn-sm', ic: 'login' })}</div>`;
+  } else {
+    card.innerHTML = `<h3>${icon(info.icon)}You are a ${esc(info.title)}</h3><ul>${info.can.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>`;
+  }
+  const name = signedIn() ? me().username : 'Not signed in';
+  document.getElementById('profile-avatar').textContent = signedIn() ? initials(me().username) : '?';
+  document.getElementById('profile-name').textContent = name;
+  document.getElementById('profile-role').textContent = signedIn() ? info.title : 'Guest';
+  profileButton.innerHTML = icon(signedIn() ? 'logout' : 'login');
+  profileButton.dataset.action = signedIn() ? 'signout' : 'signin';
+  profileButton.setAttribute('aria-label', signedIn() ? `Sign out ${name}` : 'Sign in');
+
+  const account = document.getElementById('account');
+  account.innerHTML = signedIn()
+    ? `<button type="button" class="account-button" data-action="account-menu" aria-haspopup="true" aria-expanded="false"><span class="avatar">${esc(initials(me().username))}</span><strong>${esc(me().username)}</strong>${roleBadge(r)}</button>
+       <div class="account-menu" id="account-menu" hidden><div class="who"><span class="avatar">${esc(initials(me().username))}</span><span><strong>${esc(me().username)}</strong><small>${esc(info.title)}</small></span></div><p>${esc(info.can.join('. '))}.</p>${button('Sign out', 'signout', { cls: 'btn-sm btn-block', ic: 'logout' })}</div>`
+    : store.session.status === 'checking' ? '' : `${button('Create account', 'signup', { cls: 'btn-sm account-signup', ic: 'userplus' })}${button('Sign in', 'signin', { cls: 'btn-primary btn-sm', ic: 'login' })}`;
+}
+
+/* ---------------------------------------------------------------- routing */
+const landingActive = () => Boolean(window.DrukLanding && window.DrukLanding.active());
+
+function render(page = ui.page, options = {}) {
+  const r = role();
+  if (!PAGES[page]) page = 'dashboard';
+  // While the saved session is still being checked, keep the requested page; it re-renders once the role is known.
+  if (store.session.status !== 'checking' && !rolePages[r].includes(page)) {
+    if (signedIn()) toast(`${ROLE_INFO[r].title} accounts cannot open ${PAGE_LABELS[page] || 'that page'}. Showing your overview.`);
+    page = 'dashboard';
+  }
+  if (page !== ui.page) ui.query = '';
+  ui.page = page;
+  if (!landingActive()) {
+    if (options.history !== false && location.hash !== `#${page}`) history.pushState({ page }, '', `#${page}`);
+    else if (options.history === false && location.hash !== `#${page}`) history.replaceState({ page }, '', `#${page}`);
+  }
+  renderChrome();
+  document.getElementById('page-content').innerHTML = PAGES[page]();
+  document.getElementById('sidebar').classList.remove('open');
+  if (!landingActive() && options.scroll !== false) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+// Re-render the current page in place (data refreshed, filter changed) without moving the scroll position.
+function refreshView() { render(ui.page, { history: false, scroll: false }); }
+
+window.addEventListener('hashchange', () => {
+  if (landingActive()) return;
+  render(location.hash.slice(1) || 'dashboard', { history: false });
 });
-document.addEventListener('input',e=>{if(e.target.id==='page-search'){query=e.target.value;const caret=e.target.selectionStart,renderer={tournaments:tournamentsPage,teams:teamsPage,matches:matchesPage,officials:officialsPage}[activePage];if(renderer){document.getElementById('page-content').innerHTML=renderer();applyRoleVisibility();const input=document.getElementById('page-search');input.focus();input.setSelectionRange(caret,caret)}}if(e.target.id==='global-search'){const term=e.target.value.trim();if(term.length>1){const match=document.querySelector(`.nav-link[data-page="${['tournaments','teams','matches','standings','officials'].find(x=>x.includes(term.toLowerCase()))||'dashboard'}"]`);if(match&&term.length>3){}}}});
-document.addEventListener('submit',e=>{
-  if(sessionStorage.getItem('drukleague-authenticated')==='true'&&['tournament-form','team-form','score-form'].includes(e.target.id))return;
-  if(e.target.id==='tournament-form'){e.preventDefault();if(!canRoleAction('new-tournament')){toast('Only Super Admins can create tournaments.');document.getElementById('modal-root').innerHTML='';return}const name=e.target.elements.name.value.trim();const sport=e.target.elements.sport.value.toUpperCase();if(!name)return;tournaments.unshift({name,sport,season:'2025',status:'Registration open',teams:0,fixtures:0,fill:0,theme:'',description:'Registration is open. Invite teams to get your competition started.'});document.getElementById('modal-root').innerHTML='';render('tournaments');toast(`${name} created. You can now invite teams.`);return}
-  if(e.target.id==='team-form'){e.preventDefault();if(!canRoleAction('new-team')){toast('Your role cannot register teams.');document.getElementById('modal-root').innerHTML='';return}const name=e.target.elements.name.value.trim(),dz=e.target.elements.dz.value;if(!name)return;const short=name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();teams.push({name,short,color:'',dz,played:0,w:0,d:0,l:0,gf:0,ga:0,gd:'0',pts:0,form:[]});latestActivity={title:'New team registered',detail:`${name} joined from ${dz}`,actor:'Pema Dorji'};document.getElementById('modal-root').innerHTML='';render('teams');toast(`${name} registered for review.`);return}
-  if(e.target.id==='score-form'){e.preventDefault();if(!canRoleAction('update-score')){toast('Only Match Officials can update scores.');document.getElementById('modal-root').innerHTML='';return}const form=e.target,index=Number(form.dataset.matchIndex),match=fixtureData[index],homeGoals=Number(form.elements.home.value),awayGoals=Number(form.elements.away.value);if(!match||match.matchResult||!Number.isInteger(homeGoals)||!Number.isInteger(awayGoals)||homeGoals<0||awayGoals<0)return;const final=e.submitter?.value==='finalize';if(final){applyFinalResult(match,homeGoals,awayGoals);document.getElementById('modal-root').innerHTML='';render('matches');toast('Result finalized. Standings have been updated.')}else{match.score=`${homeGoals} — ${awayGoals}`;latestActivity={title:'Live score updated',detail:`${match.home} ${homeGoals}–${awayGoals} ${match.away}`,actor:match.official};document.getElementById('modal-root').innerHTML='';render('matches');toast('Live score saved. The final result is still open.')} }
+
+/* ---------------------------------------------------------------- toasts & modals */
+function toast(message, tone = 'info') {
+  const kind = ['success', 'error', 'info'].includes(tone) ? tone : 'info';
+  const node = document.createElement('div');
+  node.className = `toast toast-${kind}`;
+  if (kind === 'error') node.setAttribute('role', 'alert');
+  node.textContent = message;
+  document.getElementById('toast-region').append(node);
+  setTimeout(() => node.remove(), kind === 'error' ? 6500 : 3600);
+}
+function openModal(id, title, sub, body, foot) {
+  document.getElementById('modal-root').innerHTML = `<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="${id}-title"><header class="modal-head"><div><h2 id="${id}-title">${esc(title)}</h2>${sub ? `<p>${esc(sub)}</p>` : ''}</div><button type="button" class="modal-close" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="${id}" novalidate><div class="modal-body">${body}</div><footer class="modal-foot">${foot}</footer></form></section></div>`;
+  document.querySelector('#modal-root input:not([type=hidden]), #modal-root select')?.focus();
+}
+const closeModal = () => { document.getElementById('modal-root').innerHTML = ''; };
+const cancelButton = '<button type="button" class="btn" data-action="dismiss-modal">Cancel</button>';
+const options = (list, selected) => list.map((v) => `<option ${v === selected ? 'selected' : ''}>${esc(v)}</option>`).join('');
+
+function showFormError(form, message) {
+  let alert = form.querySelector('.form-error');
+  if (!alert) { alert = document.createElement('p'); alert.className = 'form-error'; alert.setAttribute('role', 'alert'); form.querySelector('.modal-body, .auth-fields')?.prepend(alert); }
+  alert.textContent = message;
+}
+function setBusy(form, busy, label = 'Saving…') {
+  form.setAttribute('aria-busy', String(busy));
+  form.querySelectorAll('button[type="submit"]').forEach((b) => {
+    if (busy) { b.dataset.label = b.textContent; b.disabled = true; if (b === form._submitter || !form._submitter) b.textContent = label; } else { b.disabled = false; if (b.dataset.label) b.textContent = b.dataset.label; }
+  });
+}
+// Run a save: busy state while it runs; on success close the dialog, confirm, and reload data;
+// on failure keep the dialog open with the error inside it.
+async function runSave(form, work, success, busyLabel) {
+  form.querySelector('.form-error')?.remove();
+  setBusy(form, true, busyLabel);
+  try {
+    const result = await work();
+    closeModal();
+    toast(typeof success === 'function' ? success(result) : success, 'success');
+    await window.DrukAPI.reload();
+  } catch (error) {
+    setBusy(form, false);
+    showFormError(form, error.message || 'Something went wrong.');
+  }
+}
+
+function openTournamentModal() {
+  const year = new Date().getFullYear();
+  const seasons = [...new Set([String(year), String(year + 1), ...store.tournaments.map((t) => String(t.season || ''))].filter(Boolean))].sort().reverse();
+  openModal('tournament-form', 'Create a tournament', 'Teams can register once it is created.', `<div class="form-grid">
+    <div class="field full"><label for="t-name">Tournament name</label><input id="t-name" name="name" maxlength="70" placeholder="e.g. Wangdue Summer Cup" required /></div>
+    <div class="field"><label for="t-sport">Sport</label><select id="t-sport" name="sport">${options(SPORTS, 'Football')}</select></div>
+    <div class="field"><label for="t-season">Season</label><select id="t-season" name="season">${options(seasons, String(year))}</select></div>
+    <div class="field"><label for="t-start">Start date</label><input id="t-start" name="starts" type="date" /><small>Fixtures start on this date if it is in the future.</small></div>
+    <div class="field"><label for="t-dz">Dzongkhag</label><select id="t-dz" name="dz">${options(DZONGKHAGS, 'Thimphu')}</select></div></div>`,
+  `${cancelButton}<button type="submit" class="btn btn-primary">Create tournament</button>`);
+}
+
+function openTeamModal(presetTournament = '') {
+  const isManager = role() === 'team_manager';
+  const choices = store.tournaments.filter((t) => !isManager || t.status === 'registration_open');
+  if (!choices.length) {
+    openModal('info-form', 'No tournament to join', '', empty(isManager ? 'No tournament is open for registration' : 'Create a tournament first', isManager ? 'Ask the league admin to open a tournament for registration.' : 'A team is always registered for a tournament.', { ic: 'trophy' }), '<button type="button" class="btn btn-primary" data-action="dismiss-modal">OK</button>');
+    return;
+  }
+  openModal('team-form', isManager ? 'Create your team' : 'Add a team', isManager ? 'The team is linked to your account and entered into the tournament. The league admin then approves the entry.' : 'The team is entered into the tournament and approved straight away.', `<div class="form-grid">
+    <div class="field full"><label for="team-name">Team name</label><input id="team-name" name="name" maxlength="70" placeholder="e.g. Wangdue Rovers" required /></div>
+    <div class="field"><label for="team-dz">Dzongkhag</label><select id="team-dz" name="dz">${options(DZONGKHAGS, 'Thimphu')}</select></div>
+    <div class="field"><label for="team-tournament">Tournament</label><select id="team-tournament" name="tournament">${choices.map((t) => `<option value="${esc(t.id)}" ${t.id === presetTournament ? 'selected' : ''}>${esc(t.name)} · ${esc(t.season || '')}</option>`).join('')}</select>${isManager ? '<small>Only tournaments open for registration are listed.</small>' : ''}</div></div>`,
+  `${cancelButton}<button type="submit" class="btn btn-primary">${isManager ? 'Create and enter team' : 'Add team'}</button>`);
+}
+
+// Enter an existing team into its tournament. The admin's entries are approved straight away.
+async function enterTeam(teamId, tournamentId) {
+  const api = window.DrukAPI;
+  const team = byId(store.teams, teamId);
+  const admin = role() === 'super_admin';
+  try {
+    const reg = await api.registerTeam(tournamentId, teamId);
+    if (admin && reg?.id) await api.reviewRegistration(reg.id, true);
+    toast(admin ? `${team?.name || 'Team'} entered and approved.` : `${team?.name || 'Team'} entered. The league admin will review it.`, 'success');
+  } catch (error) {
+    toast(error.message || 'Could not enter the team.', 'error');
+  }
+  await api.reload();
+}
+
+function openRejectModal(id) {
+  const reg = byId(store.registrations, id);
+  if (!reg) return;
+  openModal('reject-form', 'Reject this entry', `${teamName(reg.teamId)} · ${tournamentName(reg.tournamentId)}`, `<input type="hidden" name="registration" value="${esc(reg.id)}" /><div class="field"><label for="r-reason">Reason</label><textarea id="r-reason" name="reason" rows="3" maxlength="500" placeholder="e.g. Squad list incomplete" required></textarea><small>The team manager needs this to understand the decision. A rejected team cannot enter the same tournament again.</small></div>`,
+    `${cancelButton}<button type="submit" class="btn btn-danger">Reject entry</button>`);
+}
+
+function openPlayerModal(teamId, playerId = '') {
+  const team = byId(store.teams, teamId);
+  if (!team) return;
+  const player = (store.players[teamId]?.rows || []).find((p) => p.id === playerId);
+  openModal('player-form', player ? 'Edit player' : 'Add a player', team.name, `<input type="hidden" name="team" value="${esc(team.id)}" /><input type="hidden" name="player" value="${esc(player?.id || '')}" /><div class="form-grid">
+    <div class="field"><label for="p-given">First name</label><input id="p-given" name="given" maxlength="60" value="${esc(player?.given || '')}" required /></div>
+    <div class="field"><label for="p-family">Last name</label><input id="p-family" name="family" maxlength="60" value="${esc(player?.family || '')}" /><small>Optional.</small></div>
+    <div class="field"><label for="p-shirt">Shirt number</label><input id="p-shirt" name="shirt" type="number" min="1" max="99" inputmode="numeric" value="${esc(player?.shirt || '')}" /><small>1–99, optional.</small></div></div>`,
+    `${cancelButton}<button type="submit" class="btn btn-primary">${player ? 'Save player' : 'Add player'}</button>`);
+}
+
+function openVenueModal() {
+  const needed = store.tournaments.find((t) => t.dzongkhag && !store.venues.some((v) => v.dzongkhag === t.dzongkhag));
+  openModal('venue-form', 'Add a venue', 'Generated fixtures are booked at venues in the tournament\'s dzongkhag.', `<div class="form-grid">
+    <div class="field full"><label for="v-name">Venue name</label><input id="v-name" name="name" minlength="2" maxlength="120" placeholder="e.g. Changlimithang Stadium" required /></div>
+    <div class="field"><label for="v-dz">Dzongkhag</label><select id="v-dz" name="dz">${options(DZONGKHAGS, needed?.dzongkhag || 'Thimphu')}</select></div>
+    <div class="field"><label for="v-cap">Capacity</label><input id="v-cap" name="capacity" type="number" min="0" max="100000" inputmode="numeric" placeholder="Optional" /></div></div>`,
+    `${cancelButton}<button type="submit" class="btn btn-primary">Add venue</button>`);
+}
+
+function openGenerateModal(presetTournament = '') {
+  if (!store.tournaments.length) { toast('Create a tournament first.'); return; }
+  const pending = pendingRegistrations().length;
+  openModal('generate-form', 'Generate fixtures', 'Creates a round-robin schedule for every approved team, at venues in the tournament\'s dzongkhag. Running it again does not duplicate matches.', `<div class="form-grid"><div class="field full"><label for="g-tournament">Tournament</label><select id="g-tournament" name="tournament">${store.tournaments.map((t) => {
+    const n = approvedIn(t.id).length;
+    const venues = store.venues.filter((v) => v.dzongkhag === t.dzongkhag).length;
+    return `<option value="${esc(t.id)}" ${t.id === presetTournament ? 'selected' : ''}>${esc(t.name)} — ${plural(n, 'approved team')}, ${plural(venues, 'venue')}</option>`;
+  }).join('')}</select><small>A tournament needs at least two approved teams.</small></div>
+  ${pending ? `<div class="field full">${notice(`${plural(pending, 'entry', 'entries')} still waiting for approval will not get fixtures. <button type="button" class="link-btn" data-page="registrations">Review first →</button>`, true)}</div>` : ''}</div>`,
+  `${cancelButton}<button type="submit" class="btn btn-primary">Generate fixtures</button>`);
+}
+
+function openScoreModal(id) {
+  const m = byId(store.matches, id);
+  if (!m) return;
+  if (m.status === 'completed') { toast(`Final result: ${m.home} ${m.resultHome}–${m.resultAway} ${m.away}.`); return; }
+  const score = matchScore(m) || [0, 0];
+  const side = (key, name, value, label) => `<div class="score-side"><small>${label}</small><strong>${esc(name)}</strong><div class="stepper"><button type="button" data-action="step" data-field="${key}" data-step="-1" aria-label="${label} score down">−</button><input name="${key}" type="number" min="0" max="99" inputmode="numeric" value="${esc(value)}" aria-label="${esc(name)} score" /><button type="button" data-action="step" data-field="${key}" data-step="1" aria-label="${label} score up">+</button></div></div>`;
+  openModal('score-form', m.status === 'live' ? 'Update the score' : 'Start scoring', `${tournamentName(m.tournamentId)} · ${m.venue || 'Venue TBD'}`, `<input type="hidden" name="match" value="${esc(m.id)}" /><div class="score-grid">${side('home', m.home, score[0], 'HOME')}<span class="score-vs">vs</span>${side('away', m.away, score[1], 'AWAY')}</div><p class="score-note">Saving keeps the result open. <b>Finalising locks it</b> and updates the standings.</p>`,
+    `${cancelButton}<button type="submit" class="btn" value="save">Save live score</button><button type="submit" class="btn btn-primary" value="finalize">Finalise result</button>`);
+}
+
+function openAssignModal(id) {
+  const m = byId(store.matches, id);
+  if (!m) return;
+  if (store.usersStatus !== 'loaded') { toast('The official list is still loading. Try again in a moment.'); return; }
+  if (!officials().length) {
+    openModal('info-form', 'No match officials yet', '', empty('Create an official account first', 'Officials need an account before they can be assigned to a match.', { ic: 'whistle', action: button('Add official', 'new-user', { cls: 'btn-primary', data: { role: 'match_official' } }) }), cancelButton);
+    return;
+  }
+  openModal('assign-form', m.officialId ? 'Change the official' : 'Assign an official', `${m.home} vs ${m.away} · ${dateParts(m.kickoff).long}`, `<input type="hidden" name="match" value="${esc(m.id)}" /><div class="field"><label for="a-official">Match official</label><select id="a-official" name="official">${officials().map((u) => {
+    const load = store.matches.filter((x) => x.officialId === u.id && x.status !== 'completed').length;
+    return `<option value="${esc(u.id)}" ${u.id === m.officialId ? 'selected' : ''}>${esc(u.username)} — ${plural(load, 'open match', 'open matches')}</option>`;
+  }).join('')}</select><small>Only this official will be able to enter and finalise the score.</small></div>`,
+  `${cancelButton}<button type="submit" class="btn btn-primary">Assign official</button>`);
+}
+
+function openUserModal(presetRole = 'match_official') {
+  const roles = [['match_official', 'Match Official — scores assigned matches'], ['team_manager', 'Team Manager — registers their teams'], ['viewer', 'Viewer — read-only access']];
+  openModal('user-form', 'Create an account', 'Share the username and password with the person directly.', `<div class="form-grid">
+    <div class="field full"><label for="u-role">Role</label><select id="u-role" name="role">${roles.map(([v, l]) => `<option value="${v}" ${v === presetRole ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+    <div class="field full"><label for="u-name">Username</label><input id="u-name" name="username" autocomplete="off" pattern="[a-zA-Z0-9._-]{3,40}" maxlength="40" placeholder="e.g. tashi.referee" required /><small>3–40 letters, numbers, dots, dashes or underscores.</small></div>
+    <div class="field full"><label for="u-pass">Password</label><div class="password-wrap"><input id="u-pass" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="72" required /><button type="button" data-action="toggle-password">Show</button></div><small>At least 10 characters.</small></div></div>`,
+  `${cancelButton}<button type="submit" class="btn btn-primary">Create account</button>`);
+}
+
+function openMatchModal() {
+  if (!store.tournaments.length) { toast('Create a tournament first.'); return; }
+  const first = store.tournaments.find((t) => teamsIn(t.id).length >= 2) || store.tournaments[0];
+  const venues = [...new Set([...store.venues.map((v) => v.name), ...store.matches.map((m) => m.venue)].filter(Boolean))];
+  const local = new Date(Date.now() + 86400000); local.setMinutes(0, 0, 0);
+  const pad = (n) => String(n).padStart(2, '0');
+  const value = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}T${pad(local.getHours())}:00`;
+  openModal('match-form', 'Schedule a match', 'Both teams must be registered in the tournament.', `<div class="form-grid">
+    <div class="field full"><label for="m-tournament">Tournament</label><select id="m-tournament" name="tournament">${store.tournaments.map((t) => `<option value="${esc(t.id)}" ${t.id === first.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+    <div id="m-teams" class="form-grid full" style="grid-column:1/-1">${matchTeamFields(first.id)}</div>
+    <div class="field"><label for="m-kickoff">Kick-off</label><input id="m-kickoff" name="kickoff" type="datetime-local" value="${value}" required /></div>
+    <div class="field"><label for="m-venue">Venue</label><input id="m-venue" name="venue" list="m-venues" maxlength="80" placeholder="e.g. Changlimithang Stadium" required /><datalist id="m-venues">${venues.map((v) => `<option value="${esc(v)}"></option>`).join('')}</datalist></div>
+    <div class="field full"><label for="m-official">Match official (optional)</label><select id="m-official" name="official"><option value="">Assign later</option>${officials().map((u) => `<option value="${esc(u.id)}">${esc(u.username)}</option>`).join('')}</select></div></div>`,
+  `${cancelButton}<button type="submit" class="btn btn-primary">Schedule match</button>`);
+}
+function matchTeamFields(tournamentId) {
+  const teams = teamsIn(tournamentId);
+  if (teams.length < 2) return `<div class="field full">${notice('This tournament has fewer than two teams. Add teams before scheduling a match.', true)}</div>`;
+  const select = (name, label, pick) => `<div class="field"><label for="m-${name}">${label}</label><select id="m-${name}" name="${name}">${teams.map((t, i) => `<option value="${esc(t.id)}" ${i === pick ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>`;
+  return `${select('home', 'Home team', 0)}${select('away', 'Away team', 1)}`;
+}
+
+/* ---------------------------------------------------------------- sign-in screen */
+// The account screen: mode 'signin' (existing account) or 'signup' (new Viewer account).
+function openSignIn(mode = 'signin') {
+  const screen = document.getElementById('auth-screen');
+  const signup = mode === 'signup';
+  const roles = Object.values(ROLE_INFO).map((info) => `<div><strong>${esc(info.title)}</strong>${esc(info.can[0])}</div>`).join('');
+  const tabs = `<div class="tabs auth-tabs" role="tablist">${[['signin', 'Sign in'], ['signup', 'Create account']].map(([k, l]) => `<button type="button" role="tab" class="tab ${mode === k ? 'active' : ''}" aria-selected="${mode === k}" data-action="auth-mode" data-mode="${k}">${l}</button>`).join('')}</div>`;
+  const form = signup
+    ? `<div><div class="eyebrow">Free viewer account</div><h1>Join <b>DrukLeague</b></h1></div>
+      <p>Follow fixtures, live scores, standings and team squads. Officials and team managers get their accounts from the league admin.</p>
+      <form id="signup-form" novalidate><div class="auth-fields">
+        <div class="field"><label for="signup-user">Username</label><input id="signup-user" name="username" autocomplete="username" pattern="[a-zA-Z0-9._-]{3,40}" maxlength="40" required /><small>3–40 letters, numbers, dots, dashes or underscores.</small></div>
+        <div class="field" style="margin-top:14px"><label for="signup-password">Password</label><div class="password-wrap"><input id="signup-password" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="72" required /><button type="button" data-action="toggle-password">Show</button></div><small>At least 10 characters.</small></div>
+        <div class="field" style="margin-top:14px"><label for="signup-confirm">Confirm password</label><input id="signup-confirm" name="confirm" type="password" autocomplete="new-password" maxlength="72" required /></div></div>
+        <button type="submit" class="btn btn-primary btn-block">Create account</button>
+        <p class="auth-help">Already have an account? <button type="button" class="link-btn" data-action="auth-mode" data-mode="signin">Sign in</button></p>
+      </form>`
+    : `<div><div class="eyebrow">Welcome back</div><h1>Sign in to <b>DrukLeague</b></h1></div>
+      <p>Use your own username and password, or the one your league admin gave you.</p>
+      <form id="signin-form" novalidate><div class="auth-fields">
+        <div class="field"><label for="login-user">Username</label><input id="login-user" name="username" autocomplete="username" required /></div>
+        <div class="field" style="margin-top:14px"><label for="login-password">Password</label><div class="password-wrap"><input id="login-password" name="password" type="password" autocomplete="current-password" required /><button type="button" data-action="toggle-password">Show</button></div></div></div>
+        <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+        <p class="auth-help">New here? <button type="button" class="link-btn" data-action="auth-mode" data-mode="signup">Create a free viewer account</button>. Officials and team managers get their accounts from the league admin.</p>
+      </form>`;
+  screen.innerHTML = `<aside class="auth-visual"><img src="./assets/landing/night-match.jpg" alt="" decoding="async" />
+      <a class="brand" href="#home" data-action="close-signin"><span class="brand-mark"><img src="./assets/drukleague-logo.png" alt="" /></span><span class="brand-type">DrukLeague<small>Tournament operations</small></span></a>
+      <div><h2>One account,<br /><b>the right tools</b> for your role.</h2><div class="auth-roles">${roles}</div></div></aside>
+    <div class="auth-panel"><div class="auth-card">
+      <div class="auth-top"><button type="button" class="btn btn-sm" data-action="close-signin">← Back</button></div>
+      ${tabs}${form}</div></div>`;
+  screen.hidden = false;
+  document.body.style.overflow = 'hidden';
+  document.getElementById(signup ? 'signup-user' : 'login-user').focus();
+}
+function closeSignIn() {
+  const screen = document.getElementById('auth-screen');
+  screen.hidden = true;
+  screen.innerHTML = '';
+  document.body.style.overflow = '';
+}
+
+/* ---------------------------------------------------------------- CSV exports */
+function downloadCSV(name, rows) {
+  const csv = rows.map((row) => row.map((v) => {
+    let text = String(v ?? '');
+    if (/^[=+\-@]/.test(text)) text = `'${text}`; // stop spreadsheet formula injection
+    return `"${text.replaceAll('"', '""')}"`;
+  }).join(',')).join('\r\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  link.download = `${name}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+const slug = (s) => String(s || 'drukleague').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'drukleague';
+function exportStandings() {
+  const s = store.standings;
+  if (!s.rows.length) { toast('There are no standings to download yet.'); return; }
+  const ranked = [...s.rows].sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
+  downloadCSV(`${slug(tournamentName(s.tournamentId))}-standings`, [['Rank', 'Team', 'Dzongkhag', 'Played', 'Won', 'Drawn', 'Lost', 'Goals for', 'Goals against', 'Goal difference', 'Points'], ...ranked.map((t, i) => [i + 1, t.name, t.dz, t.played, t.w, t.d, t.l, t.gf, t.ga, t.gd, t.pts])]);
+  toast('Standings downloaded.', 'success');
+}
+function exportFixtures() {
+  if (!store.matches.length) { toast('There are no matches to download yet.'); return; }
+  downloadCSV('drukleague-fixtures', [['Tournament', 'Kick-off', 'Home', 'Away', 'Venue', 'Status', 'Home score', 'Away score', 'Official'], ...sortByKickoff(store.matches).map((m) => { const s = matchScore(m); return [tournamentName(m.tournamentId), m.kickoff ? m.kickoff.toISOString() : '', m.home, m.away, m.venue, m.status, s ? s[0] : '', s ? s[1] : '', m.officialId ? (userName(m.officialId) || 'Assigned') : '']; })]);
+  toast('Fixtures downloaded.', 'success');
+}
+function exportTeams() {
+  if (!store.teams.length) { toast('There are no teams to download yet.'); return; }
+  downloadCSV('drukleague-teams', [['Team', 'Short code', 'Dzongkhag', 'Tournament', 'Played', 'Won', 'Drawn', 'Lost', 'Goal difference', 'Points'], ...store.teams.map((t) => { const s = teamStats(t.id); return [t.name, t.short, t.dzongkhag, tournamentName(t.tournamentId), s.p, s.w, s.d, s.l, s.gd, s.pts]; })]);
+  toast('Teams downloaded.', 'success');
+}
+
+/* ---------------------------------------------------------------- events */
+const requireRole = (action, message) => { if (canRoleAction(action)) return true; toast(message, 'error'); return false; };
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('.account')) document.getElementById('account-menu')?.setAttribute('hidden', '');
+  const nav = event.target.closest('[data-page]');
+  if (nav && !nav.closest('#landing')) {
+    event.preventDefault();
+    if (nav.dataset.tab) ui.matchTab = nav.dataset.tab;
+    if (nav.dataset.team) ui.squadTeam = nav.dataset.team;
+    if (nav.dataset.tournament) {
+      if (nav.dataset.page === 'matches') ui.matchTournament = nav.dataset.tournament;
+      if (nav.dataset.page === 'standings') void window.DrukAPI.loadStandings(nav.dataset.tournament);
+    }
+    closeModal();
+    render(nav.dataset.page);
+    return;
+  }
+  const target = event.target.closest('[data-action]');
+  if (!target || target.closest('#landing')) return;
+  const { action } = target.dataset;
+  switch (action) {
+    case 'signin': closeModal(); openSignIn('signin'); break;
+    case 'signup': closeModal(); openSignIn('signup'); break;
+    case 'auth-mode': openSignIn(target.dataset.mode); break;
+    case 'close-signin': event.preventDefault(); closeSignIn(); if (target.getAttribute('href') === '#home') location.hash = '#home'; break;
+    case 'signout': void window.DrukAPI.signOut(); break;
+    case 'account-menu': {
+      const menu = document.getElementById('account-menu');
+      const open = menu.hasAttribute('hidden');
+      menu.toggleAttribute('hidden', !open);
+      target.setAttribute('aria-expanded', String(open));
+      break;
+    }
+    case 'toggle-menu': document.getElementById('sidebar').classList.toggle('open'); break;
+    case 'close-menu': document.getElementById('sidebar').classList.remove('open'); break;
+    case 'dismiss-modal': if (event.target === target || target.tagName === 'BUTTON') closeModal(); break;
+    case 'reload': void window.DrukAPI.reload(); break;
+    case 'reload-standings': void window.DrukAPI.loadStandings(store.standings.tournamentId); break;
+    case 'new-tournament': if (requireRole('new-tournament', 'Only the Super Admin can create tournaments.')) openTournamentModal(); break;
+    case 'new-team': if (requireRole('new-team', 'Your role cannot register teams.')) openTeamModal(target.dataset.tournament); break;
+    case 'generate': if (requireRole('generate-fixtures', 'Only the Super Admin can generate fixtures.')) openGenerateModal(target.dataset.tournament); break;
+    case 'new-match': if (requireRole('schedule-match', 'Only the Super Admin can schedule matches.')) openMatchModal(); break;
+    case 'assign': if (requireRole('assign-official', 'Only the Super Admin can assign officials.')) openAssignModal(target.dataset.id); break;
+    case 'new-user': if (requireRole('manage-users', 'Only the Super Admin can create accounts.')) openUserModal(target.dataset.role); break;
+    case 'score': if (requireRole('update-score', 'Only match officials can enter scores.')) openScoreModal(target.dataset.id); break;
+    case 'register-team':
+      if (requireRole('register-team', 'Your role cannot enter teams.')) {
+        target.disabled = true;
+        void enterTeam(target.dataset.team, target.dataset.tournament);
+      }
+      break;
+    case 'approve-registration': {
+      if (!requireRole('review-registration', 'Only the Super Admin can approve entries.')) break;
+      const reg = byId(store.registrations, target.dataset.id);
+      target.disabled = true;
+      window.DrukAPI.reviewRegistration(target.dataset.id, true)
+        .then(() => toast(`${teamName(reg?.teamId)} approved for ${tournamentName(reg?.tournamentId)}.`, 'success'))
+        .catch((error) => toast(error.message, 'error'))
+        .finally(() => window.DrukAPI.reload());
+      break;
+    }
+    case 'reject-registration': if (requireRole('review-registration', 'Only the Super Admin can reject entries.')) openRejectModal(target.dataset.id); break;
+    case 'new-player': case 'edit-player': {
+      const team = byId(store.teams, target.dataset.team);
+      if (canEditSquad(team)) openPlayerModal(team.id, target.dataset.player); else toast('Only the admin or this team\'s manager can change its squad.', 'error');
+      break;
+    }
+    case 'reload-squad': void window.DrukAPI.loadPlayers(target.dataset.team); break;
+    case 'new-venue': if (requireRole('manage-venues', 'Only the Super Admin can add venues.')) openVenueModal(); break;
+    case 'reg-tab': ui.regTab = target.dataset.tab; refreshView(); break;
+    case 'step': {
+      const field = target.closest('form')?.elements[target.dataset.field];
+      if (field) field.value = Math.max(0, Math.min(99, (Number(field.value) || 0) + Number(target.dataset.step)));
+      break;
+    }
+    case 'toggle-password': {
+      const input = target.parentElement.querySelector('input');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      target.textContent = show ? 'Hide' : 'Show';
+      break;
+    }
+    case 'match-tab': ui.matchTab = target.dataset.tab; refreshView(); break;
+    case 'team-scope': ui.teamScope = target.dataset.scope; refreshView(); break;
+    case 'user-role': ui.userRole = target.dataset.role; refreshView(); break;
+    case 'export-standings': exportStandings(); break;
+    case 'export-fixtures': exportFixtures(); break;
+    case 'export-teams': exportTeams(); break;
+    default: break;
+  }
 });
-document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();document.getElementById('global-search').focus()}if(e.key==='Enter'&&e.target.id==='global-search'){const term=e.target.value.trim();if(term){query=term;const lower=term.toLowerCase();const destination=lower.includes('match')||lower.includes('score')?'matches':lower.includes('tournament')||lower.includes('cup')?'tournaments':lower.includes('stand')||lower.includes('point')||lower.includes('league')?'standings':lower.includes('venue')||lower.includes('ground')?'venues':lower.includes('official')||lower.includes('referee')?'officials':'teams';render(destination);query=term;const view={tournaments:tournamentsPage,teams:teamsPage,matches:matchesPage,officials:officialsPage}[destination];if(view)document.getElementById('page-content').innerHTML=view()}}if(e.key==='Escape'){document.getElementById('modal-root').innerHTML='';document.getElementById('sidebar').classList.remove('open')}});
-render(location.hash.slice(1)||'dashboard');
+
+document.addEventListener('submit', (event) => {
+  const form = event.target;
+  const api = window.DrukAPI;
+  if (!form.id || !api) return;
+  event.preventDefault();
+  form._submitter = event.submitter;
+  const f = form.elements;
+  switch (form.id) {
+    case 'signin-form': {
+      const username = f.username.value.trim();
+      const password = f.password.value;
+      if (!username || !password) { showFormError(form, 'Enter your username and password.'); return; }
+      form.querySelector('.form-error')?.remove();
+      setBusy(form, true, 'Signing in…');
+      api.signIn(username, password).then((user) => {
+        closeSignIn();
+        toast(`Signed in as ${user.username} (${ROLE_INFO[currentRole()].title}).`, 'success');
+        if (landingActive()) location.hash = '#dashboard'; else render('dashboard');
+      }).catch((error) => { setBusy(form, false); showFormError(form, error.message === 'Request failed (401)' ? 'Wrong username or password.' : error.message); });
+      return;
+    }
+    case 'tournament-form': {
+      const name = f.name.value.trim();
+      if (!name) { showFormError(form, 'Enter a tournament name.'); return; }
+      void runSave(form, () => api.createTournament({ name, sport: f.sport.value.toLowerCase(), season: f.season.value, starts_at: f.starts.value, dzongkhag: f.dz.value }), `${name} created. Teams can now register.`);
+      return;
+    }
+    case 'team-form': {
+      const name = f.name.value.trim();
+      if (!name) { showFormError(form, 'Enter a team name.'); return; }
+      const tournament = byId(store.tournaments, f.tournament.value);
+      void runSave(form, () => api.createTeam({ name, short_code: initials(name), dzongkhag: f.dz.value, tournament_id: f.tournament.value }), (result) => {
+        const where = tournament?.name || 'the tournament';
+        if (result?.registration_status === 'approved') return `${name} added and approved for ${where}.`;
+        if (result?.registration_status === 'pending') return `${name} created and entered into ${where}. The league admin will review the entry.`;
+        // The team was saved, but the entry failed; say why so it can be entered later.
+        setTimeout(() => toast(`${name} was saved but not entered: ${result?.registration_error || 'the entry failed'}.`, 'error'), 0);
+        return `${name} saved.`;
+      });
+      return;
+    }
+    case 'signup-form': {
+      const username = f.username.value.trim();
+      if (!/^[a-zA-Z0-9._-]{3,40}$/.test(username)) { showFormError(form, 'Usernames are 3–40 letters, numbers, dots, dashes or underscores.'); return; }
+      if (f.password.value.length < 10) { showFormError(form, 'The password must be at least 10 characters.'); return; }
+      if (f.password.value !== f.confirm.value) { showFormError(form, 'The two passwords do not match.'); return; }
+      form.querySelector('.form-error')?.remove();
+      setBusy(form, true, 'Creating account…');
+      api.signUp(username, f.password.value).then((user) => {
+        closeSignIn();
+        toast(`Welcome, ${user.username}! Your viewer account is ready.`, 'success');
+        if (landingActive()) location.hash = '#dashboard'; else render('dashboard');
+      }).catch((error) => { setBusy(form, false); showFormError(form, error.message); });
+      return;
+    }
+    case 'reject-form': {
+      const reason = f.reason.value.trim();
+      if (!reason) { showFormError(form, 'Give a reason for the team manager.'); return; }
+      const reg = byId(store.registrations, f.registration.value);
+      void runSave(form, () => api.reviewRegistration(f.registration.value, false, reason), `${teamName(reg?.teamId)} rejected for ${tournamentName(reg?.tournamentId)}.`);
+      return;
+    }
+    case 'player-form': {
+      const given = f.given.value.trim();
+      const shirt = f.shirt.value.trim();
+      if (!given) { showFormError(form, 'Enter the player\'s first name.'); return; }
+      if (shirt && !(Number.isInteger(Number(shirt)) && Number(shirt) >= 1 && Number(shirt) <= 99)) { showFormError(form, 'Shirt numbers run from 1 to 99.'); return; }
+      const body = { given_name: given, family_name: f.family.value.trim(), shirt_number: shirt };
+      const teamId = f.team.value;
+      const playerId = f.player.value;
+      void runSave(form, () => (playerId ? api.updatePlayer(playerId, body) : api.createPlayer(teamId, body)), `${given} ${playerId ? 'updated' : 'added to the squad'}.`)
+        .then(() => api.loadPlayers(teamId));
+      return;
+    }
+    case 'venue-form': {
+      const name = f.name.value.trim();
+      if (name.length < 2) { showFormError(form, 'Enter the venue name.'); return; }
+      const capacity = f.capacity.value === '' ? 0 : Number(f.capacity.value);
+      if (!Number.isInteger(capacity) || capacity < 0 || capacity > 100000) { showFormError(form, 'Capacity must be a whole number up to 100,000.'); return; }
+      void runSave(form, () => api.createVenue({ name, dzongkhag: f.dz.value, capacity }), `${name} added in ${f.dz.value}.`);
+      return;
+    }
+    case 'generate-form': {
+      const tournament = byId(store.tournaments, f.tournament.value);
+      void runSave(form, () => api.generateFixtures(f.tournament.value), (result) => {
+        const created = Number(result?.fixtures_created) || 0;
+        return created ? `${plural(created, 'fixture')} created for ${tournament?.name}. Now assign officials.` : `No new fixtures for ${tournament?.name}: it already has fixtures or fewer than two teams.`;
+      }, 'Generating…');
+      return;
+    }
+    case 'score-form': {
+      const home = Number(f.home.value);
+      const away = Number(f.away.value);
+      if (![home, away].every((n) => Number.isInteger(n) && n >= 0 && n <= 99)) { showFormError(form, 'Scores must be whole numbers from 0 to 99.'); return; }
+      const m = byId(store.matches, f.match.value);
+      const final = event.submitter?.value === 'finalize';
+      if (final && !window.confirm(`Finalise ${m.home} ${home}–${away} ${m.away}? The result will be locked.`)) return;
+      void runSave(form, () => (final ? api.finalize(m.id, home, away) : api.saveLive(m.id, home, away)),
+        final ? `Result finalised: ${m.home} ${home}–${away} ${m.away}. Standings are updating.` : `Live score saved: ${m.home} ${home}–${away} ${m.away}.`, final ? 'Finalising…' : 'Saving…');
+      return;
+    }
+    case 'assign-form': {
+      const official = byId(store.users, f.official.value);
+      void runSave(form, () => api.assignOfficial(f.match.value, f.official.value), `${official?.username || 'Official'} assigned.`);
+      return;
+    }
+    case 'user-form': {
+      const username = f.username.value.trim();
+      if (!/^[a-zA-Z0-9._-]{3,40}$/.test(username)) { showFormError(form, 'Usernames are 3–40 letters, numbers, dots, dashes or underscores.'); return; }
+      if (f.password.value.length < 10) { showFormError(form, 'The password must be at least 10 characters.'); return; }
+      void runSave(form, () => api.createUser({ username, password: f.password.value, role: f.role.value }), `Account ${username} created as ${roleLabels[f.role.value]}.`);
+      return;
+    }
+    case 'match-form': {
+      if (!f.home || !f.away) { showFormError(form, 'This tournament needs at least two teams.'); return; }
+      if (f.home.value === f.away.value) { showFormError(form, 'Choose two different teams.'); return; }
+      const kickoff = new Date(f.kickoff.value);
+      if (Number.isNaN(kickoff.valueOf())) { showFormError(form, 'Choose a kick-off date and time.'); return; }
+      const venue = f.venue.value.trim();
+      if (!venue) { showFormError(form, 'Enter a venue.'); return; }
+      void runSave(form, () => api.createMatch({ tournament_id: f.tournament.value, home_team_id: f.home.value, away_team_id: f.away.value, venue, kickoff: kickoff.toISOString(), official_id: f.official.value }), 'Match scheduled.');
+      return;
+    }
+    default:
+      closeModal();
+  }
+});
+
+document.addEventListener('change', (event) => {
+  const { id, value } = event.target;
+  if (id === 'season-filter') { ui.season = value; refreshView(); }
+  if (id === 'match-tournament') { ui.matchTournament = value; refreshView(); }
+  if (id === 'standings-tournament') void window.DrukAPI.loadStandings(value);
+  if (id === 'm-tournament') document.getElementById('m-teams').innerHTML = matchTeamFields(value);
+  if (id === 'squad-team') { ui.squadTeam = value; ui.query = ''; refreshView(); }
+});
+
+document.addEventListener('input', (event) => {
+  if (event.target.id !== 'page-search') return;
+  ui.query = event.target.value;
+  const caret = event.target.selectionStart;
+  document.getElementById('page-content').innerHTML = PAGES[ui.page]();
+  const input = document.getElementById('page-search');
+  if (input) { input.focus(); input.setSelectionRange(caret, caret); }
+});
+
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); document.getElementById('global-search')?.focus(); }
+  if (event.key === 'Escape') {
+    if (!document.getElementById('auth-screen').hidden) closeSignIn();
+    closeModal();
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('account-menu')?.setAttribute('hidden', '');
+  }
+  if (event.key === 'Enter' && event.target.id === 'global-search') {
+    const term = event.target.value.trim().toLowerCase();
+    if (!term) return;
+    const allowed = rolePages[role()];
+    const has = (list, fields) => list.some((x) => fields(x).toLowerCase().includes(term));
+    let page = 'matches';
+    if (allowed.includes('teams') && has(store.teams, (t) => `${t.name} ${t.dzongkhag}`)) page = 'teams';
+    else if (allowed.includes('tournaments') && has(store.tournaments, (t) => t.name)) page = 'tournaments';
+    render(page);
+    ui.query = event.target.value.trim();
+    refreshView();
+    event.target.value = '';
+  }
+});
+
+window.DrukApp = Object.freeze({ render, refreshView, openSignIn, closeSignIn, toast, store, ui });
+render(landingActive() ? 'dashboard' : (location.hash.slice(1) || 'dashboard'), { history: false });
