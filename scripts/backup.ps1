@@ -13,6 +13,41 @@ $volumeMountPath = $outputPath -replace '\\', '/'
 $databaseBackup = Join-Path $outputPath "drukleague-databases-$stamp.sql"
 $mediaBackupName = "drukleague-media-$stamp.tar.gz"
 
+function ConvertTo-ProcessArgument {
+    param([AllowEmptyString()][string]$Value)
+
+    if ($Value.Length -gt 0 -and $Value -notmatch '[\s"]') { return $Value }
+
+    $builder = New-Object System.Text.StringBuilder
+    [void]$builder.Append('"')
+    $backslashCount = 0
+    foreach ($character in $Value.ToCharArray()) {
+        if ($character -eq '\') {
+            $backslashCount++
+            continue
+        }
+
+        if ($character -eq '"') {
+            [void]$builder.Append(('\' * (2 * $backslashCount + 1)))
+            [void]$builder.Append('"')
+            $backslashCount = 0
+            continue
+        }
+
+        if ($backslashCount -gt 0) {
+            [void]$builder.Append(('\' * $backslashCount))
+            $backslashCount = 0
+        }
+        [void]$builder.Append($character)
+    }
+
+    if ($backslashCount -gt 0) {
+        [void]$builder.Append(('\' * (2 * $backslashCount)))
+    }
+    [void]$builder.Append('"')
+    return $builder.ToString()
+}
+
 $configLines = & $docker compose -f $composeFile config --format json
 if ($LASTEXITCODE -ne 0) { throw 'Could not read Compose configuration.' }
 $composeConfig = ($configLines -join "`n") | ConvertFrom-Json
@@ -24,8 +59,9 @@ $start.FileName = $docker
 $start.UseShellExecute = $false
 $start.RedirectStandardOutput = $true
 $start.RedirectStandardError = $true
-@('compose', '-f', $composeFile, 'exec', '-T', 'postgres', 'sh', '-c', 'pg_dumpall -U "$POSTGRES_USER"') |
-    ForEach-Object { [void]$start.ArgumentList.Add($_) }
+$processArguments = @('compose', '-f', $composeFile, 'exec', '-T', 'postgres', 'sh', '-c', 'pg_dumpall -U "$POSTGRES_USER"') |
+    ForEach-Object { ConvertTo-ProcessArgument $_ }
+$start.Arguments = $processArguments -join ' '
 $process = [System.Diagnostics.Process]::new()
 $process.StartInfo = $start
 if (-not $process.Start()) { throw 'Could not start the PostgreSQL backup command.' }
