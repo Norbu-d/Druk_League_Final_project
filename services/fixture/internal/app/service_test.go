@@ -35,9 +35,13 @@ type fakeRepo struct {
 	advanceErr      error
 	pending         []domain.Fixture
 	pendingErr      error
+	saveErr         error
 }
 
 func (f *fakeRepo) SaveSchedule(_ context.Context, _ string, fixtures []domain.Fixture, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
+	if f.saveErr != nil {
+		return nil, false, f.saveErr
+	}
 	if f.stored != nil {
 		return append([]domain.Fixture(nil), f.stored...), false, nil
 	}
@@ -272,6 +276,27 @@ func TestGenerateRejections(t *testing.T) {
 	if _, _, err := badID.Generate(context.Background(), admin, tournament, "", time.Time{}); err == nil {
 		t.Fatal("event id failure ignored")
 	}
+}
+
+func TestGenerateVenueAndTeamDependencies(t *testing.T) {
+	var district string
+	repo := &fakeRepo{linked: map[string]string{}}
+	venueDown := New(repo, fakeTournaments{}, fakeTeams{ids: []string{"a", "b"}}, fakeVenuesError{}, &fakeMatches{})
+	if _, _, err := venueDown.Generate(context.Background(), admin, tournament, "", time.Time{}); err == nil {
+		t.Fatal("venue outage not reported")
+	}
+
+	saveDown := New(&fakeRepo{linked: map[string]string{}, saveErr: core.Dependency("database down")},
+		fakeTournaments{}, fakeTeams{ids: []string{"a", "b"}}, fakeVenues{dzongkhag: &district}, &fakeMatches{})
+	if _, _, err := saveDown.Generate(context.Background(), admin, tournament, "", time.Time{}); err == nil {
+		t.Fatal("schedule save failure ignored")
+	}
+}
+
+type fakeVenuesError struct{}
+
+func (fakeVenuesError) InDzongkhag(context.Context, string) ([]domain.Venue, error) {
+	return nil, core.Dependency("venue service down")
 }
 
 func TestGenerateKnockoutFromStandings(t *testing.T) {
