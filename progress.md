@@ -1,8 +1,8 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-21
+**Last updated:** 2026-11-27
 **Project root:** `D:\druk-league`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the local Compose stack started and the web page returned HTTP 200; this was a startup smoke check, not a rerun of the E2E suite. PRs #31, #34, #35, and #36 merged with their reported CI checks passing. PR #37 (live standings UI) merged into `development` on 20 Nov, followed by Namgay’s PR #38 (SCRUM-46 registration and fixtures views), merged on 21 Nov with 17/17 GitHub checks passing. Signed-in browser acceptance remains unverified because the local DrukLeague API and Docker engine are unavailable. Docker volumes contain test rows, so confirm a test-only database before any workflow that creates or finalizes competition records.
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the local Compose stack started and the web page returned HTTP 200; this was a startup smoke check, not a rerun of the E2E suite. PRs #31, #34, #35, and #36 merged with their reported CI checks passing. PR #37 (live standings UI) merged into `development` on 20 Nov, followed by Namgay’s PR #38 (SCRUM-46 registration and fixtures views), merged on 21 Nov with 17/17 GitHub checks passing. Signed-in Chrome confirmed the Super Admin account, but registration acceptance remains blocked until a test tournament is available. Docker volumes contain test rows, so confirm a test-only database before any workflow that creates or finalizes competition records.
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -803,9 +803,6 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 ## 52. SCRUM-24 testing continuation (27 Nov 2026)
 
-<<<<<<< HEAD
-- Jira: [SCRUM-46](https://rub-team-da9meulc.atlassian.net/browse/SCRUM-46), In Progress. Scope: screens for team/tournament registration and fixture browsing using the API gateway.
-=======
 - Resumed testing work after the earlier pause. Added API Gateway unit tests for signed, expired, and tampered JWTs; strict JSON decoding; role authorization predicate; nullable SQL conversions; safe error responses; and CORS preflight. Added test-plan case T-22.
 - `go test ./cmd/api` and `go test ./...` passed in `services/api-gateway` on 27 Nov. Focused `go test -cover ./cmd/api ./internal/auditoutbox` reported 5.9% for the API Gateway command package and 100% for `internal/auditoutbox`; the low command-package coverage confirms this is only a starting set of tests. The repository coverage script measures `internal/...` for this module, so these command-package tests do not affect its 80% gate. More handler/service tests plus integration/contract, cross-service, browser, and resilience evidence remain before SCRUM-24 can be considered complete.
 - Corrected historical notes that referred to nonexistent SCRUM-55. Jira has not been refreshed in this session; prior issue status and sprint details remain last-known records only.
@@ -820,14 +817,9 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 ## SCRUM-46 — Registration and fixtures views (Namgay; paused, 22 Nov 2026)
 
 - Jira: [SCRUM-46](https://rub-team-da9meulc.atlassian.net/browse/SCRUM-46), To Do at Namgay's request while signed-in acceptance awaits a confirmed test tournament. Scope: screens for team/tournament registration and fixture browsing using the API gateway.
->>>>>>> origin/development
 - Branch: `feature/namgay-SCRUM-46-registration-fixtures`. [PR #38](https://github.com/Norbu-d/Druk_League_Final_project/pull/38) merged into `development` on 21 Nov 2026; all 17 GitHub checks passed.
 - Added live counts to tournament cards from saved team and match records; removed hard-coded team registration counts and standings-only team assumptions from the team list.
 - The team registration form requires a saved tournament and submits its ID with the team record. Team rows show their linked tournament and standings values.
 - Added a tournament selector for fixtures and display of saved kickoff date/time, venue, tournament, and current match status/result.
 - The gateway currently exposes team creation/listing and fixture generation/listing, but no separate registration-service routes. This implementation follows the gateway contract and treats a team linked to a tournament as the current registration flow; approval/review workflow remains unavailable through this API.
-<<<<<<< HEAD
-- Verification: `node --check app.js`, `node --check api.js`, `git diff --check`, SonarCloud, and all 17 GitHub checks passed. Docker is unavailable; port 8080 responds with 403 from an unrelated Java process and is not the DrukLeague API. Signed-in browser/API acceptance remains unverified. No competition records were created or modified; verify on a confirmed test-only database before exercising record-changing flows.
-=======
-- Verification: `node --check app.js`, `node --check api.js`, `git diff --check`, SonarCloud, and all 17 GitHub checks passed. Runtime: Compose services started using a local port override (`web` on 4173, BFF on 8082; existing services on 3000/8080 were left running); web and BFF health checks returned HTTP 200. Signed-in Chrome confirmed `admin` / Super Admin, but the Tournaments page showed no tournaments, so the team registration acceptance check is blocked until Norbu or Sonam identifies a test tournament or confirms test-only data creation. No competition records were created or modified.
->>>>>>> origin/development
+- Verification: `node --check app.js`, `node --check api.js`, `git diff --check`, SonarCloud, and all 17 GitHub checks passed. Runtime: Compose services started using a local port override (`web` on 4173, BFF on 8082; existing services on 3000/8080 were left running); web and BFF health checks returned HTTP 200. Signed-in Chrome confirmed `admin` / Super Admin, but the Tournaments page showed no tournaments, so the team registration acceptance check remains blocked until Norbu or Sonam identifies a test tournament or confirms test-only data creation. No competition records were created or modified.
