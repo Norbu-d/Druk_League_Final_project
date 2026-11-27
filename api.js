@@ -29,6 +29,23 @@
     if(!alert){alert=document.createElement('p');alert.dataset.formError='true';alert.setAttribute('role','alert');alert.className='form-error';form.querySelector('.modal-body')?.prepend(alert)}
     if(alert)alert.textContent=message;
   }
+  // Saves a modal form: busy state while the request runs; on success close the
+  // modal and confirm right away (the data refresh follows); on failure keep the
+  // form open with the error inside it.
+  async function saveForm(form, save, {success, failure}) {
+    setFormBusy(form,true);
+    let result;
+    try { result=await save(); }
+    catch(error){
+      setFormBusy(form,false);
+      showFormError(form,`${failure}: ${error.message}`);
+      toast(`${failure}: ${error.message}`,'error');
+      return;
+    }
+    document.getElementById('modal-root').innerHTML='';
+    toast(typeof success==='function'?success(result):success,'success');
+    await refresh();
+  }
   const standingsState = {status:'signed-out', tournamentID:'', tournaments:[], rows:[], message:''};
   window.DRUKLEAGUE_STANDINGS_STATE = standingsState;
   async function renew() {
@@ -162,13 +179,13 @@
       standingsState.status = 'error';
       standingsState.message = error.message || 'Could not load saved project data.';
     if (['dashboard','standings','teams','matches','tournaments'].includes(activePage)) render(activePage);
-      toast(`Could not load saved project data: ${error.message}`);
+      toast(`Could not load saved project data: ${error.message}`,'error');
     }
   }
   async function showLogin() {
     if (token()) {
       try { await request('/auth/logout',{method:'POST'}); }
-      catch (error) { toast(error.message); return; }
+      catch (error) { toast(`Could not sign out: ${error.message}`,'error'); return; }
       currentUser = null;
       window.DRUKLEAGUE_DASHBOARD_STATE = {status:'signed-out'};
       sessionStorage.removeItem(authKey);
@@ -177,7 +194,7 @@
       window.DRUKLEAGUE_AUTHENTICATED = false;
       syncRoleIdentity();
       render('dashboard');
-      toast('Signed out.'); return;
+      toast('Signed out.','success'); return;
     }
     document.getElementById('modal-root').innerHTML=`<div class="modal-backdrop" data-action="dismiss-modal"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="login-title"><header class="modal-head"><div><h2 id="login-title">Sign in to DrukLeague</h2><p>Connect to your saved tournaments and match data.</p></div><button class="modal-close" type="button" data-action="dismiss-modal" aria-label="Close">×</button></header><form id="login-form"><div class="modal-body"><div class="form-grid"><div class="form-field full"><label for="login-user">Username</label><input id="login-user" name="username" autocomplete="username" required></div><div class="form-field full"><label for="login-password">Password</label><input id="login-password" name="password" type="password" autocomplete="current-password" required></div></div></div><footer class="modal-footer"><button type="button" class="button" data-action="dismiss-modal">Cancel</button><button type="submit" class="button button-primary">Sign in</button></footer></form></section></div>`;
     document.getElementById('login-user').focus();
@@ -200,11 +217,11 @@
         syncRoleIdentity();
         document.getElementById('modal-root').innerHTML='';
         render(activePage);
-        toast(`Signed in as ${username||'user'}.`);
+        toast(`Signed in as ${username||'user'}.`,'success');
         await refresh();
       }
       catch(error){
-        toast(error.message);
+        toast(`Could not sign in: ${error.message}`,'error');
         const modal=document.querySelector('#login-form .modal-body');
         if (modal) {
           let message=document.getElementById('login-error');
@@ -221,36 +238,45 @@
       return;
     }
     const formAction={'tournament-form':'new-tournament','team-form':'new-team','score-form':'update-score'}[form.id];
-    if (formAction && !canRoleAction(formAction)) { event.preventDefault(); toast('Your role cannot perform this action.'); return; }
+    if (formAction && !canRoleAction(formAction)) { event.preventDefault(); toast('Your role cannot perform this action.','error'); return; }
     if (!token()) return;
     if (['tournament-form','team-form','score-form'].includes(form.id)) event.preventDefault();
     if (form.id==='tournament-form') {
       const name=form.elements.name.value.trim(), sport=form.elements.sport.value.split('·')[0].trim().toLowerCase(), starts=form.querySelector('#t-start').value, season=form.elements.season.value;
-      setFormBusy(form,true);
-      try { await request('/tournaments',{method:'POST',body:JSON.stringify({name,sport,season,starts_at:starts,dzongkhag:form.elements.dz.value})}); await refresh(); document.getElementById('modal-root').innerHTML='';toast(`${name} saved.`); }
-      catch(error){showFormError(form,`Could not save tournament: ${error.message}`);toast(`Could not save tournament: ${error.message}`);}
-      finally{setFormBusy(form,false)}
+      if(!name){showFormError(form,'Enter a tournament name.');return;}
+      await saveForm(form,()=>request('/tournaments',{method:'POST',body:JSON.stringify({name,sport,season,starts_at:starts,dzongkhag:form.elements.dz.value})}),
+        {success:`${name} created for the ${season} season. Teams can now register.`,failure:'Could not save tournament'});
     } else if (form.id==='team-form') {
       const name=form.elements.name.value.trim(), dz=form.elements.dz.value, tournamentID=safeUUID(form.elements.tournament_id.value), tournament=tournaments.find(t=>t.id===tournamentID);
-      if(!tournament){toast('Choose a valid tournament before registering the team.');return;}
-      setFormBusy(form,true);
-      try { await request('/teams',{method:'POST',body:JSON.stringify({name,short_code:initials(name),dzongkhag:dz,tournament_id:tournament.id})}); await refresh(); document.getElementById('modal-root').innerHTML='';toast(`${name} registered.`); }
-      catch(error){showFormError(form,`Could not register team: ${error.message}`);toast(`Could not save team: ${error.message}`);}
-      finally{setFormBusy(form,false)}
+      if(!name){showFormError(form,'Enter a team name.');return;}
+      if(!tournament){showFormError(form,'Choose a valid tournament before registering the team.');return;}
+      await saveForm(form,()=>request('/teams',{method:'POST',body:JSON.stringify({name,short_code:initials(name),dzongkhag:dz,tournament_id:tournament.id})}),
+        {success:`${name} registered for ${tournament.name}.`,failure:'Could not register team'});
     } else if (form.id==='score-form') {
-      const match=fixtureData[Number(form.dataset.matchIndex)],matchID=safeUUID(match?.id); if (!matchID) {toast('This demo fixture is not saved in the database.');return;}
-      const body=JSON.stringify({home:Number(form.elements.home.value),away:Number(form.elements.away.value)}),final=event.submitter?.value==='finalize';
-      try { await request(`/matches/${encodeURIComponent(matchID)}/${final?'finalize':'live'}`,{method:final?'POST':'PATCH',body});await refresh(); }
-      catch(error){toast(`Could not save score: ${error.message}`);}
+      const match=fixtureData[Number(form.dataset.matchIndex)],matchID=safeUUID(match?.id); if (!matchID) {showFormError(form,'This fixture is not saved in the database, so its score cannot be saved.');return;}
+      const home=Number(form.elements.home.value),away=Number(form.elements.away.value),final=event.submitter?.value==='finalize';
+      if(![home,away].every(goals=>Number.isInteger(goals)&&goals>=0&&goals<=99)){showFormError(form,'Scores must be whole numbers from 0 to 99.');return;}
+      const scoreline=`${match.home} ${home}–${away} ${match.away}`;
+      await saveForm(form,()=>request(`/matches/${encodeURIComponent(matchID)}/${final?'finalize':'live'}`,{method:final?'POST':'PATCH',body:JSON.stringify({home,away})}),
+        {success:final?`Result finalized: ${scoreline}. Standings update from this result.`:`Live score saved: ${scoreline}. The result is still open.`,failure:final?'Could not finalize result':'Could not save live score'});
     }
   });
   document.addEventListener('click',async(event)=>{
     if(event.target.closest('[data-action="refresh-dashboard"]')) { await refresh(); return; }
-    if(event.target.closest('[data-action="generate-fixtures"]')) {
-      if(!canRoleAction('generate-fixtures')) {toast('Only Super Admins can generate fixtures.');return;}
+    const generateButton=event.target.closest('[data-action="generate-fixtures"]');
+    if(generateButton) {
+      if(!canRoleAction('generate-fixtures')) {toast('Only Super Admins can generate fixtures.','error');return;}
       if(!token()){toast('Sign in to generate saved fixtures.');return;}
+      if(generateButton.disabled) return;
       const tournament=tournaments.find(t=>t.id===window.DRUKLEAGUE_FIXTURES_TOURNAMENT_ID)||tournaments.find(t=>t.id),tournamentID=safeUUID(tournament?.id);if(!tournamentID){toast('Create a tournament and register at least two teams first.');return;}
-      try{const result=await request(`/tournaments/${encodeURIComponent(tournamentID)}/fixtures`,{method:'POST'});toast(`${result.fixtures_created} fixtures created.`);await refresh();}catch(error){toast(error.message);}
+      const label=generateButton.textContent;generateButton.disabled=true;generateButton.textContent='Generating…';
+      let result;
+      try{result=await request(`/tournaments/${encodeURIComponent(tournamentID)}/fixtures`,{method:'POST'});}
+      catch(error){toast(`Could not generate fixtures: ${error.message}`,'error');return;}
+      finally{generateButton.disabled=false;generateButton.textContent=label;}
+      const created=Number(result?.fixtures_created)||0;
+      toast(created?`${created} fixture${created===1?'':'s'} created for ${tournament.name}.`:`No new fixtures were created for ${tournament.name}. It may already have fixtures, or need at least two registered teams.`,created?'success':'info');
+      await refresh();
     }
   });
   document.addEventListener('change', event => {
