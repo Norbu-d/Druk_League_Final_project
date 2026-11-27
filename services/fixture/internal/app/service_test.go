@@ -14,21 +14,27 @@ import (
 const (
 	tournament = "11111111-1111-4111-8111-111111111111"
 	adminID    = "22222222-2222-4222-8222-222222222222"
+	teamA      = "33333333-3333-4333-8333-333333333333"
+	teamB      = "44444444-4444-4444-8444-444444444444"
+	teamC      = "55555555-5555-4555-8555-555555555555"
+	teamD      = "66666666-6666-4666-8666-666666666666"
 )
 
 var admin = Caller{ID: adminID, Role: core.RoleSuperAdmin}
 
 type fakeRepo struct {
-	stored         []domain.Fixture
-	event          domain.OutboxEvent
-	linked         map[string]string
-	linkErr        error
-	knockout       domain.KnockoutPlan
-	advanceFixture domain.Fixture
-	advanceCreated bool
-	advanceErr     error
-	pending        []domain.Fixture
-	pendingErr     error
+	stored          []domain.Fixture
+	event           domain.OutboxEvent
+	linked          map[string]string
+	linkErr         error
+	knockout        domain.KnockoutPlan
+	knockoutCreated bool
+	knockoutErr     error
+	advanceFixture  domain.Fixture
+	advanceCreated  bool
+	advanceErr      error
+	pending         []domain.Fixture
+	pendingErr      error
 }
 
 func (f *fakeRepo) SaveSchedule(_ context.Context, _ string, fixtures []domain.Fixture, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
@@ -54,15 +60,18 @@ func (f *fakeRepo) LinkMatch(_ context.Context, booked domain.Fixture) error {
 	return nil
 }
 func (f *fakeRepo) SaveKnockoutSchedule(_ context.Context, _ string, plan domain.KnockoutPlan, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
+	if f.knockoutErr != nil {
+		return nil, false, f.knockoutErr
+	}
 	f.knockout, f.event = plan, event
 	if f.stored != nil {
 		return append([]domain.Fixture(nil), f.stored...), false, nil
 	}
 	f.stored = append([]domain.Fixture(nil), plan.Fixtures...)
 	for i := range f.stored {
-		f.stored[i].ID = string(rune('a' + i))
+		f.stored[i].ID = string(rune('k' + i))
 	}
-	return append([]domain.Fixture(nil), f.stored...), true, nil
+	return append([]domain.Fixture(nil), f.stored...), f.knockoutCreated, nil
 }
 func (f *fakeRepo) AdvanceKnockout(context.Context, domain.MatchFinalized) (domain.Fixture, bool, error) {
 	return f.advanceFixture, f.advanceCreated, f.advanceErr
@@ -92,7 +101,9 @@ type fakeStandings struct {
 	err error
 }
 
-func (f fakeStandings) TeamIDsByRank(context.Context, string) ([]string, error) { return f.ids, f.err }
+func (f fakeStandings) TeamIDsByRank(context.Context, string) ([]string, error) {
+	return f.ids, f.err
+}
 
 type fakeVenues struct {
 	dzongkhag *string
@@ -263,6 +274,69 @@ func TestGenerateRejections(t *testing.T) {
 	}
 }
 
+func TestGenerateKnockoutFromStandings(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}, knockoutCreated: true}, &fakeMatches{}
+	var district string
+	s := New(repo, fakeTournaments{}, fakeTeams{ids: []string{teamA, teamB, teamC, teamD}},
+		fakeVenues{dzongkhag: &district}, matches, fakeStandings{ids: []string{teamD, teamC, teamB, teamA}})
+	s.newID = func() (string, error) { return "event-1", nil }
+
+	fixtures, created, err := s.Generate(context.Background(), admin, tournament, domain.FormatKnockout, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created != 2 || len(fixtures) != 2 || matches.created != 2 || len(repo.linked) != 2 {
+		t.Fatalf("created=%d fixtures=%d matches=%d linked=%d", created, len(fixtures), matches.created, len(repo.linked))
+	}
+	if fixtures[0].HomeTeamID != teamD || fixtures[0].AwayTeamID != teamA || repo.event.EventID != "event-1" {
+		t.Fatalf("standings were not used to seed and store the bracket: fixture=%+v event=%+v", fixtures[0], repo.event)
+	}
+}
+
+func TestGenerateKnockoutRequiresStandingsForEveryTeam(t *testing.T) {
+	repo := &fakeRepo{linked: map[string]string{}}
+	s, _ := newService(repo, []string{teamA, teamB}, &fakeMatches{})
+	if _, _, err := s.Generate(context.Background(), admin, tournament, domain.FormatKnockout, time.Time{}); !errors.Is(err, core.ErrDependency) {
+		t.Fatalf("missing standings service: %v", err)
+	}
+
+	var district string
+	s = New(repo, fakeTournaments{}, fakeTeams{ids: []string{teamA, teamB}}, fakeVenues{dzongkhag: &district},
+		&fakeMatches{}, fakeStandings{ids: []string{teamA}})
+	if _, _, err := s.Generate(context.Background(), admin, tournament, domain.FormatKnockout, time.Time{}); !errors.Is(err, core.ErrPrecondition) {
+		t.Fatalf("missing standings row: %v", err)
+	}
+}
+
+func TestHandleMatchFinalizedPropagatesFailures(t *testing.T) {
+	s, _ := newService(&fakeRepo{advanceErr: core.Dependency("repository down")}, nil, &fakeMatches{})
+	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{}); !errors.Is(err, core.ErrDependency) {
+		t.Fatalf("advance error: %v", err)
+	}
+
+	repo := &fakeRepo{
+		advanceFixture: domain.Fixture{Format: domain.FormatLeagueKnockout},
+		advanceCreated: true,
+	}
+	s, _ = newService(repo, []string{teamA, teamB}, &fakeMatches{})
+	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{}); !errors.Is(err, core.ErrDependency) {
+		t.Fatalf("missing standings dependency: %v", err)
+	}
+
+	repo = &fakeRepo{pendingErr: core.Dependency("repository down")}
+	s, _ = newService(repo, nil, &fakeMatches{})
+	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{}); !errors.Is(err, core.ErrDependency) {
+		t.Fatalf("pending fixture error: %v", err)
+	}
+
+	repo = &fakeRepo{pending: []domain.Fixture{{ID: "pending"}}}
+	matches := &fakeMatches{busy: func(domain.Fixture) bool { return true }}
+	s, _ = newService(repo, nil, matches)
+	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{}); !errors.Is(err, core.ErrConflict) {
+		t.Fatalf("match creation error: %v", err)
+	}
+}
+
 func TestList(t *testing.T) {
 	s, _ := newService(&fakeRepo{stored: []domain.Fixture{{ID: "f1"}}}, nil, &fakeMatches{})
 	if _, _, err := s.List(context.Background(), "x", 10, 0); !errors.Is(err, core.ErrInvalid) {
@@ -274,7 +348,7 @@ func TestList(t *testing.T) {
 }
 
 func TestGenerateKnockoutAndHandleFinalizedLeagueKnockout(t *testing.T) {
-	repo, matches := &fakeRepo{linked: map[string]string{}}, &fakeMatches{}
+	repo, matches := &fakeRepo{linked: map[string]string{}, knockoutCreated: true}, &fakeMatches{}
 	var district string
 	teams := []string{
 		"11111111-1111-4111-8111-111111111101",
