@@ -14,6 +14,11 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("venue-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"DZONGKHAG_SERVICE_ADDR",
+	)
 	dzongkhagConn, err := servicekit.Dial(servicekit.Env("DZONGKHAG_SERVICE_ADDR", "dzongkhag:50051"), servicekit.ClientOptions{Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("venue-service", servicekit.Secret(), 0)})
 	if err != nil {
 		log.Fatal(err)

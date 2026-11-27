@@ -17,6 +17,19 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("bff-service",
+		"AUTH_SERVICE_ADDR",
+		"USER_SERVICE_ADDR",
+		"TOURNAMENT_SERVICE_ADDR",
+		"TEAM_SERVICE_ADDR",
+		"MATCH_SERVICE_ADDR",
+		"SCORE_SERVICE_ADDR",
+		"STANDINGS_SERVICE_ADDR",
+		"FIXTURE_SERVICE_ADDR",
+		"OFFICIAL_SERVICE_ADDR",
+		"CORS_ORIGIN",
+		"BFF_ADDR",
+	)
 	// Every call forwards the signed-in user's token, so each service applies that user's role.
 	dial := func(name, fallback string) *grpc.ClientConn {
 		conn, err := servicekit.Dial(servicekit.Env(name, fallback), servicekit.ClientOptions{Auth: servicekit.ForwardCaller})

@@ -1,8 +1,8 @@
 # DrukLeague — Project Progress and Handoff
 
-**Last updated:** 2026-11-12
+**Last updated:** 2026-11-27
 **Project root:** `D:\druk-league`
-**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the recovered Docker WSL disk started the local Compose stack; 26 long-running containers were up, PostgreSQL and NATS were healthy, and the web page returned HTTP 200 (section 40). This was a startup smoke check, not a rerun of the 29/29 E2E suite. PR #31 merged into `development` on 11 Nov with 17/17 checks passing; local `development` was fast-forwarded to that merge and is clean. PR #2 remains open and unmergeable: its feature branch has a merge conflict with `development`, and its latest SonarCloud check reports Security Rating B (required A). Commit `5d92461` on `feature/norbu-match-engine` contains the BFF cookie-auth and Sonar findings follow-up; its focused Go, JavaScript, PowerShell, Compose-config, and diff checks passed locally. The fixes are not yet integrated into `development`. Sonam's PR #11 for the media schema passed all checks and merged to `development` on 5 Nov 2026; SCRUM-83 is Done. OpenTelemetry tracing remains deferred per SCRUM-72. The active Docker disk is now under `D:\docker\DockerDesktopRecovery\DockerDesktopWSL`.
+**Run state:** The 19 Oct full Compose run passed 29/29 E2E checks (section 10). On 11 Nov, the local Compose stack started and the web page returned HTTP 200; this was a startup smoke check, not a rerun of the E2E suite. PRs #31, #34, #35, and #36 merged with their reported CI checks passing. PR #37 (live standings UI) merged into `development` on 20 Nov, followed by Namgay’s PR #38 (SCRUM-46 registration and fixtures views), merged on 21 Nov with 17/17 GitHub checks passing. Signed-in Chrome confirmed the Super Admin account, but registration acceptance remains blocked until a test tournament is available. Docker volumes contain test rows, so confirm a test-only database before any workflow that creates or finalizes competition records.
 
 > **Read this first.** The code is a working **MVP vertical slice** (one Go API + plain HTML/CSS/JS frontend) plus 20 service modules. The Report, Search query, Audit Log, Analytics event aggregation/dashboard query, Configuration RPCs, and Media upload/retrieval have implementation beyond health shells; several need more acceptance checks or tests. Several services and the monolith still need more tests. The proposal and deck describe a larger system (20 microservices + gateway + BFF + OpenFaaS functions). Section 2 lists the differences; section 10 lists the 2026-10-19 container run; section 11 holds the 2026-10-22 design review.
 
@@ -189,7 +189,7 @@ Decided: build toward all 20 services (7 Oct 2026); Dzongkhag Admin role dropped
 6. **Part 6:** `eventkit` (redelivery limit, dead-letter stream), Fixture outbox, Notification consumer and Audit Log consumers are implemented. Still to do: OpenFaaS/faasd function (pending tutor confirmation) and live Docker outage/reconnect/replay acceptance.
 7. **Part 7:** deadlines, retries on safe reads, circuit breaker, panic recovery and request-id logging are done in `servicekit`. Team → Tournament reference validation is implemented on `feature/norbu-match-engine`/PR #2 but not yet integrated into `development`; Docker fault-isolation scenarios remain.
 8. **Part 8:** Media upload/retrieval implementation exists (SCRUM-64/84); authenticated browser E2E and restore-from-backup remain. Search synchronization design (SCRUM-87) is documented, while indexing rollout remains. Configuration RPCs (SCRUM-94) and Analytics dashboard metrics (SCRUM-67/90) are implemented, with live acceptance still pending. Audit Log admin-action publishing and its end-to-end flow passed CI; SCRUM-68 is Done.
-9. **Part 9 (SWE302):** GitHub Actions runs Go formatting, vet, build, tests, module coverage, Buf, govulncheck, gosec, Trivy and k6. PR #31 passed 17/17 checks before merging (11 Nov). Remaining: reconcile the 80% coverage gate and its module results; add test suites for modules without tests and the monolith; ZAP; browser E2E/Playwright; Docker fault-isolation and recovery acceptance. PR #2's SonarCloud check currently fails the required Security Rating A gate (latest rating B). SCRUM-55 remains open until its full criteria and current evidence are reconciled.
+9. **Part 9 (SWE302):** GitHub Actions runs Go formatting, vet, build, tests, module coverage, Buf, govulncheck, gosec, Trivy and k6. PR #31 passed 17/17 checks before merging (11 Nov). Remaining: reconcile the 80% coverage gate and its module results; add test suites for modules without tests and the monolith; ZAP; browser E2E/Playwright; Docker fault-isolation and recovery acceptance. PR #2's SonarCloud check currently fails the required Security Rating A gate (latest rating B). The acceptance evidence and issue mapping still need reconciliation.
 10. **Frontend:** replace sample data with API data (dashboard, all-tournament standings, officials, venues, reports); team-user and public viewer views; loading/error/empty states.
 11. **Observability:** OpenTelemetry traces across gateway and services.
 12. **SWE303 evidence:** sprint plans, reviews, retrospectives; update the defect log, risk register (add the cross-service finding) and traceability matrix with executed results; RACI/estimation/communication plan; final report and demo script.
@@ -586,14 +586,14 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added role checks to UI click and form submission paths so manually invoked hidden actions are rejected with a user-facing message. The authenticated API/server remains the security boundary; these browser checks are presentation behavior only.
 - Updated `app.js` and `api.js`. No local tests or build checks were run. Committed as `55dc688` and `22210cc`, then merged to `development` in PR [#16](https://github.com/Norbu-d/Druk_League_Final_project/pull/16) at merge commit `666d197` on 5 Nov 2026. All 11 CI checks passed. Jira was initially To Do and Namgay confirmed it was changed to Done on 5 Nov 2026.
 
-## 21. SCRUM-24 — Testing pyramid (Namgay contribution merged, 6 Nov 2026)
+## 21. SCRUM-24 — Testing pyramid (last Jira check 21 Nov 2026; resumed 27 Nov)
 
-- Jira shows the parent assigned to Namgay in Sprint 8 (*Integration & QA*), In Progress, with two of three children Done. SCRUM-55, integration and contract tests, remains In Progress and assigned to Norbu.
+- Last recorded Jira check on 21 Nov: SCRUM-24 was In Progress and assigned to Namgay in Sprint 8. Work had been paused at Namgay’s request; the current request resumes the work. Jira has not been refreshed in this session.
 - Extracted the four-role page/action permission policy into `role-permissions.js`, added four Node unit tests for page access, fallback roles, mutation permissions and read-only export, and added a CI job to run them. Updated `docs/swe302-test-plan.md` with case T-17 and its evidence.
 - Added Audit Log unit tests for event validation and conversion, authorization and pagination, JetStream message handling, and gRPC request/response mapping. Added PostgreSQL repository tests for event idempotency, filtered/paginated reads, and database errors; these run automatically in CI's PostgreSQL-backed test job.
 - PR [#26](https://github.com/Norbu-d/Druk_League_Final_project/pull/26) merged to `development` at `0362590` on 6 Nov. All PR checks passed, including Go lint/build/test/80% coverage, security, image scan, notification and audit E2E, frontend permissions, protobuf, and performance.
-- Local verification on 6 Nov: the audit-log Go packages pass, and combined `internal/...` coverage is 80.6% against the 80% gate. PostgreSQL integration cases were skipped locally because `TEST_DATABASE_URL` is unset. The previously added four Node permission tests and syntax checks passed. The full Compose E2E remains assigned to SCRUM-56 (Done); cross-service integration and contract tests remain in Norbu's open SCRUM-55.
-- SCRUM-24 remains open until the full story scope and SCRUM-55 are complete and CI/E2E acceptance evidence is reconciled. SCRUM-68 is Done.
+- Local verification on 6 Nov: the audit-log Go packages pass, and combined `internal/...` coverage is 80.6% against the 80% gate. PostgreSQL integration cases were skipped locally because `TEST_DATABASE_URL` is unset. The previously added four Node permission tests and syntax checks passed. The full Compose E2E remains unverified in this record. Cross-service integration, contract, resilience, and browser acceptance evidence still need to be checked against SCRUM-24's actual criteria.
+- Historical note correction (27 Nov): earlier progress entries incorrectly cited SCRUM-55 and attributed work/status to it. The user confirmed there is no SCRUM-55 issue; those references are invalid and must not be used as Jira evidence. No live Jira refresh was available while correcting this file. SCRUM-24 must be closed only after its stated acceptance criteria and current Jira workflow are verified. The last recorded Jira check said SCRUM-68 was Done.
 
 ## 22. SCRUM-103 — Nginx hardening (in progress, 6 Nov 2026)
 
@@ -647,20 +647,20 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - Added Registration service startup dependencies and address wiring in Compose, and client pagination/outage coverage. `go build ./...` passed for Fixture and `tools/e2e`; Compose configuration validation and `git diff --check` passed. The Fixture container rebuilt and is running.
 - Fixture gRPC, app, adapter and client tests passed in the full Go module test run recorded in section 31. Registration withdrawal, registration deadlines/capacity, roster locking and the underlying Team/tournament model migration still require agreed product decisions; SCRUM-99 remains In Progress.
 
-## 31. SCRUM-55 — Integration and contract test verification (9 Nov 2026)
+## 31. Cross-service and contract test verification (recorded 9 Nov 2026; issue mapping unverified)
 
 - Fixed a Fixture gRPC test fake left on the old team-list port after Fixture switched to approved Registration entries. Fixed an EventKit test assertion so it checks the Events stream update without assuming the DLQ stream is not also reconciled.
 - Ran `go test -work -count=1 ./...` for every Go module using Go 1.26.5 and an isolated PostgreSQL 17 test database; every module passed. Existing service gRPC client/server tests, database-backed tests, NATS tests and the new Media/Analytics tests passed.
 - Buf 1.73.0 `lint`, `build`, and `breaking --against .git#branch=development` passed after fetching the current `origin/development` baseline. The run used Go 1.26.5; GitHub Actions pins 1.26.10.
-- The CI coverage command was attempted using Go 1.26.10. Its 80% gate remains red for Analytics (10.9%) and Media (63.7%); the API Gateway coverage attempt was blocked by `goproxy.io` returning HTTP 400 for `klauspost/compress`. Audit Log, Configuration, Search and API Gateway currently have no `_test.go` files. SCRUM-55 remains In Progress until these coverage gaps and missing test suites are addressed.
-- Focused test fixes are included in the SCRUM-55 branch update.
+- The CI coverage command was attempted using Go 1.26.10. Its 80% gate was red for Analytics (10.9%) and Media (63.7%); the API Gateway coverage attempt was blocked by `goproxy.io` returning HTTP 400 for `klauspost/compress`. At that time Audit Log, Configuration, Search and API Gateway lacked tests; later sections record tests subsequently added to several modules. Refresh the coverage run before treating these historical numbers as current.
+- Earlier versions of this entry incorrectly labeled these results as SCRUM-55 work. That Jira key is invalid per the user's confirmation; this section records repository test history only, not ticket ownership or status.
 
 ## 32. SCRUM-21 — Role-based UI (implementation complete, 6 Nov 2026)
 
 - SCRUM-21 is assigned to Namgay. Existing role-based page and action visibility is retained; the sidebar and header show signed-in username and role, and signing out restores Public viewer / Viewer. `role-permissions.js` centralizes role labels, profile formatting, and Viewer fallback.
 - The local `file:///` launch uses the API at `127.0.0.1:8080`; failed sign-ins show an inline error. The recommended full-app launch remains Docker Compose at `http://localhost:4173`.
 - Verification recorded on the feature branch: all 6 Node role-permission/profile tests passed; `node --check` passed for `role-permissions.js`, `app.js`, and `api.js`; `git diff --check` passed. Browser reproduction remains pending, and backend authorization remains the security boundary.
-- PR #28 merged into `development` at `db8e8db`. The last recorded Jira status was To Do; refresh its acceptance criteria and status. SCRUM-24 remains open.
+- Live Jira check on 21 Nov: SCRUM-21 is Done in Sprint 8; SCRUM-48 and SCRUM-49 are also Done. PR #28 merged into `development` at `db8e8db`; all checks passed. SCRUM-24 remains In Progress and paused separately.
 
 ## 33. Sync with `development` (9 Nov 2026)
 
@@ -765,3 +765,61 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 - The supplied gosec output identified G706 log-injection risk in BFF request logging. Gosec still flagged client-controlled values after the URL path was removed, so the BFF now generates request IDs at its HTTP boundary and logs only response status and duration. Added a regression check that a client-provided ID is not reflected. The local gosec 2.30.0 scan now passes with zero findings, and the BFF HTTP API tests pass.
 - The supplied coverage output shows all displayed module totals from `services/official` onward above 80%, but it omits earlier modules where the coverage threshold failure occurred. A local all-module coverage attempt could not complete in this environment; Docker is unavailable and the Linux shell has Go 1.22.2 pinned with `GOTOOLCHAIN=local`.
 - The BFF security follow-up still needs to be committed and rescanned. The first failing module's coverage summary is still needed to diagnose the separate coverage failure.
+
+## 47. Search PR handoff and live standings UI (20 Nov 2026)
+
+- Namgay's PR #35 (`feature/namgay-scrum24-test-expansion`) merged on 18 Nov 2026. It adds Configuration and Search tests and SWE302 plan entries; the PR description says GitHub CI passed 17 checks, while its local PostgreSQL integration cases were skipped because `TEST_DATABASE_URL` was not configured.
+- Sonam's PR #36 (`feature/sonam-platform-services`) merged on 20 Nov 2026. It adds durable Search indexing/outbox behavior; GitHub showed 17 checks passed and SonarCloud Quality Gate passed. Sonam's PR note says Player indexing needs a runtime check once Player records exist.
+- Fetched `origin/development` at `d5302e9` and fast-forwarded `codex/live-standings-ui` to that commit. The existing standings page now uses the authenticated `/standings?tournament_id=...` API, has tournament selection plus loading, empty, error, and signed-out states, and exports the selected live table as CSV.
+- Local checks passed: `node --check app.js`, `node --check api.js`, `git diff --check`; the running Docker web server returned HTTP 200 for `/`, `/app.js`, and `/api.js`. Signed-in browser verification and full test/coverage rerun remain open. Commit `69f3b2a` and the progress update are pushed to `origin/codex/live-standings-ui`; PR #37 is open for teammate review and continuation. Wait for acceptance and required checks before merging into `development`.
+- GitHub currently lists PR #2 as open although local `development` includes a merge commit labeled for PR #2. Verify the authoritative GitHub state and branch ancestry before closing it or duplicating its remaining work.
+
+## 47. SCRUM-69 centralized configuration consumers (13 Nov 2026)
+
+- Added an authenticated shared configuration loader in servicekit. It reads only allowlisted non-secret settings from `service.<service-name>.<SETTING>` keys and retains environment/default values when a key is missing or Config is unavailable. Database URLs, JWT secrets, bootstrap credentials, and media storage paths remain environment-based.
+- Wired the loader into the 19 domain services that consume Config and the BFF; Compose now supplies the Config address and starts Config before consumers.
+- All affected Go modules compile, Docker Compose configuration validates, and `git diff --check` passes. A live central-value override still needs a runtime smoke check.
+
+## 48. SCRUM-69 PR #32 check fixes (13 Nov 2026)
+
+- Replaced the dynamic RPC target/method values in the circuit-breaker log with a fixed message to address gosec G706. Added the indirect Contracts dependency to the service template module for the repository tidy check.
+- `go build ./...` passed for `packages/servicekit` and `services/_template`; `git diff --check` passed. The Bash security script could not run in this Windows session, so GitHub Actions must confirm the G706 fix.
+
+## 49. SCRUM-69 coverage gate fixes (13 Nov 2026)
+
+- Added tests for centralized configuration loading and fixture knockout progression, pending fixtures, and outbox pruning.
+- `bash scripts/coverage.sh 80` passed; servicekit coverage is 83.5% and fixture coverage is 82.1%.
+
+## 50. SCRUM-24 test coverage follow-up (18 Nov 2026)
+
+- Added Configuration gRPC tests for invalid/missing keys, public reads, Super Admin-only writes, oversized values, insert/update persistence, and role denial. Added Search unit/gRPC tests for validation, Unicode query limits, filter normalization/deduplication, page-size/token bounds, pagination, hit mapping, and repository error handling; added PostgreSQL tests for entity filters, case-insensitive matching, display-field mapping, pagination, and database errors.
+- Added test-plan cases T-20 (Configuration access/validation) and T-21 (Search filters/pagination). `go test ./...` passed in the Configuration and Search modules locally. Their PostgreSQL integration cases were skipped because `TEST_DATABASE_URL` is not configured; GitHub CI's PostgreSQL-backed coverage job must verify them.
+- Parent SCRUM-24 was last recorded In Progress. The issue mapping and full story acceptance still need a live Jira check; do not infer a child issue or owner from previous notes.
+
+## 51. SCRUM-66 Search indexing (20 Nov 2026)
+
+- Added durable Search consumers and transactional Team, Player, and Tournament outboxes, including initial events for existing records and a replay procedure.
+- The four service images started successfully; Search indexed 20 teams and 5 tournaments, and an authenticated Search RPC returned the requested team. The Player database currently has no records.
+
+## 52. SCRUM-24 testing continuation (27 Nov 2026)
+
+- Resumed testing work after the earlier pause. Added API Gateway unit tests for signed, expired, and tampered JWTs; strict JSON decoding; role authorization predicate; nullable SQL conversions; safe error responses; and CORS preflight. Added test-plan case T-22.
+- `go test ./cmd/api` and `go test ./...` passed in `services/api-gateway` on 27 Nov. Focused `go test -cover ./cmd/api ./internal/auditoutbox` reported 5.9% for the API Gateway command package and 100% for `internal/auditoutbox`; the low command-package coverage confirms this is only a starting set of tests. The repository coverage script measures `internal/...` for this module, so these command-package tests do not affect its 80% gate. More handler/service tests plus integration/contract, cross-service, browser, and resilience evidence remain before SCRUM-24 can be considered complete.
+- Corrected historical notes that referred to nonexistent SCRUM-55. Jira has not been refreshed in this session; prior issue status and sprint details remain last-known records only.
+
+## SCRUM-20 — Web client follow-up (Namgay, 22 Nov 2026)
+
+- Jira check on 22 Nov: SCRUM-20 is assigned to Namgay, In Progress in active Sprint 8 (Integration & QA); SCRUM-47 is Done. Its remaining child SCRUM-46 was moved to To Do at Namgay's request while browser acceptance waits for an identified test tournament. SCRUM-24 was set aside per Namgay's earlier pause request; its current status and remaining work need a fresh Jira check.
+- On `feature/namgay-SCRUM-20-web-client-followup`, removed sample teams/tournaments/fixtures from the runtime data lists and added role-neutral loading, empty, signed-out and retry states for saved-data views; dashboard no longer claims hard-coded activity is live API data. Tournament cards now escape API content and show the exact fixture count (including zero); the tournament season filter works, the create form chooses a season, and the header season is derived from live tournament data instead of hard-coded 2025.
+- Team, tournament and fixture list empty states are explicit. API save failures for tournament/team forms now remain visible in the form, submit buttons show a busy state, and successful saves close the form and refresh live data.
+- No tournament, team, or match records were created or modified. Local syntax checks (`node --check app.js`, `node --check api.js`) and `git diff --check` passed; no automated test suite or full browser acceptance was run locally. PR [#42](https://github.com/Norbu-d/Druk_League_Final_project/pull/42) merged into `development` on 22 Nov 2026 at merge commit `0b34e9d`; all required GitHub checks passed. Remaining SCRUM-20 acceptance includes end-to-end signed-in role checks and confirmation of the full screen set against the backend; a test tournament is still needed to exercise team registration safely.
+
+## SCRUM-46 — Registration and fixtures views (Namgay; paused, 22 Nov 2026)
+
+- Jira: [SCRUM-46](https://rub-team-da9meulc.atlassian.net/browse/SCRUM-46), To Do at Namgay's request while signed-in acceptance awaits a confirmed test tournament. Scope: screens for team/tournament registration and fixture browsing using the API gateway.
+- Branch: `feature/namgay-SCRUM-46-registration-fixtures`. [PR #38](https://github.com/Norbu-d/Druk_League_Final_project/pull/38) merged into `development` on 21 Nov 2026; all 17 GitHub checks passed.
+- Added live counts to tournament cards from saved team and match records; removed hard-coded team registration counts and standings-only team assumptions from the team list.
+- The team registration form requires a saved tournament and submits its ID with the team record. Team rows show their linked tournament and standings values.
+- Added a tournament selector for fixtures and display of saved kickoff date/time, venue, tournament, and current match status/result.
+- The gateway currently exposes team creation/listing and fixture generation/listing, but no separate registration-service routes. This implementation follows the gateway contract and treats a team linked to a tournament as the current registration flow; approval/review workflow remains unavailable through this API.
+- Verification: `node --check app.js`, `node --check api.js`, `git diff --check`, SonarCloud, and all 17 GitHub checks passed. Runtime: Compose services started using a local port override (`web` on 4173, BFF on 8082; existing services on 3000/8080 were left running); web and BFF health checks returned HTTP 200. Signed-in Chrome confirmed `admin` / Super Admin, but the Tournaments page showed no tournaments, so the team registration acceptance check remains blocked until Norbu or Sonam identifies a test tournament or confirms test-only data creation. No competition records were created or modified.

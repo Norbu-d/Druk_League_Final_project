@@ -17,6 +17,9 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("media-service",
+		"MEDIA_HTTP_ADDR",
+	)
 	db, err := sql.Open("pgx", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal(err)

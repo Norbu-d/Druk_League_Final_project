@@ -17,6 +17,11 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("audit-log-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"NATS_URL",
+	)
 	consumerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var natsConn *nats.Conn

@@ -1,3 +1,4 @@
+(() => {
 const rolePages = Object.freeze({
   super_admin: Object.freeze(['dashboard','tournaments','teams','matches','standings','officials','venues','reports']),
   match_official: Object.freeze(['dashboard','matches','standings']),
@@ -78,3 +79,4 @@ function roleIdentity(username, role, signedIn = true) {
 const permissions = Object.freeze({rolePages, roleActions, roleLabels, currentRole, canRoleAction, roleLabel, roleIdentity, sanitizeRole, sanitizeUsername, sanitizeUUID, safeAPIURL});
 if (typeof module !== 'undefined' && module.exports) module.exports = permissions;
 if (typeof window !== 'undefined') window.DrukLeaguePermissions = permissions;
+})();

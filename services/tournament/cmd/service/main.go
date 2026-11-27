@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	"github.com/drukleague/platform/packages/eventkit"
 	"github.com/drukleague/platform/packages/servicekit/dzongkhags"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	grpcadapter "github.com/drukleague/platform/services/tournament/internal/adapters/grpc"
@@ -14,6 +16,15 @@ import (
 )
 
 func main() {
+	servicekit.LoadConfiguration("tournament-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"DZONGKHAG_SERVICE_ADDR",
+		"NATS_URL",
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var natsConn interface{ Close() }
 	dzongkhagConn, err := servicekit.Dial(servicekit.Env("DZONGKHAG_SERVICE_ADDR", "dzongkhag:50051"), servicekit.ClientOptions{Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("tournament-service", servicekit.Secret(), 0)})
 	if err != nil {
 		log.Fatal(err)
@@ -22,9 +33,17 @@ func main() {
 	directory := dzongkhags.New(dzongkhagConn, 0)
 	register := func(server *grpc.Server, db *sql.DB) error {
 		v1.RegisterTournamentServiceServer(server, grpcadapter.New(app.New(postgres.New(db), directory)))
+		conn, err := eventkit.StartSQLOutboxRelay(ctx, db, servicekit.Env("NATS_URL", "nats://nats:4222"), "drukleague-tournament")
+		if err != nil {
+			return err
+		}
+		natsConn = conn
 		return nil
 	}
 	if err := servicekit.Run("tournament-service", register); err != nil {
 		log.Fatal(err)
+	}
+	if natsConn != nil {
+		natsConn.Close()
 	}
 }

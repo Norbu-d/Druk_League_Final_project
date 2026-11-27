@@ -23,17 +23,18 @@ const (
 var admin = Caller{ID: adminID, Role: core.RoleSuperAdmin}
 
 type fakeRepo struct {
-	stored             []domain.Fixture
-	event              domain.OutboxEvent
-	linked             map[string]string
-	linkErr            error
-	knockoutCreated    bool
-	knockoutErr        error
-	advanceFixture     domain.Fixture
-	advanceCreated     bool
-	advanceErr         error
-	pendingFixtures    []domain.Fixture
-	pendingFixturesErr error
+	stored          []domain.Fixture
+	event           domain.OutboxEvent
+	linked          map[string]string
+	linkErr         error
+	knockout        domain.KnockoutPlan
+	knockoutCreated bool
+	knockoutErr     error
+	advanceFixture  domain.Fixture
+	advanceCreated  bool
+	advanceErr      error
+	pending         []domain.Fixture
+	pendingErr      error
 }
 
 func (f *fakeRepo) SaveSchedule(_ context.Context, _ string, fixtures []domain.Fixture, event domain.OutboxEvent) ([]domain.Fixture, bool, error) {
@@ -62,10 +63,11 @@ func (f *fakeRepo) SaveKnockoutSchedule(_ context.Context, _ string, plan domain
 	if f.knockoutErr != nil {
 		return nil, false, f.knockoutErr
 	}
+	f.knockout, f.event = plan, event
 	if f.stored != nil {
 		return append([]domain.Fixture(nil), f.stored...), false, nil
 	}
-	f.stored, f.event = plan.Fixtures, event
+	f.stored = append([]domain.Fixture(nil), plan.Fixtures...)
 	for i := range f.stored {
 		f.stored[i].ID = string(rune('k' + i))
 	}
@@ -75,7 +77,7 @@ func (f *fakeRepo) AdvanceKnockout(context.Context, domain.MatchFinalized) (doma
 	return f.advanceFixture, f.advanceCreated, f.advanceErr
 }
 func (f *fakeRepo) PendingFixtures(context.Context, string) ([]domain.Fixture, error) {
-	return f.pendingFixtures, f.pendingFixturesErr
+	return f.pending, f.pendingErr
 }
 func (f *fakeRepo) List(context.Context, string, int, int) ([]domain.Fixture, bool, error) {
 	return f.stored, false, nil
@@ -306,34 +308,6 @@ func TestGenerateKnockoutRequiresStandingsForEveryTeam(t *testing.T) {
 	}
 }
 
-func TestHandleMatchFinalizedStartsKnockoutAndBooksPendingFixtures(t *testing.T) {
-	finalizedAt := time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
-	repo := &fakeRepo{
-		linked:          map[string]string{},
-		advanceFixture:  domain.Fixture{Format: domain.FormatLeagueKnockout},
-		advanceCreated:  true,
-		pendingFixtures: []domain.Fixture{{ID: "pending", TournamentID: tournament, HomeTeamID: teamA, AwayTeamID: teamB}},
-	}
-	matches := &fakeMatches{}
-	var district string
-	s := New(repo, fakeTournaments{}, fakeTeams{ids: []string{teamA, teamB}}, fakeVenues{dzongkhag: &district},
-		matches, fakeStandings{ids: []string{teamA, teamB}})
-	s.newID = func() (string, error) { return "event-1", nil }
-
-	err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{
-		TournamentID: tournament, FinalizedAt: finalizedAt,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(repo.stored) != 1 || !repo.stored[0].Kickoff.Equal(finalizedAt.AddDate(0, 0, 7)) {
-		t.Fatalf("knockout schedule was not saved for the following week: %+v", repo.stored)
-	}
-	if matches.created != 1 || repo.linked["pending"] != "match-1" {
-		t.Fatalf("pending fixture was not booked: created=%d linked=%v", matches.created, repo.linked)
-	}
-}
-
 func TestHandleMatchFinalizedPropagatesFailures(t *testing.T) {
 	s, _ := newService(&fakeRepo{advanceErr: core.Dependency("repository down")}, nil, &fakeMatches{})
 	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{}); !errors.Is(err, core.ErrDependency) {
@@ -349,13 +323,13 @@ func TestHandleMatchFinalizedPropagatesFailures(t *testing.T) {
 		t.Fatalf("missing standings dependency: %v", err)
 	}
 
-	repo = &fakeRepo{pendingFixturesErr: core.Dependency("repository down")}
+	repo = &fakeRepo{pendingErr: core.Dependency("repository down")}
 	s, _ = newService(repo, nil, &fakeMatches{})
 	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{}); !errors.Is(err, core.ErrDependency) {
 		t.Fatalf("pending fixture error: %v", err)
 	}
 
-	repo = &fakeRepo{pendingFixtures: []domain.Fixture{{ID: "pending"}}}
+	repo = &fakeRepo{pending: []domain.Fixture{{ID: "pending"}}}
 	matches := &fakeMatches{busy: func(domain.Fixture) bool { return true }}
 	s, _ = newService(repo, nil, matches)
 	if err := s.HandleMatchFinalized(context.Background(), domain.MatchFinalized{}); !errors.Is(err, core.ErrConflict) {
@@ -370,5 +344,39 @@ func TestList(t *testing.T) {
 	}
 	if items, _, err := s.List(context.Background(), tournament, 10, 0); err != nil || len(items) != 1 {
 		t.Fatalf("list: %v", err)
+	}
+}
+
+func TestGenerateKnockoutAndHandleFinalizedLeagueKnockout(t *testing.T) {
+	repo, matches := &fakeRepo{linked: map[string]string{}, knockoutCreated: true}, &fakeMatches{}
+	var district string
+	teams := []string{
+		"11111111-1111-4111-8111-111111111101",
+		"11111111-1111-4111-8111-111111111102",
+		"11111111-1111-4111-8111-111111111103",
+		"11111111-1111-4111-8111-111111111104",
+	}
+	s := New(repo, fakeTournaments{}, fakeTeams{ids: teams},
+		fakeVenues{dzongkhag: &district}, matches, fakeStandings{ids: []string{teams[3], teams[0], teams[2], teams[1], "11111111-1111-4111-8111-111111111105"}})
+	s.now = func() time.Time { return time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC) }
+	s.newID = func() (string, error) { return "event-1", nil }
+
+	fixtures, created, err := s.Generate(context.Background(), admin, tournament, domain.FormatKnockout, time.Time{})
+	if err != nil || created == 0 || len(fixtures) == 0 || len(repo.knockout.Fixtures) == 0 {
+		t.Fatalf("knockout schedule: fixtures=%d created=%d err=%v", len(fixtures), created, err)
+	}
+	if event := repo.event; event.EventID != "event-1" || len(event.Payload) == 0 {
+		t.Fatalf("knockout outbox event missing: %+v", event)
+	}
+
+	repo.advanceFixture = domain.Fixture{Format: domain.FormatLeagueKnockout}
+	repo.advanceCreated = true
+	repo.pending = []domain.Fixture{{ID: "next"}}
+	event := domain.MatchFinalized{TournamentID: tournament, FinalizedAt: time.Date(2026, 10, 20, 0, 0, 0, 0, time.UTC)}
+	if err := s.HandleMatchFinalized(context.Background(), event); err != nil {
+		t.Fatal(err)
+	}
+	if repo.knockout.Rounds == 0 || repo.event.EventID != "event-1" || repo.linked["next"] == "" {
+		t.Fatalf("league knockout did not create and link next round: plan=%+v event=%+v linked=%v", repo.knockout, repo.event, repo.linked)
 	}
 }
