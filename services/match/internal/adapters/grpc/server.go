@@ -28,7 +28,7 @@ func (s *Server) CreateMatch(ctx context.Context, req *v1.CreateMatchRequest) (*
 		return nil, status.Error(codes.InvalidArgument, "kickoff is required and must be valid")
 	}
 	identity, _ := servicekit.IdentityFromContext(ctx)
-	match, err := s.service.Create(ctx, identity.Role, domain.Match{
+	match, err := s.service.CreateAs(ctx, identity.Role, identity.Username, domain.Match{
 		TournamentID: req.GetTournamentId(), HomeTeamID: req.GetHomeTeamId(),
 		AwayTeamID: req.GetAwayTeamId(), Venue: req.GetVenue(), Kickoff: req.GetKickoff().AsTime(),
 	})
@@ -95,6 +95,9 @@ func translate(err error) error {
 		return status.Error(codes.InvalidArgument, "match request is invalid")
 	case errors.Is(err, domain.ErrNotFound):
 		return status.Error(codes.NotFound, "match not found")
+	case errors.Is(err, domain.ErrConflict) && err != domain.ErrConflict:
+		// A clash names what is busy and when, so a caller such as Fixture can pick another slot.
+		return status.Error(codes.AlreadyExists, strings.TrimPrefix(err.Error(), domain.ErrConflict.Error()+": "))
 	case errors.Is(err, domain.ErrConflict):
 		return status.Error(codes.AlreadyExists, "match scheduling conflict or match is finalised")
 	case errors.Is(err, domain.ErrForbidden):

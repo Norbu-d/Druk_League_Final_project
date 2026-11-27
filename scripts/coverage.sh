@@ -1,38 +1,77 @@
-#!/usr/bin/env sh
-# Per-module unit/integration test coverage for the Go code under internal/ (services) or the
-# whole module (shared packages). cmd/ wiring is excluded: it only connects adapters.
-# Set TEST_DATABASE_URL to include the PostgreSQL adapter tests, e.g.
-#   TEST_DATABASE_URL='postgres://postgres:test@127.0.0.1:55432/postgres?sslmode=disable'
-# Usage: scripts/coverage.sh [min-percent]   (exits 1 if any listed module is below min)
+#!/usr/bin/env bash
+# Test every Go module and enforce the coverage threshold where tests exist.
+# Profiles stay inside their module because native Windows Go does not handle
+# Git Bash's /tmp paths reliably.
+# Usage: scripts/coverage.sh [minimum-percent]
 set -u
-root=$(cd "$(dirname "$0")/.." && pwd)
-min=${1:-0}
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+minimum=${1:-80}
 status=0
-printf '%-28s %8s\n' MODULE COVERAGE
-for dir in "$root"/packages/servicekit "$root"/packages/eventkit "$root"/services/*/; do
-  dir=${dir%/}
-  [ -f "$dir/go.mod" ] || continue
+printf '%-32s %12s\n' MODULE COVERAGE
+
+# Remove any profile left behind if a run is interrupted.
+cleanup_profiles() {
+  for dir in "$root"/packages/* "$root"/services/* "$root"/tools/*; do
+    [[ -d "$dir" ]] || continue
+    rm -f "$dir"/.coverage-$$.out
+    rm -f "$dir"/.coverage-$$.log
+  done
+  return 0
+}
+trap cleanup_profiles EXIT
+trap 'cleanup_profiles; exit 1' HUP INT TERM
+
+for dir in "$root"/packages/* "$root"/services/* "$root"/tools/*; do
+  [[ -f "$dir/go.mod" ]] || continue
   name=${dir#"$root"/}
-  case "$name" in services/_template|services/api-gateway|services/service-*) continue ;; esac
-  if [ -d "$dir/internal" ]; then pkgs=./internal/...; else pkgs=./...; fi
-  profile=$(mktemp)
-  output=$(mktemp)
-  if ! (cd "$dir" && go test -count=1 -coverpkg="$pkgs" -coverprofile="$profile" $pkgs >"$output" 2>&1); then
-    printf '%-28s %8s\n' "$name" FAIL
+  case "$name" in
+    services/service-builder|services/service-runtime|services/_template) continue ;;
+    *) ;;
+  esac
+
+  # A module-local profile path works with native Windows Go from Git Bash.
+  profile=.coverage-$$.out
+  output=.coverage-$$.log
+  if [[ "$name" == packages/servicekit ]]; then
+    coverage_packages=./core/...,./dzongkhags/...,./servicekit/...
+    test_packages=(./core/... ./dzongkhags/... ./servicekit/...)
+  elif [[ -d "$dir/internal" ]]; then
+    coverage_packages=./internal/...
+    test_packages=(./internal/...)
+  else
+    coverage_packages=./...
+    test_packages=(./...)
+  fi
+  if ! (cd "$dir" && go test -count=1 -coverpkg="$coverage_packages" -coverprofile="$profile" "${test_packages[@]}" >"$output" 2>&1); then
+    cat "$dir/$output"
+    printf '%-32s %12s\n' "$name" TEST-FAIL
+    rm -f "$dir/$profile"
+    rm -f "$dir/$output"
     status=1
-    rm -f "$profile"
-    rm -f "$output"
     continue
   fi
-  total=$(cd "$dir" && go tool cover -func="$profile" 2>/dev/null | awk '/^total:/ {sub("%","",$3); print $3}')
-  rm -f "$profile"
-  if [ -z "$total" ] || { [ "$total" = "0.0" ] && grep -q '\[no test files\]' "$output"; }; then
-    printf '%-28s %8s\n' "$name" "NO TESTS"
-    rm -f "$output"
-    continue
+
+  total=$(cd "$dir" && go tool cover -func="$profile" 2>/dev/null | awk '/^total:/ {sub("%", "", $3); print $3}')
+  if [[ "$name" == packages/servicekit ]]; then
+    has_tests=$(find "$dir"/core "$dir"/dzongkhags "$dir"/servicekit -name '*_test.go' -type f -print -quit)
+  elif [[ -d "$dir/internal" ]]; then
+    has_tests=$(find "$dir/internal" -name '*_test.go' -type f -print -quit)
+  else
+    has_tests=$(find "$dir" -name '*_test.go' -type f -print -quit)
   fi
-  rm -f "$output"
-  printf '%-28s %7s%%\n' "$name" "$total"
-  if awk -v t="$total" -v m="$min" 'BEGIN{exit !(t+0 < m+0)}'; then status=1; fi
+  rm -f "$dir/$profile"
+  rm -f "$dir/$output"
+
+  if [[ -z "$has_tests" ]]; then
+    printf '%-32s %12s\n' "$name" 'NO TESTS'
+  else
+    [[ -n "$total" ]] || total=0
+    printf '%-32s %11s%%\n' "$name" "$total"
+    if awk -v total="$total" -v minimum="$minimum" 'BEGIN { exit !(total + 0 < minimum + 0) }'; then
+      status=1
+    fi
+  fi
 done
-exit $status
+
+exit "$status"

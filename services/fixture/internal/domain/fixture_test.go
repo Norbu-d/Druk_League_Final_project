@@ -105,6 +105,27 @@ func TestLargeLeagueSpacing(t *testing.T) {
 	}
 }
 
+func TestAlternatives(t *testing.T) {
+	kickoff := time.Date(2026, 11, 1, 4, 0, 0, 0, time.UTC)
+	planned := Fixture{ID: "f1", VenueID: "v2", VenueName: "Lungtenphu", Kickoff: kickoff}
+	slots := Alternatives(planned, []Venue{{ID: "v1", Name: "Changlimithang"}, {ID: "v2", Name: "Lungtenphu"}})
+	want := []struct {
+		venue string
+		shift time.Duration
+	}{{"v2", 0}, {"v1", 0}, {"v2", 3 * time.Hour}, {"v1", 3 * time.Hour}, {"v2", 6 * time.Hour}, {"v1", 6 * time.Hour}}
+	if len(slots) != len(want) {
+		t.Fatalf("got %d slots", len(slots))
+	}
+	for i, w := range want {
+		if slots[i].VenueID != w.venue || !slots[i].Kickoff.Equal(kickoff.Add(w.shift)) || slots[i].ID != "f1" {
+			t.Fatalf("slot %d: %+v", i, slots[i])
+		}
+	}
+	if none := Alternatives(Fixture{Kickoff: kickoff}, nil); len(none) != len(SameDaySlots) || none[0].VenueID != "" {
+		t.Fatalf("without venues only the kickoff moves: %+v", none)
+	}
+}
+
 func TestScheduleErrors(t *testing.T) {
 	if _, err := Schedule("t", teams(1), nil, start, FormatRoundRobin); !errors.Is(err, core.ErrPrecondition) {
 		t.Fatalf("one team: %v", err)
@@ -133,16 +154,39 @@ func TestScheduleOddTeamCount(t *testing.T) {
 }
 
 func TestFormatsAndDefaultStart(t *testing.T) {
-	for input, want := range map[string]string{"": FormatRoundRobin, "league": FormatRoundRobin, "round robin": FormatRoundRobin, "home_and_away": FormatDoubleRoundRobin, FormatDoubleRoundRobin: FormatDoubleRoundRobin} {
+	for input, want := range map[string]string{"": FormatRoundRobin, "league": FormatRoundRobin, "round robin": FormatRoundRobin, "home_and_away": FormatDoubleRoundRobin, FormatDoubleRoundRobin: FormatDoubleRoundRobin, "League + Knockout": FormatLeagueKnockout} {
 		if got, err := NormalizeFormat(input); err != nil || got != want {
 			t.Fatalf("%q: %q %v", input, got, err)
 		}
 	}
-	if _, err := NormalizeFormat("knockout"); !errors.Is(err, core.ErrInvalid) {
-		t.Fatal("unsupported format accepted")
+	if got, err := NormalizeFormat(FormatKnockout); err != nil || got != FormatKnockout {
+		t.Fatalf("knockout format: %q %v", got, err)
 	}
 	got := DefaultStart(time.Date(2026, 10, 19, 15, 30, 0, 0, time.UTC))
 	if !got.Equal(time.Date(2026, 10, 26, 4, 0, 0, 0, time.UTC)) {
 		t.Fatalf("default start %v", got)
+	}
+}
+
+func TestKnockoutScheduleUsesStandingsSeedsAndByes(t *testing.T) {
+	ranked := []string{
+		"11111111-1111-4111-8111-111111111111",
+		"22222222-2222-4222-8222-222222222222",
+		"33333333-3333-4333-8333-333333333333",
+		"44444444-4444-4444-8444-444444444444",
+		"55555555-5555-4555-8555-555555555555",
+	}
+	plan, err := KnockoutSchedule("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", ranked, nil, start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Fixtures) != 1 || len(plan.Byes) != 3 || plan.BracketSize != 8 || plan.Rounds != 3 {
+		t.Fatalf("unexpected five-team bracket: %+v", plan)
+	}
+	if plan.Fixtures[0].HomeTeamID != ranked[3] || plan.Fixtures[0].AwayTeamID != ranked[4] || plan.Fixtures[0].HomeSeed != 4 || plan.Fixtures[0].AwaySeed != 5 {
+		t.Fatalf("seed pairing incorrect: %+v", plan.Fixtures[0])
+	}
+	if plan.Byes[0].TeamID != ranked[0] || plan.Byes[0].Seed != 1 {
+		t.Fatalf("top seed did not receive first bye: %+v", plan.Byes)
 	}
 }

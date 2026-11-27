@@ -2,134 +2,79 @@ package grpcadapter
 
 import (
 	"context"
-	"database/sql"
-	"errors"
-	"strconv"
-	"strings"
-	"time"
 
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/player/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	"github.com/drukleague/platform/services/player/internal/app"
+	"github.com/drukleague/platform/services/player/internal/domain"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Server struct {
 	v1.UnimplementedPlayerServiceServer
-	db *sql.DB
+	service *app.Service
 }
 
-func New(db *sql.DB) *Server { return &Server{db: db} }
+func New(service *app.Service) *Server { return &Server{service: service} }
 
 func (s *Server) CreatePlayer(ctx context.Context, req *v1.CreatePlayerRequest) (*v1.CreatePlayerResponse, error) {
-	teamID := strings.TrimSpace(req.GetTeamId())
-	given := strings.TrimSpace(req.GetGivenName())
-	family := strings.TrimSpace(req.GetFamilyName())
-	if teamID == "" || given == "" || family == "" {
-		return nil, status.Error(codes.InvalidArgument, "team id, given name, and family name are required")
-	}
-	p := new(v1.Player)
-	var created time.Time
-	err := s.db.QueryRowContext(ctx, `INSERT INTO players(team_id,given_name,family_name,shirt_number) VALUES($1,$2,$3,$4) RETURNING id::text,team_id::text,given_name,family_name,shirt_number,created_at`, teamID, given, family, strings.TrimSpace(req.GetShirtNumber())).Scan(&p.Id, &p.TeamId, &p.GivenName, &p.FamilyName, &p.ShirtNumber, &created)
+	caller, err := callerFrom(ctx)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "team id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not create player")
+		return nil, servicekit.ToStatus(err)
 	}
-	p.CreatedAt = timestamppb.New(created)
-	return &v1.CreatePlayerResponse{Player: p}, nil
+	p, err := s.service.Create(ctx, caller, domain.Player{TeamID: req.GetTeamId(), GivenName: req.GetGivenName(), FamilyName: req.GetFamilyName(), ShirtNumber: req.GetShirtNumber()})
+	if err != nil {
+		return nil, servicekit.ToStatus(err)
+	}
+	return &v1.CreatePlayerResponse{Player: toProto(p)}, nil
 }
+
 func (s *Server) GetPlayer(ctx context.Context, req *v1.GetPlayerRequest) (*v1.GetPlayerResponse, error) {
-	p, err := s.read(ctx, `SELECT id::text,team_id::text,given_name,family_name,shirt_number,created_at FROM players WHERE id=$1`, strings.TrimSpace(req.GetId()))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, status.Error(codes.NotFound, "player not found")
-	}
+	p, err := s.service.Get(ctx, req.GetId())
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "player id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not read player")
+		return nil, servicekit.ToStatus(err)
 	}
-	return &v1.GetPlayerResponse{Player: p}, nil
+	return &v1.GetPlayerResponse{Player: toProto(p)}, nil
 }
+
 func (s *Server) ListPlayers(ctx context.Context, req *v1.ListPlayersRequest) (*v1.ListPlayersResponse, error) {
-	size, offset, err := page(req.GetPageSize(), req.GetPageToken())
+	size, offset, err := servicekit.Page(req.GetPageSize(), req.GetPageToken())
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text,team_id::text,given_name,family_name,shirt_number,created_at FROM players WHERE ($1='' OR team_id::text=$1) ORDER BY family_name,given_name,id LIMIT $2 OFFSET $3`, strings.TrimSpace(req.GetTeamId()), size+1, offset)
+	items, more, err := s.service.List(ctx, req.GetTeamId(), size, offset)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "team id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not list players")
+		return nil, servicekit.ToStatus(err)
 	}
-	defer rows.Close()
-	result := &v1.ListPlayersResponse{Players: make([]*v1.Player, 0, size)}
-	for rows.Next() {
-		p := new(v1.Player)
-		var created time.Time
-		if err := rows.Scan(&p.Id, &p.TeamId, &p.GivenName, &p.FamilyName, &p.ShirtNumber, &created); err != nil {
-			return nil, status.Error(codes.Internal, "could not read players")
-		}
-		if int32(len(result.Players)) == size {
-			result.NextPageToken = strconv.Itoa(offset + int(size))
-			break
-		}
-		p.CreatedAt = timestamppb.New(created)
-		result.Players = append(result.Players, p)
+	response := &v1.ListPlayersResponse{Players: make([]*v1.Player, 0, len(items)), NextPageToken: servicekit.NextPageToken(offset, len(items), more)}
+	for _, p := range items {
+		response.Players = append(response.Players, toProto(p))
 	}
-	if err := rows.Err(); err != nil {
-		return nil, status.Error(codes.Internal, "could not read players")
-	}
-	return result, nil
+	return response, nil
 }
+
 func (s *Server) UpdatePlayer(ctx context.Context, req *v1.UpdatePlayerRequest) (*v1.UpdatePlayerResponse, error) {
-	id := strings.TrimSpace(req.GetId())
-	given := strings.TrimSpace(req.GetGivenName())
-	family := strings.TrimSpace(req.GetFamilyName())
-	if id == "" || given == "" || family == "" {
-		return nil, status.Error(codes.InvalidArgument, "player id, given name, and family name are required")
-	}
-	p := new(v1.Player)
-	var created time.Time
-	err := s.db.QueryRowContext(ctx, `UPDATE players SET given_name=$2,family_name=$3,shirt_number=$4 WHERE id=$1 RETURNING id::text,team_id::text,given_name,family_name,shirt_number,created_at`, id, given, family, strings.TrimSpace(req.GetShirtNumber())).Scan(&p.Id, &p.TeamId, &p.GivenName, &p.FamilyName, &p.ShirtNumber, &created)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, status.Error(codes.NotFound, "player not found")
-	}
+	caller, err := callerFrom(ctx)
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid input syntax for type uuid") {
-			return nil, status.Error(codes.InvalidArgument, "player id must be a UUID")
-		}
-		return nil, status.Error(codes.Internal, "could not update player")
+		return nil, servicekit.ToStatus(err)
 	}
-	p.CreatedAt = timestamppb.New(created)
-	return &v1.UpdatePlayerResponse{Player: p}, nil
+	p, err := s.service.Update(ctx, caller, domain.Player{ID: req.GetId(), GivenName: req.GetGivenName(), FamilyName: req.GetFamilyName(), ShirtNumber: req.GetShirtNumber()})
+	if err != nil {
+		return nil, servicekit.ToStatus(err)
+	}
+	return &v1.UpdatePlayerResponse{Player: toProto(p)}, nil
 }
-func (s *Server) read(ctx context.Context, q string, args ...any) (*v1.Player, error) {
-	p := new(v1.Player)
-	var created time.Time
-	err := s.db.QueryRowContext(ctx, q, args...).Scan(&p.Id, &p.TeamId, &p.GivenName, &p.FamilyName, &p.ShirtNumber, &created)
-	if err == nil {
-		p.CreatedAt = timestamppb.New(created)
-	}
-	return p, err
+
+func callerFrom(ctx context.Context) (app.Caller, error) {
+	identity, ok := servicekit.IdentityFromContext(ctx)
+	caller, err := servicekit.Caller(identity, ok)
+	return app.Caller{ID: caller.ID, Role: caller.Role}, err
 }
-func page(size int32, token string) (int32, int, error) {
-	if size <= 0 {
-		size = 50
+
+func toProto(p domain.Player) *v1.Player {
+	player := &v1.Player{Id: p.ID, TeamId: p.TeamID, GivenName: p.GivenName, FamilyName: p.FamilyName, ShirtNumber: p.ShirtNumber}
+	if !p.CreatedAt.IsZero() {
+		player.CreatedAt = timestamppb.New(p.CreatedAt)
 	}
-	if size > 100 {
-		size = 100
-	}
-	offset := 0
-	if token != "" {
-		n, err := strconv.Atoi(token)
-		if err != nil || n < 0 {
-			return 0, 0, status.Error(codes.InvalidArgument, "invalid page token")
-		}
-		offset = n
-	}
-	return size, offset, nil
+	return player
 }

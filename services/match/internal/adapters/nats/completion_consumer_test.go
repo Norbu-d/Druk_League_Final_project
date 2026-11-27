@@ -11,7 +11,9 @@ import (
 
 type fakeApp struct{ err error }
 
-func (f fakeApp) MarkCompleted(context.Context, string, string) (bool, error) { return f.err == nil, f.err }
+func (f fakeApp) MarkCompleted(context.Context, string, string) (bool, error) {
+	return f.err == nil, f.err
+}
 
 func TestHandler(t *testing.T) {
 	payload := []byte(`{"event_id":"e","match_id":"m"}`)

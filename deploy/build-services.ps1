@@ -8,13 +8,16 @@ try {
     Push-Location (Join-Path $projectRoot "deploy")
     try {
         $services = @(
-            "api", "auth", "user", "team", "player", "tournament", "registration",
+            "api", "bff", "auth", "user", "team", "player", "tournament", "registration",
             "match", "score", "fixture", "standings", "venue", "official",
             "dzongkhag", "notification", "media", "report", "search", "analytics",
             "audit-log", "configuration"
         )
-        docker compose --env-file .env --parallel 2 build @services
-        if ($LASTEXITCODE -ne 0) { throw "Service image build failed." }
+        foreach ($service in $services) {
+            Write-Host "Building $service..."
+            docker compose --env-file .env build $service
+            if ($LASTEXITCODE -ne 0) { throw "Service image build failed for '$service'." }
+        }
     }
     finally {
         Pop-Location

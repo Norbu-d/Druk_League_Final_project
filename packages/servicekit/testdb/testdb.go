@@ -37,7 +37,9 @@ func New(t *testing.T, migrationsDir string) *sql.DB {
 		t.Fatal(err)
 	}
 	if _, err = server.ExecContext(ctx, "CREATE DATABASE "+name); err != nil {
-		server.Close()
+		if closeErr := server.Close(); closeErr != nil {
+			t.Errorf("close test database admin connection: %v", closeErr)
+		}
 		t.Fatalf("create test database: %v", err)
 	}
 	parsed, err := url.Parse(admin)

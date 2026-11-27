@@ -1,13 +1,21 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 
+	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/configuration/v1"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
+	grpcadapter "github.com/drukleague/platform/services/configuration/internal/adapters/grpc"
+	"google.golang.org/grpc"
 )
 
 func main() {
-	if err := servicekit.Run("configuration-service"); err != nil {
+	register := func(server *grpc.Server, db *sql.DB) error {
+		v1.RegisterConfigurationServiceServer(server, grpcadapter.New(db))
+		return nil
+	}
+	if err := servicekit.Run("configuration-service", register); err != nil {
 		log.Fatal(err)
 	}
 }

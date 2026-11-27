@@ -28,6 +28,7 @@ func (f *fakeOutbox) MarkPublished(_ context.Context, id string) error {
 	f.published = append(f.published, id)
 	return nil
 }
+func (f *fakeOutbox) PrunePublished(context.Context, time.Time) (int64, error) { return 0, nil }
 
 type fakeJS struct {
 	subjects []string

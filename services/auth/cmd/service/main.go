@@ -23,6 +23,13 @@ func duration(name string, fallback time.Duration) time.Duration {
 }
 
 func main() {
+	servicekit.LoadConfiguration("auth-service",
+		"GRPC_ADDR",
+		"METRICS_ADDR",
+		"USER_SERVICE_ADDR",
+		"ACCESS_TOKEN_TTL",
+		"REFRESH_TOKEN_TTL",
+	)
 	userConn, err := servicekit.Dial(servicekit.Env("USER_SERVICE_ADDR", "user:50051"), servicekit.ClientOptions{Auth: servicekit.ServiceIdentity, Tokens: servicekit.NewTokenSource("auth-service", servicekit.Secret(), 0)})
 	if err != nil {
 		log.Fatal(err)

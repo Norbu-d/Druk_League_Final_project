@@ -1,6 +1,7 @@
 package servicekit
 
 import (
+	"context"
 	"errors"
 	"log"
 
@@ -8,6 +9,21 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// FetchDependency calls a dependency and extracts its required response value.
+// It keeps the common gRPC status and empty-response handling consistent across clients.
+func FetchDependency[T any, R any](ctx context.Context, call func(context.Context) (T, error), what string, extract func(T) (R, bool)) (R, error) {
+	var zero R
+	response, err := call(ctx)
+	if err != nil {
+		return zero, FromStatus(err, what)
+	}
+	value, ok := extract(response)
+	if !ok {
+		return zero, core.Dependency(what + " service returned no " + what)
+	}
+	return value, nil
+}
 
 // ToStatus maps core sentinel errors to gRPC status codes. The wrapped message of a known
 // error is returned to the caller; anything else is logged and reported as Internal so

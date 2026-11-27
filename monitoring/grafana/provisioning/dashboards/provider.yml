@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: DrukLeague
+    orgId: 1
+    folder: DrukLeague
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /etc/grafana/provisioning/dashboards

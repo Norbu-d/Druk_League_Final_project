@@ -13,4 +13,5 @@ COPY services/report/migrations /app/migrations
 ENV SERVICE_NAME=report-service
 ENV MIGRATIONS_DIR=/app/migrations
 EXPOSE 50051
+EXPOSE 8080
 ENTRYPOINT ["/app/service"]

@@ -2,7 +2,12 @@ package eventkit
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"io"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,10 +15,12 @@ import (
 )
 
 type fakeStreams struct {
-	streams map[string]*nats.StreamConfig
-	infoErr error
-	added   []string
-	updated []string
+	streams   map[string]*nats.StreamConfig
+	infoErr   error
+	addErr    error
+	updateErr error
+	added     []string
+	updated   []string
 }
 
 func (f *fakeStreams) StreamInfo(name string, _ ...nats.JSOpt) (*nats.StreamInfo, error) {
@@ -28,13 +35,42 @@ func (f *fakeStreams) StreamInfo(name string, _ ...nats.JSOpt) (*nats.StreamInfo
 }
 func (f *fakeStreams) AddStream(cfg *nats.StreamConfig, _ ...nats.JSOpt) (*nats.StreamInfo, error) {
 	f.added = append(f.added, cfg.Name)
+	if f.addErr != nil {
+		return nil, f.addErr
+	}
 	f.streams[cfg.Name] = cfg
 	return &nats.StreamInfo{Config: *cfg}, nil
 }
 func (f *fakeStreams) UpdateStream(cfg *nats.StreamConfig, _ ...nats.JSOpt) (*nats.StreamInfo, error) {
 	f.updated = append(f.updated, cfg.Name)
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
 	f.streams[cfg.Name] = cfg
 	return &nats.StreamInfo{Config: *cfg}, nil
+}
+
+func TestEnsureStreamsHandlesCreateAndUpdateErrors(t *testing.T) {
+	createErr := errors.New("create failed")
+	streams := &fakeStreams{streams: map[string]*nats.StreamConfig{}, addErr: createErr}
+	if err := EnsureStreams(streams); !errors.Is(err, createErr) {
+		t.Fatalf("create error = %v", err)
+	}
+
+	streams = &fakeStreams{streams: map[string]*nats.StreamConfig{
+		EventsStream: {Name: EventsStream, Subjects: []string{SubjectMatchFinalized}},
+		DLQStream:    {Name: DLQStream, Subjects: []string{DLQPrefix + ">"}},
+	}, updateErr: errors.New("update failed")}
+	if err := EnsureStreams(streams); err == nil || !strings.Contains(err.Error(), "update stream") {
+		t.Fatalf("expected update error, got %v", err)
+	}
+}
+
+func TestEnsureStreamsAcceptsConcurrentStreamCreate(t *testing.T) {
+	streams := &fakeStreams{streams: map[string]*nats.StreamConfig{}, addErr: nats.ErrStreamNameAlreadyInUse}
+	if err := EnsureStreams(streams); err != nil {
+		t.Fatalf("concurrent create should be harmless: %v", err)
+	}
 }
 
 func TestEnsureStreamsCreatesBothStreams(t *testing.T) {
@@ -55,7 +91,13 @@ func TestEnsureStreamsAddsMissingSubjectsToLegacyStream(t *testing.T) {
 	if err := EnsureStreams(streams); err != nil {
 		t.Fatal(err)
 	}
-	if len(streams.updated) != 1 || len(streams.streams[EventsStream].Subjects) != 2 {
+	updatedEvents := 0
+	for _, name := range streams.updated {
+		if name == EventsStream {
+			updatedEvents++
+		}
+	}
+	if updatedEvents != 1 || len(streams.streams[EventsStream].Subjects) != len(EventSubjects) {
 		t.Fatalf("legacy stream not updated: %+v", streams.streams[EventsStream].Subjects)
 	}
 	// Running again changes nothing.
@@ -95,6 +137,13 @@ func TestPublish(t *testing.T) {
 	}
 	if len(publisher.published) != 2 || publisher.published[0].Subject != SubjectFixturesGenerated {
 		t.Fatal("message not published")
+	}
+}
+
+func TestPublishReturnsPublisherError(t *testing.T) {
+	want := errors.New("publish failed")
+	if err := Publish(&fakePublisher{err: want}, SubjectFixturesGenerated, []byte(`{}`), "id"); !errors.Is(err, want) {
+		t.Fatalf("publish error = %v", err)
 	}
 }
 
@@ -175,10 +224,271 @@ func TestStartConsumerValidatesConfig(t *testing.T) {
 	}
 }
 
+func TestConnectRejectsMalformedURL(t *testing.T) {
+	if _, _, err := Connect("http://[", "eventkit-test"); err == nil {
+		t.Fatal("expected malformed server URL to fail")
+	}
+}
+
+func TestNATSMessageMethods(t *testing.T) {
+	message := natsMessage{msg: &nats.Msg{Subject: SubjectSearchTeam, Data: []byte("payload")}}
+	if message.Subject() != SubjectSearchTeam || string(message.Data()) != "payload" || message.Deliveries() != 1 {
+		t.Fatal("message accessors returned unexpected values")
+	}
+	// An unbound NATS message has no acknowledgement connection, but each adapter
+	// method should still safely return the library error rather than panic.
+	_ = message.Ack()
+	_ = message.NakWithDelay(time.Second)
+	_ = message.Term()
+}
+
 func TestDefaults(t *testing.T) {
 	c := ConsumerConfig{}
 	c.defaults()
 	if c.MaxDeliver != 5 || c.Backoff != 2*time.Second {
 		t.Fatal("defaults wrong")
+	}
+}
+
+type fakeOutboxStore struct {
+	events       []OutboxEvent
+	pendingErr   error
+	markErr      error
+	markedEvents []string
+}
+
+func (s *fakeOutboxStore) PendingEvents(context.Context, int) ([]OutboxEvent, error) {
+	return s.events, s.pendingErr
+}
+func (s *fakeOutboxStore) MarkPublished(_ context.Context, eventID string) error {
+	s.markedEvents = append(s.markedEvents, eventID)
+	return s.markErr
+}
+
+func TestRelayOutboxOncePublishesAndMarksBatch(t *testing.T) {
+	store := &fakeOutboxStore{events: []OutboxEvent{{EventID: "one", Subject: SubjectSearchTeam, Payload: []byte(`{"n":1}`)}, {EventID: "two", Subject: SubjectSearchPlayer, Payload: []byte(`{"n":2}`)}}}
+	publisher := &fakePublisher{}
+	count, err := RelayOutboxOnce(context.Background(), store, publisher, 0)
+	if err != nil || count != 2 {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+	if len(publisher.published) != 2 || len(store.markedEvents) != 2 || store.markedEvents[1] != "two" {
+		t.Fatalf("published=%d marked=%v", len(publisher.published), store.markedEvents)
+	}
+	if publisher.published[0].Subject != SubjectSearchTeam || string(publisher.published[0].Data) != `{"n":1}` {
+		t.Fatalf("unexpected published event: %+v", publisher.published[0])
+	}
+}
+
+func TestRelayOutboxOnceReturnsPendingReadError(t *testing.T) {
+	want := errors.New("database unavailable")
+	count, err := RelayOutboxOnce(context.Background(), &fakeOutboxStore{pendingErr: want}, &fakePublisher{}, 10)
+	if count != 0 || !errors.Is(err, want) {
+		t.Fatalf("count=%d err=%v", count, err)
+	}
+}
+
+func TestRelayOutboxOnceStopsWhenPublishFails(t *testing.T) {
+	store := &fakeOutboxStore{events: []OutboxEvent{{EventID: "one", Subject: SubjectSearchTeam}, {EventID: "two", Subject: SubjectSearchTeam}}}
+	want := errors.New("nats unavailable")
+	count, err := RelayOutboxOnce(context.Background(), store, &fakePublisher{err: want}, 2)
+	if count != 0 || !errors.Is(err, want) || len(store.markedEvents) != 0 {
+		t.Fatalf("count=%d err=%v marked=%v", count, err, store.markedEvents)
+	}
+}
+
+func TestRelayOutboxOnceReturnsMarkErrorAfterPublish(t *testing.T) {
+	want := errors.New("database unavailable")
+	store := &fakeOutboxStore{events: []OutboxEvent{{EventID: "one", Subject: SubjectSearchTeam}}, markErr: want}
+	publisher := &fakePublisher{}
+	count, err := RelayOutboxOnce(context.Background(), store, publisher, 1)
+	if count != 0 || !errors.Is(err, want) || len(publisher.published) != 1 {
+		t.Fatalf("count=%d err=%v published=%d", count, err, len(publisher.published))
+	}
+}
+
+func TestRunOutboxRelayStopsOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		RunOutboxRelay(ctx, &fakeOutboxStore{}, &fakePublisher{}, 0)
+		close(done)
+	}()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("relay did not stop after cancellation")
+	}
+}
+
+type outboxSQLDriver struct{}
+type outboxSQLConn struct{}
+type outboxSQLRows struct{ sent bool }
+type outboxSQLResult struct{}
+
+type trackedCloser struct {
+	closed bool
+}
+
+func (c *trackedCloser) Close() {
+	c.closed = true
+}
+
+type relayPublisher struct {
+	published chan *nats.Msg
+}
+
+func (p relayPublisher) PublishMsg(m *nats.Msg, _ ...nats.PubOpt) (*nats.PubAck, error) {
+	p.published <- m
+	return &nats.PubAck{}, nil
+}
+
+var outboxSQLState struct {
+	sync.Mutex
+	queries []string
+	execs   []string
+}
+
+func (outboxSQLDriver) Open(string) (driver.Conn, error)  { return outboxSQLConn{}, nil }
+func (outboxSQLConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("not supported") }
+func (outboxSQLConn) Close() error                        { return nil }
+func (outboxSQLConn) Begin() (driver.Tx, error)           { return nil, errors.New("not supported") }
+func (outboxSQLConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	outboxSQLState.Lock()
+	outboxSQLState.queries = append(outboxSQLState.queries, query)
+	outboxSQLState.Unlock()
+	return &outboxSQLRows{}, nil
+}
+func (outboxSQLConn) ExecContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Result, error) {
+	outboxSQLState.Lock()
+	outboxSQLState.execs = append(outboxSQLState.execs, query)
+	outboxSQLState.Unlock()
+	return outboxSQLResult{}, nil
+}
+func (*outboxSQLRows) Columns() []string { return []string{"event_id", "subject", "payload"} }
+func (*outboxSQLRows) Close() error      { return nil }
+func (r *outboxSQLRows) Next(dest []driver.Value) error {
+	if r.sent {
+		return io.EOF
+	}
+	r.sent = true
+	dest[0], dest[1], dest[2] = "event-1", SubjectSearchTeam, `{"event_id":"event-1"}`
+	return nil
+}
+func (outboxSQLResult) LastInsertId() (int64, error) { return 0, nil }
+func (outboxSQLResult) RowsAffected() (int64, error) { return 1, nil }
+
+var registerOutboxSQLDriver sync.Once
+
+func TestSQLOutboxStoreReadsAndMarksPendingEvents(t *testing.T) {
+	registerOutboxSQLDriver.Do(func() { sql.Register("eventkit-outbox-test", outboxSQLDriver{}) })
+	db, err := sql.Open("eventkit-outbox-test", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	outboxSQLState.Lock()
+	outboxSQLState.queries, outboxSQLState.execs = nil, nil
+	outboxSQLState.Unlock()
+	store, err := NewSQLOutboxStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.PendingEvents(context.Background(), 25)
+	if err != nil || len(events) != 1 || events[0].EventID != "event-1" || string(events[0].Payload) != `{"event_id":"event-1"}` {
+		t.Fatalf("events=%+v err=%v", events, err)
+	}
+	if err := store.MarkPublished(context.Background(), events[0].EventID); err != nil {
+		t.Fatal(err)
+	}
+	outboxSQLState.Lock()
+	defer outboxSQLState.Unlock()
+	if len(outboxSQLState.queries) != 1 || !strings.Contains(outboxSQLState.queries[0], "FROM search_outbox") || len(outboxSQLState.execs) != 1 || !strings.Contains(outboxSQLState.execs[0], "UPDATE search_outbox") {
+		t.Fatalf("queries=%v execs=%v", outboxSQLState.queries, outboxSQLState.execs)
+	}
+}
+
+func TestNewSQLOutboxStoreRejectsNilDB(t *testing.T) {
+	if _, err := NewSQLOutboxStore(nil); err == nil {
+		t.Fatal("expected nil database error")
+	}
+}
+
+func TestStartSQLOutboxRelayClosesConnectionWhenStreamSetupFails(t *testing.T) {
+	want := errors.New("nats unavailable")
+	conn := &trackedCloser{}
+	streams := &fakeStreams{streams: map[string]*nats.StreamConfig{}, infoErr: want}
+
+	got, err := startSQLOutboxRelay(context.Background(), nil, conn, streams, &fakePublisher{})
+	if !errors.Is(err, want) || got != nil {
+		t.Fatalf("got closer=%v err=%v, want nil closer and %v", got, err, want)
+	}
+	if !conn.closed {
+		t.Fatal("connection was not closed after stream setup failed")
+	}
+}
+
+func TestStartSQLOutboxRelayStartsAndReturnsConnection(t *testing.T) {
+	registerOutboxSQLDriver.Do(func() { sql.Register("eventkit-outbox-test", outboxSQLDriver{}) })
+	db, err := sql.Open("eventkit-outbox-test", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	outboxSQLState.Lock()
+	outboxSQLState.queries, outboxSQLState.execs = nil, nil
+	outboxSQLState.Unlock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn := &trackedCloser{}
+	streams := &fakeStreams{streams: map[string]*nats.StreamConfig{}}
+	publisher := relayPublisher{published: make(chan *nats.Msg, 1)}
+	done := make(chan struct{})
+	got, err := startSQLOutboxRelay(ctx, db, conn, streams, publisher)
+	if err != nil {
+		t.Fatalf("start relay: %v", err)
+	}
+	if got != conn {
+		t.Fatal("returned connection does not match the connection passed to startup")
+	}
+
+	select {
+	case msg := <-publisher.published:
+		if msg.Subject != SubjectSearchTeam || string(msg.Data) != `{"event_id":"event-1"}` {
+			t.Fatalf("unexpected relayed message: %+v", msg)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("relay did not publish the pending outbox event")
+	}
+	cancel()
+	go func() {
+		// The relay exits after observing cancellation at the end of its first pass.
+		// A short wait here is bounded by RunOutboxRelay's cancellation select.
+		for i := 0; i < 100; i++ {
+			outboxSQLState.Lock()
+			marked := len(outboxSQLState.execs) > 0
+			outboxSQLState.Unlock()
+			if marked {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("relay did not finish publishing the pending event")
+	}
+	outboxSQLState.Lock()
+	marked := len(outboxSQLState.execs) == 1 && strings.Contains(outboxSQLState.execs[0], "UPDATE search_outbox")
+	outboxSQLState.Unlock()
+	if !marked {
+		t.Fatal("relay did not mark the event as published")
+	}
+	if len(streams.added) != 2 {
+		t.Fatalf("expected both streams to be ensured, added %v", streams.added)
 	}
 }
