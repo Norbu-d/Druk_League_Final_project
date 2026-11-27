@@ -53,4 +53,31 @@ func TestRepositoryAgainstPostgres(t *testing.T) {
 	if pending, _ := repo.PendingEvents(ctx, 10); len(pending) != 0 {
 		t.Fatal("published event still pending")
 	}
+	if items, more, err := repo.List(ctx, tournament, 10, 0); err != nil || more || len(items) != 3 {
+		t.Fatalf("complete list: %v %v %+v", err, more, items)
+	}
+	if items, more, err := repo.List(ctx, "88888888-8888-4888-8888-888888888888", 10, 0); err != nil || more || len(items) != 0 {
+		t.Fatalf("empty list: %v %v %+v", err, more, items)
+	}
+	if _, _, err := repo.SaveSchedule(ctx, "not-a-uuid", nil, domain.OutboxEvent{}); err == nil {
+		t.Fatal("invalid tournament id accepted")
+	}
+	if _, _, err := repo.SaveSchedule(ctx, "88888888-8888-4888-8888-888888888888", []domain.Fixture{{HomeTeamID: "not-a-uuid"}}, domain.OutboxEvent{}); err == nil {
+		t.Fatal("invalid team id accepted")
+	}
+	if _, _, err := repo.SaveSchedule(ctx, "99999999-9999-4999-8999-999999999999", nil, domain.OutboxEvent{EventID: "not-a-uuid", Payload: []byte(`{}`)}); err == nil {
+		t.Fatal("invalid event id accepted")
+	}
+	if _, _, err := repo.List(ctx, "not-a-uuid", 10, 0); err == nil {
+		t.Fatal("invalid list tournament id accepted")
+	}
+	if err := repo.LinkMatch(ctx, "not-a-uuid", "not-a-uuid"); err == nil {
+		t.Fatal("invalid match link ids accepted")
+	}
+	if _, err := repo.PendingEvents(ctx, -1); err == nil {
+		t.Fatal("negative pending-event limit accepted")
+	}
+	if err := repo.MarkPublished(ctx, "not-a-uuid"); err == nil {
+		t.Fatal("invalid event id accepted when publishing")
+	}
 }
