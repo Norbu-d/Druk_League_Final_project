@@ -370,7 +370,8 @@ function standingsPreview() {
 function tournamentsPage() {
   const blocked = gate('Tournaments', 'Competitions');
   if (blocked) return blocked;
-  const seasons = [...new Set(store.tournaments.map((t) => String(t.season || '')).filter(Boolean))].sort().reverse();
+  const seasons = [...new Set(store.tournaments.map((t) => String(t.season || '')).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).reverse();
   const q = ui.query.toLowerCase();
   const list = store.tournaments.filter((t) => (ui.season === 'all' || String(t.season) === ui.season) && `${t.name} ${t.sport} ${t.dzongkhag}`.toLowerCase().includes(q));
   const cards = list.map((t) => {
@@ -440,7 +441,7 @@ function matchesPage() {
     mine: isMine, unassigned: (m) => !m.officialId && m.status !== 'completed'
   };
   if (!filters[ui.matchTab] || !tabs.some(([k]) => k === ui.matchTab)) ui.matchTab = 'all';
-  const list = sortByKickoff(inTournament.filter(filters[ui.matchTab]).filter((m) => `${m.home} ${m.away} ${m.venue}`.toLowerCase().includes(q)));
+  const list = sortByKickoff(inTournament.filter((match) => filters[ui.matchTab](match)).filter((m) => `${m.home} ${m.away} ${m.venue}`.toLowerCase().includes(q)));
   const listHtml = list.length ? `<div class="match-list">${list.map((m) => matchCard(m)).join('')}</div>`
     : `<section class="panel">${store.matches.length
       ? empty(ui.matchTab === 'mine' ? 'No matches assigned to you' : 'No matches here', ui.matchTab === 'mine' ? 'The league admin assigns officials to matches. Assigned matches appear here.' : 'Try another tab, tournament or search.', { ic: 'calendar' })
@@ -449,7 +450,7 @@ function matchesPage() {
     : r === 'super_admin' ? notice('Assign an official to every match. Only the assigned official can enter and finalise its score.') : '';
   return `${pageHead('On the pitch', 'Matches &amp; scores', 'Fixtures, live scores and final results.', `${button('Schedule a match', 'new-match', { ic: 'calendar', roleAction: 'schedule-match' })}${button('Generate fixtures', 'generate', { cls: 'btn-primary', ic: 'plus', roleAction: 'generate-fixtures' })}`)}
   ${intro}
-  <div class="toolbar"><div class="tabs">${tabs.map(([k, l]) => `<button type="button" class="tab ${ui.matchTab === k ? 'active' : ''}" data-action="match-tab" data-tab="${k}">${l}<span class="count">${inTournament.filter(filters[k]).length}</span></button>`).join('')}</div><span class="spacer"></span>
+  <div class="toolbar"><div class="tabs">${tabs.map(([k, l]) => `<button type="button" class="tab ${ui.matchTab === k ? 'active' : ''}" data-action="match-tab" data-tab="${k}">${l}<span class="count">${inTournament.filter((match) => filters[k](match)).length}</span></button>`).join('')}</div><span class="spacer"></span>
   <label class="select-wrap">Tournament<select id="match-tournament"><option value="all">All tournaments</option>${store.tournaments.map((t) => `<option value="${esc(t.id)}" ${ui.matchTournament === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
   <label class="search">${icon('search')}<input id="page-search" placeholder="Search teams or venues…" value="${esc(ui.query)}" /></label></div>${listHtml}`;
 }
@@ -625,7 +626,8 @@ function renderChrome() {
   document.getElementById('crumb-current').textContent = PAGE_LABELS[ui.page] || 'Overview';
   document.getElementById('footer-year').textContent = String(new Date().getFullYear());
 
-  const seasons = store.tournaments.map((t) => String(t.season || '')).filter(Boolean).sort();
+  const seasons = store.tournaments.map((t) => String(t.season || '')).filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   document.getElementById('season-label').textContent = `${seasons.at(-1) || new Date().getFullYear()} season`;
 
   const info = ROLE_INFO[r];
@@ -730,7 +732,8 @@ async function runSave(form, work, success, busyLabel) {
 
 function openTournamentModal() {
   const year = new Date().getFullYear();
-  const seasons = [...new Set([String(year), String(year + 1), ...store.tournaments.map((t) => String(t.season || ''))].filter(Boolean))].sort().reverse();
+  const seasons = [...new Set([String(year), String(year + 1), ...store.tournaments.map((t) => String(t.season || ''))].filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).reverse();
   openModal('tournament-form', 'Create a tournament', 'Teams can register once it is created.', `<div class="form-grid">
     <div class="field full"><label for="t-name">Tournament name</label><input id="t-name" name="name" maxlength="70" placeholder="e.g. Wangdue Summer Cup" required /></div>
     <div class="field"><label for="t-sport">Sport</label><select id="t-sport" name="sport">${options(SPORTS, 'Football')}</select></div>
