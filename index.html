@@ -3,60 +3,303 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#142c27" />
+    <meta name="theme-color" content="#0f2a52" />
     <meta name="description" content="DrukLeague tournament management for Bhutan." />
     <title>DrukLeague — Tournament operations</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=workspace-2" />
+    <link rel="stylesheet" href="./landing.css?v=landing-2" />
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar" id="sidebar">
-        <a class="brand" href="#dashboard" aria-label="DrukLeague dashboard">
-          <span class="brand-logo-wrap"><img class="brand-logo" src="./assets/drukleague-logo.png" alt="" /></span>
-          <span class="brand-type">druk<span>league</span><small>TOURNAMENT OPERATIONS</small></span>
+    <!-- Landing page: shown for an empty hash or #home; every other hash opens the workspace. -->
+    <div class="landing" id="landing" hidden>
+      <section class="lp-hero" id="lp-top" aria-label="DrukLeague introduction">
+        <div class="lp-hero-media" aria-hidden="true">
+          <img decoding="async" class="lp-slide is-active" src="./assets/landing/hero-stadium.jpg" alt="" />
+          <img decoding="async" class="lp-slide" src="./assets/landing/night-match.jpg" alt="" loading="lazy" />
+          <img decoding="async" class="lp-slide" src="./assets/landing/stadium-dzong.jpg" alt="" loading="lazy" />
+        </div>
+
+        <header class="lp-nav">
+          <a class="lp-brand" href="#home" aria-label="DrukLeague home">
+            <span class="lp-brand-mark"><img decoding="async" src="./assets/drukleague-logo.png" alt="" /></span>
+            <span>DrukLeague</span>
+          </a>
+          <nav class="lp-menu glass" aria-label="Landing sections">
+            <button type="button" data-lp-scroll="lp-top">Home</button>
+            <button type="button" data-lp-scroll="lp-sports">Sports</button>
+            <button type="button" data-lp-scroll="lp-features">Features</button>
+            <button type="button" data-lp-scroll="lp-how">How it works</button>
+          </nav>
+          <div class="lp-nav-actions">
+            <span class="lp-chip"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>20 Dzongkhags</span>
+            <button type="button" class="lp-btn lp-btn-light" data-lp-action="open">Open dashboard</button>
+          </div>
+        </header>
+
+        <button type="button" class="lp-arrow lp-arrow-prev" data-lp-slide="-1" aria-label="Previous photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+        <button type="button" class="lp-arrow lp-arrow-next" data-lp-slide="1" aria-label="Next photo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+
+        <h1 class="lp-title">
+          <span class="lp-line"><span class="thin">Bhutan's</span> <b>Game Day,</b></span>
+          <span class="lp-line"><b>Live</b> <span class="thin">in One League</span></span>
+        </h1>
+
+        <div class="lp-left">
+          <h2>Inter-Dzongkhag</h2>
+          <p class="lp-left-sub">Tournaments · Fixtures · Standings</p>
+          <div class="lp-faces">
+            <span class="lp-face-stack" aria-hidden="true">
+              <img decoding="async" src="./assets/landing/archery-aim-sm.jpg" alt="" />
+              <img decoding="async" src="./assets/landing/bhutan-maldives-sm.jpg" alt="" />
+              <img decoding="async" src="./assets/landing/volleyball-sm.jpg" alt="" />
+              <img decoding="async" src="./assets/landing/sunset-save-sm.jpg" alt="" />
+              <span>+20</span>
+            </span>
+            <span class="lp-faces-label">Dzongkhags<br />on one platform</span>
+          </div>
+          <p>Create tournaments, register teams, generate fixtures and publish live scores in one place, instead of phone calls, paper score sheets and messaging apps.</p>
+          <button type="button" class="lp-btn lp-btn-light" data-lp-scroll="lp-features">Learn more <span aria-hidden="true">→</span></button>
+        </div>
+
+        <div class="lp-phone" aria-label="Preview of the match centre on a phone">
+          <div class="lp-phone-screen">
+            <img decoding="async" src="./assets/landing/goalkeeper-dive-sm.jpg" alt="A goalkeeper dives to save a shot" />
+            <span class="lp-island" aria-hidden="true"></span>
+            <span class="lp-preview-tag">Preview</span>
+            <div class="lp-phone-ui">
+              <div class="lp-phone-head"><strong>Match Centre</strong><span aria-hidden="true">•••</span></div>
+              <div class="lp-widgets">
+                <div class="lp-widget glass-dark">
+                  <small>Live</small>
+                  <svg class="lp-ring" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="32"/><circle class="lp-ring-value" cx="40" cy="40" r="32"/></svg>
+                  <span class="lp-ring-label"><b>72′</b><small>played</small></span>
+                </div>
+                <div class="lp-widget lp-widget-white">
+                  <small>Score</small>
+                  <span class="lp-score">2<i>–</i>1</span>
+                  <span class="lp-score-teams"><span>Home</span><span>Away</span></span>
+                </div>
+                <div class="lp-widget glass-dark">
+                  <small>Standings</small>
+                  <svg class="lp-pulse" viewBox="0 0 120 40" aria-hidden="true"><path d="M0 28h22l6-14 8 22 8-30 7 22h14l5-8 6 8h44"/></svg>
+                  <span class="lp-widget-foot">Winner +3 pts</span>
+                </div>
+                <div class="lp-widget glass-dark">
+                  <small>Result</small>
+                  <span class="lp-final"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Final</span>
+                  <span class="lp-widget-foot">by assigned official</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="lp-card glass" aria-label="Live scores">
+          <div class="lp-card-top">
+            <span class="lp-dots" aria-hidden="true"><i></i><i class="on"></i><i></i></span>
+            <button type="button" class="lp-pill" data-lp-scroll="lp-sports">More</button>
+          </div>
+          <div class="lp-card-photos">
+            <img decoding="async" src="./assets/landing/sunset-save-sm.jpg" alt="Goalkeeper saving a shot at sunset" />
+            <img decoding="async" src="./assets/landing/night-shot-sm.jpg" alt="Striker shooting on goal in a night match" />
+            <img decoding="async" src="./assets/landing/bhutan-maldives-sm.jpg" alt="Bhutan playing Maldives at the 2013 SAFF Championship" />
+          </div>
+          <h3>Live Scores, Honest Results</h3>
+          <p>Officials update the score as the match runs. A result becomes final only when the assigned official finalises it.</p>
+        </aside>
+
+        <div class="lp-mini">
+          <div class="lp-mini-card lp-mini-photo lp-float lp-float-slow">
+            <img decoding="async" src="./assets/landing/archery-bullseye-sm.jpg" alt="Archers celebrating a hit on the target" />
+            <span>Archery<br />to Football</span>
+          </div>
+          <div class="lp-mini-card lp-mini-glass lp-float">
+            <span class="lp-mini-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></span>
+            <span>Standings<br />update on every final</span>
+          </div>
+        </div>
+
+        <div class="lp-sport-icons" aria-label="Sports">
+          <span title="Football"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10z"/><path d="M12 3v4M16 10l4.5-1.5M14.5 15l2.5 4M9.5 15 7 19M8 10 3.5 8.5"/></svg></span>
+          <span title="Archery"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg></span>
+          <span title="Volleyball"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3c0 5 2 8 8 10M4 8c4 0 8 2 9 13M5 17c4-1 7-4 7-9"/></svg></span>
+          <span title="Basketball"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3v18M5.5 5.5c3 3 3 10 0 13M18.5 5.5c-3 3-3 10 0 13"/></svg></span>
+        </div>
+      </section>
+
+      <section class="lp-section lp-sports" id="lp-sports">
+        <div class="lp-section-head lp-reveal">
+          <span class="lp-kicker">Every sport, every dzongkhag</span>
+          <h2>From Changlimithang to the <b>archery range</b></h2>
+          <p>Football comes first. The same tournament, fixture and standings flow is built to grow to the other games Bhutan plays.</p>
+        </div>
+        <div class="lp-marquee" data-lp-marquee>
+          <div class="lp-track">
+            <figure><img decoding="async" src="./assets/landing/night-match-sm.jpg" alt="Night match at Changlimithang Stadium, Thimphu" loading="lazy" /><figcaption>Football · Changlimithang</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/archery-aim-sm.jpg" alt="Archer aiming in Bhutan" loading="lazy" /><figcaption>Archery · Bhutan</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/saff-final-sm.jpg" alt="SAFF Women's Championship final under floodlights" loading="lazy" /><figcaption>Women's football</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/volleyball-sm.jpg" alt="Volleyball player spiking at the net" loading="lazy" /><figcaption>Volleyball</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/archery-lhuentse-sm.jpg" alt="Archery tournament in Lhuentse" loading="lazy" /><figcaption>Archery · Lhuentse</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/scoreboard-sm.jpg" alt="Scoreboard showing Bhutan against Maldives" loading="lazy" /><figcaption>Bhutan v Maldives</figcaption></figure>
+          </div>
+        </div>
+        <div class="lp-marquee lp-marquee-reverse" data-lp-marquee>
+          <div class="lp-track">
+            <figure><img decoding="async" src="./assets/landing/goalkeeper-dive-sm.jpg" alt="Goalkeeper diving for the ball" loading="lazy" /><figcaption>Every save counts</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/stadium-dzong-sm.jpg" alt="Changlimithang Stadium with traditional architecture" loading="lazy" /><figcaption>Thimphu</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/sunset-save-sm.jpg" alt="Goalkeeper save at sunset" loading="lazy" /><figcaption>Football · evening league</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/archery-bullseye-sm.jpg" alt="Archers celebrating a bullseye" loading="lazy" /><figcaption>Bullseye</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/night-shot-sm.jpg" alt="Striker shooting during a floodlit match" loading="lazy" /><figcaption>Floodlit fixtures</figcaption></figure>
+            <figure><img decoding="async" src="./assets/landing/hero-stadium-sm.jpg" alt="Training at Changlimithang Stadium" loading="lazy" /><figcaption>Training day</figcaption></figure>
+          </div>
+        </div>
+      </section>
+
+      <div class="lp-ticker" aria-hidden="true">
+        <div class="lp-ticker-track"><span>Football</span><i>✳</i><span>Archery</span><i>✳</i><span>Volleyball</span><i>✳</i><span>Basketball</span><i>✳</i><span>Khuru</span><i>✳</i><span>Cricket</span><i>✳</i></div>
+      </div>
+
+      <section class="lp-section" id="lp-features">
+        <div class="lp-section-head lp-reveal">
+          <span class="lp-kicker">What you can run</span>
+          <h2>One place for the <b>whole tournament</b></h2>
+        </div>
+        <div class="lp-bento">
+          <article class="lp-tile lp-tile-wide lp-reveal">
+            <img decoding="async" src="./assets/landing/night-shot.jpg" alt="" loading="lazy" />
+            <div><h3>Live scoring</h3><p>The assigned match official updates the score in real time. Once finalised, the result is locked; only an audited admin correction can change it.</p></div>
+          </article>
+          <article class="lp-tile lp-reveal">
+            <img decoding="async" src="./assets/landing/scoreboard.jpg" alt="" loading="lazy" />
+            <div><h3>Automatic standings</h3><p>Every final result updates the table: three points for a win, one for a draw.</p></div>
+          </article>
+          <article class="lp-tile lp-reveal">
+            <img decoding="async" src="./assets/landing/stadium-dzong.jpg" alt="" loading="lazy" />
+            <div><h3>Fixtures &amp; venues</h3><p>Round-robin, double round-robin and knockout fixtures, with venue clash checks.</p></div>
+          </article>
+          <article class="lp-tile lp-reveal">
+            <img decoding="async" src="./assets/landing/archery-lhuentse.jpg" alt="" loading="lazy" />
+            <div><h3>Teams &amp; registration</h3><p>Teams are registered for each tournament, and only approved teams are scheduled into fixtures.</p></div>
+          </article>
+          <article class="lp-tile lp-reveal">
+            <img decoding="async" src="./assets/landing/saff-final.jpg" alt="" loading="lazy" />
+            <div><h3>Notices &amp; reports</h3><p>Team managers are notified when a result is final, and standings and fixtures export as CSV or JSON.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="lp-section lp-how" id="lp-how">
+        <div class="lp-section-head lp-reveal">
+          <span class="lp-kicker">How it works</span>
+          <h2>From sign-up to <b>final table</b></h2>
+        </div>
+        <ol class="lp-steps">
+          <li class="lp-reveal"><span>01</span><h3>Create a tournament</h3><p>Set the season, dzongkhag and fixture format.</p></li>
+          <li class="lp-reveal"><span>02</span><h3>Register teams</h3><p>Teams from across the dzongkhags join the tournament.</p></li>
+          <li class="lp-reveal"><span>03</span><h3>Generate fixtures</h3><p>Matches are scheduled with venues and kick-off times.</p></li>
+          <li class="lp-reveal"><span>04</span><h3>Score live</h3><p>Officials update scores and finalise results.</p></li>
+          <li class="lp-reveal"><span>05</span><h3>Publish standings</h3><p>Teams, officials and fans follow the updated table.</p></li>
+        </ol>
+      </section>
+
+      <section class="lp-stats" aria-label="DrukLeague in numbers">
+        <div class="lp-stat lp-reveal"><b data-lp-count="20">20</b><span>Dzongkhags covered</span></div>
+        <div class="lp-stat lp-reveal"><b data-lp-count="20">20</b><span>Microservices</span></div>
+        <div class="lp-stat lp-reveal"><b data-lp-count="4">4</b><span>User roles</span></div>
+        <div class="lp-stat lp-reveal"><b data-lp-count="3">3</b><span>Fixture formats</span></div>
+      </section>
+
+      <section class="lp-cta lp-reveal">
+        <img decoding="async" src="./assets/landing/night-match.jpg" alt="" loading="lazy" />
+        <div>
+          <h2>Ready for <b>kick-off?</b></h2>
+          <p>Follow fixtures, results and standings without an account, or create a free viewer account. Admins, officials and team managers sign in to run the season.</p>
+          <div class="lp-cta-actions">
+            <button type="button" class="lp-btn lp-btn-light" data-lp-action="open">Open dashboard</button>
+            <button type="button" class="lp-btn lp-btn-ghost" data-lp-action="signup" data-lp-signin>Create account</button>
+            <button type="button" class="lp-btn lp-btn-ghost" data-lp-action="signin" data-lp-signin>Sign in</button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="lp-footer">
+        <div class="lp-footer-top">
+          <span class="lp-brand lp-brand-dark"><span class="lp-brand-mark"><img decoding="async" src="./assets/drukleague-logo.png" alt="" /></span><span>DrukLeague</span></span>
+          <span>Made for the game, across all 20 dzongkhags.</span>
+        </div>
+        <details class="lp-credits">
+          <summary>Photo credits</summary>
+          <p>Photos from Wikimedia Commons, resized and cropped for this page. Lexend font: SIL Open Font License 1.1.</p>
+          <ul>
+            <li>Changlimithang Stadium — RPSkokie, <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="noopener" target="_blank">CC BY-SA 4.0</a></li>
+            <li>Changlimethang Stadium, Thimphu — Richard Mortel, <a href="https://creativecommons.org/licenses/by/2.0" rel="noopener" target="_blank">CC BY 2.0</a></li>
+            <li>Bhutan – Changlimithang Stadium 2013 — Benjamin Goetzinger, <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="noopener" target="_blank">CC BY-SA 4.0</a></li>
+            <li>Soccer goalkeeper — Master Sgt. Lance Cheung, U.S. Air Force, public domain</li>
+            <li>Block — WomEOS, <a href="https://creativecommons.org/licenses/by-sa/2.0" rel="noopener" target="_blank">CC BY-SA 2.0</a></li>
+            <li>Nighttime amateur soccer match — PattayaPatrol, <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="noopener" target="_blank">CC BY-SA 4.0</a></li>
+            <li>SAFF Championship 2013 (10) and (12) — Krish Dulal, <a href="https://creativecommons.org/licenses/by-sa/3.0" rel="noopener" target="_blank">CC BY-SA 3.0</a></li>
+            <li>Archery in Bhutan; After hitting bullseye — Footlooseinme, <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="noopener" target="_blank">CC BY-SA 4.0</a></li>
+            <li>Archery Tournament, Lhuentse, Bhutan — muddum27, <a href="https://creativecommons.org/licenses/by/2.0" rel="noopener" target="_blank">CC BY 2.0</a></li>
+            <li>International volleyball match (FL61757972) — IPPA photographer, <a href="https://creativecommons.org/licenses/by/4.0" rel="noopener" target="_blank">CC BY 4.0</a></li>
+            <li>Dasarath Stadium, 2022 SAFF Women's Championship final — Aarogya1234, <a href="https://creativecommons.org/licenses/by-sa/4.0" rel="noopener" target="_blank">CC BY-SA 4.0</a></li>
+          </ul>
+        </details>
+      </footer>
+    </div>
+
+    <div class="app-shell" hidden>
+      <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
+        <a class="brand" href="#home" aria-label="DrukLeague home page">
+          <span class="brand-mark"><img src="./assets/drukleague-logo.png" alt="" /></span>
+          <span class="brand-type">DrukLeague<small>Tournament operations</small></span>
         </a>
-        <div class="workspace-label">WORKSPACE</div>
-        <nav class="primary-nav" aria-label="Main navigation">
-          <a href="#dashboard" class="nav-link active" data-page="dashboard"><span class="nav-icon" data-icon="grid"></span>Overview</a>
-          <a href="#tournaments" class="nav-link" data-page="tournaments"><span class="nav-icon" data-icon="trophy"></span>Tournaments<span class="nav-count">4</span></a>
-          <a href="#teams" class="nav-link" data-page="teams"><span class="nav-icon" data-icon="users"></span>Teams &amp; dzongkhags</a>
-          <a href="#matches" class="nav-link" data-page="matches"><span class="nav-icon" data-icon="calendar"></span>Matches &amp; scores<span class="live-dot"></span></a>
+        <nav class="nav-group" aria-label="Workspace">
+          <p class="nav-label">Workspace</p>
+          <a href="#dashboard" class="nav-link" data-page="dashboard"><span class="nav-icon" data-icon="grid"></span>Overview</a>
+          <a href="#tournaments" class="nav-link" data-page="tournaments"><span class="nav-icon" data-icon="trophy"></span>Tournaments</a>
+          <a href="#teams" class="nav-link" data-page="teams"><span class="nav-icon" data-icon="users"></span><span data-nav-label="teams">Teams</span></a>
+          <a href="#squads" class="nav-link" data-page="squads"><span class="nav-icon" data-icon="shirt"></span>Squads</a>
+          <a href="#registrations" class="nav-link" data-page="registrations"><span class="nav-icon" data-icon="flag"></span>Registrations</a>
+          <a href="#matches" class="nav-link" data-page="matches"><span class="nav-icon" data-icon="calendar"></span><span data-nav-label="matches">Matches &amp; scores</span></a>
           <a href="#standings" class="nav-link" data-page="standings"><span class="nav-icon" data-icon="chart"></span>Standings</a>
-          <a href="#officials" class="nav-link" data-page="officials"><span class="nav-icon" data-icon="shield"></span>Officials</a>
         </nav>
-        <div class="sidebar-divider"></div>
-        <div class="workspace-label">MANAGE</div>
-        <nav class="primary-nav" aria-label="Management navigation">
+        <nav class="nav-group" id="admin-nav" aria-label="Administration">
+          <p class="nav-label">Administration</p>
+          <a href="#officials" class="nav-link" data-page="officials"><span class="nav-icon" data-icon="shield"></span>Officials</a>
+          <a href="#users" class="nav-link" data-page="users"><span class="nav-icon" data-icon="key"></span>Users &amp; roles</a>
           <a href="#venues" class="nav-link" data-page="venues"><span class="nav-icon" data-icon="pin"></span>Venues</a>
           <a href="#reports" class="nav-link" data-page="reports"><span class="nav-icon" data-icon="file"></span>Reports</a>
         </nav>
         <div class="sidebar-bottom">
-          <div class="help-card"><span class="help-spark">✳</span><strong>Need a hand?</strong><p>Explore the quick guide to get your tournament moving.</p><button class="text-button" id="help-button">Open quick guide <span>↗</span></button></div>
-          <button class="profile-button" id="profile-button" type="button" aria-label="Signed-out public viewer"><span class="avatar avatar-gold" id="profile-avatar">PV</span><span class="profile-copy"><strong id="profile-name">Public viewer</strong><small id="profile-role">Viewer</small></span><span class="profile-more" aria-hidden="true">···</span></button>
+          <section class="role-card" id="role-card" aria-live="polite"></section>
+          <div class="profile-row">
+            <span class="avatar" id="profile-avatar" aria-hidden="true">PV</span>
+            <span class="profile-copy"><strong id="profile-name">Public viewer</strong><small id="profile-role">Not signed in</small></span>
+            <button class="icon-button" id="profile-button" type="button" aria-label="Sign in"><span data-icon="login"></span></button>
+          </div>
         </div>
       </aside>
+      <div class="sidebar-scrim" data-action="close-menu" aria-hidden="true"></div>
       <main class="main-area">
         <header class="topbar">
-          <button class="icon-button mobile-menu" id="menu-button" aria-label="Open navigation"><span data-icon="menu"></span></button>
-          <div class="breadcrumb"><span>DrukLeague</span><span class="crumb-slash">/</span><strong id="crumb-current">Overview</strong></div>
+          <button class="icon-button mobile-menu" id="menu-button" type="button" data-action="toggle-menu" aria-label="Open navigation"><span data-icon="menu"></span></button>
+          <div class="breadcrumb"><a href="#home">DrukLeague</a><span aria-hidden="true">/</span><strong id="crumb-current">Overview</strong></div>
           <div class="topbar-actions">
-            <label class="searchbox"><span data-icon="search"></span><input id="global-search" type="search" placeholder="Search anything..." aria-label="Search anything" /><kbd>⌘ K</kbd></label>
-            <button class="season-button" id="season-button"><span class="season-dot"></span>2025 season<span class="chevron">⌄</span></button>
-            <button class="icon-button notification-button" id="notifications-button" aria-label="Notifications"><span data-icon="bell"></span><i></i></button>
-            <button class="avatar avatar-gold top-avatar auth-button" id="auth-button" type="button" aria-label="Sign in to DrukLeague">PV</button>
+            <label class="searchbox"><span data-icon="search"></span><input id="global-search" type="search" placeholder="Search teams, matches…" aria-label="Search teams, tournaments and matches" /><kbd>Ctrl K</kbd></label>
+            <span class="season-chip" id="season-chip"><i></i><span id="season-label">Season</span></span>
+            <div class="account" id="account"></div>
           </div>
         </header>
         <section class="page-content" id="page-content" aria-live="polite"></section>
-        <footer class="app-footer"><span>© 2025 DrukLeague</span><span>Made for the game, across all 20 dzongkhags <b>✳</b></span><a href="#help">Help &amp; support <span>↗</span></a></footer>
+        <footer class="app-footer"><span>© <span id="footer-year">2026</span> DrukLeague</span><span>Made for the game, across all 20 dzongkhags</span></footer>
       </main>
     </div>
+    <div class="auth-screen" id="auth-screen" hidden></div>
     <div id="modal-root"></div>
     <div class="toast-region" id="toast-region" aria-live="polite"></div>
-    <script src="./role-permissions.js?v=dashboard-data-2" defer></script>
-    <script src="./app.js" defer></script>
-    <script src="./api.js?v=dashboard-data-3" defer></script>
+    <script src="./role-permissions.js?v=workspace-2" defer></script>
+    <script src="./landing.js?v=landing-4" defer></script>
+    <script src="./app.js?v=workspace-2" defer></script>
+    <script src="./api.js?v=workspace-2" defer></script>
   </body>
 </html>

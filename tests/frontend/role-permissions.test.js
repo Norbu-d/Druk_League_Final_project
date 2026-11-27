@@ -14,10 +14,10 @@ function useRole(role) {
 
 test('only the four supported roles are defined, with the expected page access', () => {
   assert.deepEqual(Object.keys(rolePages).sort(), ['match_official','super_admin','team_manager','viewer']);
-  assert.deepEqual(rolePages.super_admin, ['dashboard','tournaments','teams','matches','standings','officials','venues','reports']);
-  assert.deepEqual(rolePages.match_official, ['dashboard','matches','standings']);
-  assert.deepEqual(rolePages.team_manager, ['dashboard','teams','matches','standings']);
-  assert.deepEqual(rolePages.viewer, ['dashboard','tournaments','teams','matches','standings']);
+  assert.deepEqual(rolePages.super_admin, ['dashboard','tournaments','teams','squads','registrations','matches','standings','officials','users','venues','reports']);
+  assert.deepEqual(rolePages.match_official, ['dashboard','tournaments','matches','standings']);
+  assert.deepEqual(rolePages.team_manager, ['dashboard','tournaments','teams','squads','registrations','matches','standings']);
+  assert.deepEqual(rolePages.viewer, ['dashboard','tournaments','teams','squads','matches','standings']);
 });
 
 test('unknown and removed roles fall back to Viewer', () => {
@@ -50,6 +50,22 @@ test('API requests are confined to known same-origin routes and methods', () => 
   assert.equal(safeAPIURL(root, '/standings?tournament_id=invalid&next=/admin'), '');
 });
 
+test('admin account, scheduling and session-refresh routes are allowed with their methods only', () => {
+  const root = 'http://localhost/api';
+  const id = '22222222-2222-4222-8222-222222222222';
+  assert.equal(safeAPIURL(root, '/auth/refresh', 'POST'), 'http://localhost/api/auth/refresh');
+  assert.equal(safeAPIURL(root, '/auth/refresh', 'GET'), '');
+  assert.equal(safeAPIURL(root, '/users'), 'http://localhost/api/users');
+  assert.equal(safeAPIURL(root, '/users', 'POST'), 'http://localhost/api/users');
+  assert.equal(safeAPIURL(root, '/users?role=match_official'), 'http://localhost/api/users?role=match_official');
+  assert.equal(safeAPIURL(root, '/users?role=admin'), '');
+  assert.equal(safeAPIURL(root, '/users?role=match_official', 'POST'), '');
+  assert.equal(safeAPIURL(root, '/users', 'DELETE'), '');
+  assert.equal(safeAPIURL(root, '/matches', 'POST'), 'http://localhost/api/matches');
+  assert.equal(safeAPIURL(root, `/matches/${id}/official`, 'PATCH'), `http://localhost/api/matches/${id}/official`);
+  assert.equal(safeAPIURL(root, `/matches/${id}/official`, 'POST'), '');
+});
+
 test('the active role has a clear user-facing label', () => {
   assert.deepEqual(roleLabels, {
     super_admin: 'Super Admin',
@@ -76,10 +92,39 @@ test('the profile identity reflects signed-in role and resets cleanly when signe
   });
 });
 
+test('public views, sign-up, registrations, squads and venues are allowed with their methods only', () => {
+  const root = 'http://localhost/api';
+  const id = '22222222-2222-4222-8222-222222222222';
+  for (const name of ['tournaments','teams','matches']) {
+    assert.equal(safeAPIURL(root, `/public/${name}`), `http://localhost/api/public/${name}`);
+    assert.equal(safeAPIURL(root, `/public/${name}`, 'POST'), '');
+  }
+  assert.equal(safeAPIURL(root, `/public/standings?tournament_id=${id}`), `http://localhost/api/public/standings?tournament_id=${id}`);
+  assert.equal(safeAPIURL(root, '/public/standings?tournament_id=x'), '');
+  assert.equal(safeAPIURL(root, '/public/users'), '');
+  assert.equal(safeAPIURL(root, '/auth/signup', 'POST'), 'http://localhost/api/auth/signup');
+  assert.equal(safeAPIURL(root, '/auth/signup'), '');
+  assert.equal(safeAPIURL(root, '/registrations'), 'http://localhost/api/registrations');
+  assert.equal(safeAPIURL(root, '/registrations', 'POST'), 'http://localhost/api/registrations');
+  assert.equal(safeAPIURL(root, `/registrations?tournament_id=${id}&status=pending`), `http://localhost/api/registrations?tournament_id=${id}&status=pending`);
+  assert.equal(safeAPIURL(root, '/registrations?status=deleted'), '');
+  assert.equal(safeAPIURL(root, '/registrations?status=pending&status=approved'), '');
+  assert.equal(safeAPIURL(root, `/registrations/${id}`, 'PATCH'), `http://localhost/api/registrations/${id}`);
+  assert.equal(safeAPIURL(root, `/registrations/${id}`, 'DELETE'), '');
+  assert.equal(safeAPIURL(root, '/registrations/not-a-uuid', 'PATCH'), '');
+  assert.equal(safeAPIURL(root, `/teams/${id}/players`), `http://localhost/api/teams/${id}/players`);
+  assert.equal(safeAPIURL(root, `/teams/${id}/players`, 'POST'), `http://localhost/api/teams/${id}/players`);
+  assert.equal(safeAPIURL(root, `/players/${id}`, 'PATCH'), `http://localhost/api/players/${id}`);
+  assert.equal(safeAPIURL(root, `/players/${id}`), '');
+  assert.equal(safeAPIURL(root, '/venues'), 'http://localhost/api/venues');
+  assert.equal(safeAPIURL(root, '/venues', 'POST'), 'http://localhost/api/venues');
+  assert.equal(safeAPIURL(root, '/venues', 'PATCH'), '');
+});
+
 test('admin, team manager, and match official controls are limited to their roles', () => {
   const cases = [
-    ['super_admin', ['new-tournament','generate-fixtures','new-team','manage-officials','manage-venues','export']],
-    ['team_manager', ['new-team','export']],
+    ['super_admin', ['new-tournament','generate-fixtures','new-team','register-team','review-registration','edit-squad','manage-officials','manage-venues','manage-users','schedule-match','assign-official','export']],
+    ['team_manager', ['new-team','register-team','edit-squad','export']],
     ['match_official', ['update-score','finalize-score','export']],
     ['viewer', ['export']]
   ];

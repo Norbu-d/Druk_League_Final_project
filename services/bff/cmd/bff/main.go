@@ -9,8 +9,11 @@ import (
 	authv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/auth/v1"
 	fixturev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
+	playerv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/player/v1"
+	registrationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	venuev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	"github.com/drukleague/platform/services/bff/internal/httpapi"
 	"google.golang.org/grpc"
@@ -27,6 +30,9 @@ func main() {
 		"STANDINGS_SERVICE_ADDR",
 		"FIXTURE_SERVICE_ADDR",
 		"OFFICIAL_SERVICE_ADDR",
+		"REGISTRATION_SERVICE_ADDR",
+		"PLAYER_SERVICE_ADDR",
+		"VENUE_SERVICE_ADDR",
 		"CORS_ORIGIN",
 		"BFF_ADDR",
 	)
@@ -39,15 +45,18 @@ func main() {
 		return conn
 	}
 	clients := httpapi.Clients{
-		Auth:        authv1.NewAuthServiceClient(dial("AUTH_SERVICE_ADDR", "auth:50051")),
-		Users:       v1.NewUserServiceClient(dial("USER_SERVICE_ADDR", "user:50051")),
-		Tournaments: v1.NewTournamentServiceClient(dial("TOURNAMENT_SERVICE_ADDR", "tournament:50051")),
-		Teams:       v1.NewTeamServiceClient(dial("TEAM_SERVICE_ADDR", "team:50051")),
-		Matches:     v1.NewMatchServiceClient(dial("MATCH_SERVICE_ADDR", "match:50051")),
-		Scores:      v1.NewScoreServiceClient(dial("SCORE_SERVICE_ADDR", "score:50051")),
-		Standings:   standingsv1.NewStandingsServiceClient(dial("STANDINGS_SERVICE_ADDR", "standings:50051")),
-		Fixtures:    fixturev1.NewFixtureServiceClient(dial("FIXTURE_SERVICE_ADDR", "fixture:50051")),
-		Officials:   officialv1.NewOfficialServiceClient(dial("OFFICIAL_SERVICE_ADDR", "official:50051")),
+		Auth:          authv1.NewAuthServiceClient(dial("AUTH_SERVICE_ADDR", "auth:50051")),
+		Users:         v1.NewUserServiceClient(dial("USER_SERVICE_ADDR", "user:50051")),
+		Tournaments:   v1.NewTournamentServiceClient(dial("TOURNAMENT_SERVICE_ADDR", "tournament:50051")),
+		Teams:         v1.NewTeamServiceClient(dial("TEAM_SERVICE_ADDR", "team:50051")),
+		Matches:       v1.NewMatchServiceClient(dial("MATCH_SERVICE_ADDR", "match:50051")),
+		Scores:        v1.NewScoreServiceClient(dial("SCORE_SERVICE_ADDR", "score:50051")),
+		Standings:     standingsv1.NewStandingsServiceClient(dial("STANDINGS_SERVICE_ADDR", "standings:50051")),
+		Fixtures:      fixturev1.NewFixtureServiceClient(dial("FIXTURE_SERVICE_ADDR", "fixture:50051")),
+		Officials:     officialv1.NewOfficialServiceClient(dial("OFFICIAL_SERVICE_ADDR", "official:50051")),
+		Registrations: registrationv1.NewRegistrationServiceClient(dial("REGISTRATION_SERVICE_ADDR", "registration:50051")),
+		Players:       playerv1.NewPlayerServiceClient(dial("PLAYER_SERVICE_ADDR", "player:50051")),
+		Venues:        venuev1.NewVenueServiceClient(dial("VENUE_SERVICE_ADDR", "venue:50051")),
 	}
 	server := httpapi.New(clients, servicekit.Secret(), servicekit.Env("CORS_ORIGIN", "http://localhost:4173"))
 	addr := servicekit.Env("BFF_ADDR", ":8080")

@@ -52,7 +52,7 @@ type fakeAuth struct {
 
 func (f fakeAuth) Login(ctx context.Context, in *authv1.LoginRequest, _ ...grpc.CallOption) (*authv1.LoginResponse, error) {
 	f.log.add(ctx, "Login")
-	if in.GetPassword() != "right" {
+	if !strings.HasPrefix(in.GetPassword(), "right") {
 		return nil, status.Error(codes.Unauthenticated, "authentication required: invalid username or password")
 	}
 	return &authv1.LoginResponse{AccessToken: signedTestToken("login"), RefreshToken: "refresh", ExpiresAt: timestamppb.New(time.Unix(1900000000, 0)), User: &v1.User{Id: "u1", Username: in.GetUsername(), Role: "super_admin"}}, nil
@@ -79,7 +79,10 @@ func (f fakeUsers) ListUsers(ctx context.Context, in *v1.ListUsersRequest, _ ...
 	return &v1.ListUsersResponse{Users: []*v1.User{{Id: "o1", Username: "official", Role: "match_official"}}}, nil
 }
 func (f fakeUsers) CreateUser(ctx context.Context, in *v1.CreateUserRequest, _ ...grpc.CallOption) (*v1.CreateUserResponse, error) {
-	f.log.add(ctx, "CreateUser")
+	f.log.add(ctx, "CreateUser:"+in.GetRole())
+	if in.GetUsername() == "taken" {
+		return nil, status.Error(codes.AlreadyExists, "conflict: username is already taken")
+	}
 	if len(in.GetPassword()) < 10 {
 		return nil, status.Error(codes.InvalidArgument, "invalid request: password must be at least 10 characters")
 	}
@@ -123,14 +126,14 @@ type fakeTeams struct {
 
 func (f fakeTeams) ListTeams(ctx context.Context, in *v1.ListTeamsRequest, _ ...grpc.CallOption) (*v1.ListTeamsResponse, error) {
 	f.log.add(ctx, "ListTeams:"+in.GetTournamentId())
-	return &v1.ListTeamsResponse{Teams: []*v1.Team{{Id: "h", Name: "Paro FC", ShortCode: "PFC"}}}, nil
+	return &v1.ListTeamsResponse{Teams: []*v1.Team{{Id: "h", Name: "Paro FC", ShortCode: "PFC", ManagerId: "m1"}}}, nil
 }
 func (f fakeTeams) CreateTeam(ctx context.Context, in *v1.CreateTeamRequest, _ ...grpc.CallOption) (*v1.CreateTeamResponse, error) {
 	f.log.add(ctx, "CreateTeam:"+in.GetShortCode())
 	if in.GetShortCode() == "DUP" {
 		return nil, status.Error(codes.AlreadyExists, "conflict: team short code already exists for this tournament")
 	}
-	return &v1.CreateTeamResponse{Team: &v1.Team{Id: "new", Name: in.GetName(), ShortCode: in.GetShortCode()}}, nil
+	return &v1.CreateTeamResponse{Team: &v1.Team{Id: "new", Name: in.GetName(), ShortCode: in.GetShortCode(), TournamentId: in.GetTournamentId()}}, nil
 }
 func (f fakeTeams) GetTeam(ctx context.Context, in *v1.GetTeamRequest, _ ...grpc.CallOption) (*v1.GetTeamResponse, error) {
 	f.log.add(ctx, "GetTeam:"+in.GetId())
@@ -151,7 +154,7 @@ func (f fakeMatches) ListMatches(ctx context.Context, in *v1.ListMatchesRequest,
 		return timestamppb.New(time.Date(2026, 11, day, 0, 0, 0, 0, time.UTC))
 	}
 	return &v1.ListMatchesResponse{Matches: []*v1.Match{
-		{Id: "no-kickoff", HomeTeamId: "h", AwayTeamId: "a", Status: "scheduled"},
+		{Id: "no-kickoff", HomeTeamId: "h", AwayTeamId: "a", Status: "scheduled", OfficialId: "o1"},
 		{Id: "final", HomeTeamId: "h", AwayTeamId: "a", Status: "completed", Kickoff: at(3)},
 		{Id: "live", HomeTeamId: "h", AwayTeamId: "gone", Status: "scheduled", Kickoff: at(2), Venue: "Changlimithang"},
 		{Id: "fresh", HomeTeamId: "a", AwayTeamId: "h", Status: "scheduled", Kickoff: at(1)},
@@ -237,6 +240,7 @@ func newServer(t *testing.T) (http.Handler, *calls, string) {
 	clients := Clients{
 		Auth: fakeAuth{log: log}, Users: fakeUsers{log: log}, Tournaments: fakeTournaments{log: log}, Teams: fakeTeams{log: log},
 		Matches: fakeMatches{log: log}, Scores: fakeScores{log: log}, Standings: fakeStandings{log: log}, Fixtures: fakeFixtures{log: log}, Officials: fakeOfficials{log: log},
+		Registrations: fakeRegistrations{log: log}, Players: fakePlayers{log: log}, Venues: fakeVenues{log: log},
 	}
 	token, _, err := servicekit.SignToken(secret, servicekit.Identity{ID: "u1", Username: "admin", Role: "super_admin"}, time.Hour)
 	if err != nil {

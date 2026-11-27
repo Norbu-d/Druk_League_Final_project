@@ -17,8 +17,11 @@ import (
 	authv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/auth/v1"
 	fixturev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/fixture/v1"
 	officialv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/official/v1"
+	playerv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/player/v1"
+	registrationv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/registration/v1"
 	standingsv1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/standings/v1"
 	v1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/v1"
+	venuev1 "github.com/drukleague/platform/packages/contracts/gen/drukleague/venue/v1"
 	"github.com/drukleague/platform/packages/servicekit/servicekit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,19 +38,31 @@ type Clients struct {
 	Standings   standingsv1.StandingsServiceClient
 	Fixtures    fixturev1.FixtureServiceClient
 	Officials   officialv1.OfficialServiceClient
+	// Registrations, Players and Venues back team entry, squads and grounds.
+	Registrations registrationv1.RegistrationServiceClient
+	Players       playerv1.PlayerServiceClient
+	Venues        venuev1.VenueServiceClient
 }
 
 type Server struct {
 	c          Clients
 	secret     []byte
 	corsOrigin string
+	// tokens signs the BFF's own short-lived service token. It is used only by the public
+	// read-only routes and by viewer sign-up; signed-in routes always forward the user's token.
+	tokens  *servicekit.TokenSource
+	signups *windowLimiter
 }
+
+// Sign-ups allowed per minute across all callers. Nginx also limits each address; this
+// bound protects the user service when the BFF is reached directly.
+const signupsPerMinute = 10
 
 func New(clients Clients, secret []byte, corsOrigin string) *Server {
 	if corsOrigin == "" {
 		corsOrigin = "http://localhost:4173"
 	}
-	return &Server{c: clients, secret: secret, corsOrigin: corsOrigin}
+	return &Server{c: clients, secret: secret, corsOrigin: corsOrigin, tokens: servicekit.NewTokenSource("bff-service", secret, 5*time.Minute), signups: newWindowLimiter(signupsPerMinute, time.Minute)}
 }
 
 // Handler returns the routes, wrapped in CORS, request-id and access logging.
@@ -56,6 +71,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("POST /api/auth/login", s.login)
 	mux.HandleFunc("POST /api/auth/refresh", s.refresh)
+	mux.HandleFunc("POST /api/auth/signup", s.signup)
+	// Public, read-only views for visitors who are not signed in.
+	for pattern, handler := range map[string]http.HandlerFunc{
+		"GET /api/public/tournaments": s.listTournaments,
+		"GET /api/public/teams":       s.publicTeams,
+		"GET /api/public/matches":     s.publicMatches,
+		"GET /api/public/standings":   s.listStandings,
+	} {
+		mux.Handle(pattern, s.asService(handler))
+	}
 	routes := map[string]http.HandlerFunc{
 		"POST /api/auth/logout":               s.logout,
 		"GET /api/auth/session":               s.session,
@@ -72,6 +97,14 @@ func (s *Server) Handler() http.Handler {
 		"GET /api/standings":                  s.listStandings,
 		"GET /api/users":                      s.listUsers,
 		"POST /api/users":                     s.createUser,
+		"GET /api/registrations":              s.listRegistrations,
+		"POST /api/registrations":             s.registerTeam,
+		"PATCH /api/registrations/{id}":       s.reviewRegistration,
+		"GET /api/teams/{id}/players":         s.listPlayers,
+		"POST /api/teams/{id}/players":        s.createPlayer,
+		"PATCH /api/players/{id}":             s.updatePlayer,
+		"GET /api/venues":                     s.listVenues,
+		"POST /api/venues":                    s.createVenue,
 	}
 	for pattern, handler := range routes {
 		mux.Handle(pattern, s.authenticate(handler))
@@ -101,6 +134,20 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		ctx := servicekit.WithBearer(r.Context(), token)
 		ctx = servicekit.WithIdentity(ctx, identity)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// asService runs a public, read-only handler with the BFF's own service token. Nothing from
+// the browser (cookie or header) is forwarded, so a visitor can never act as someone else.
+func (s *Server) asService(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, err := s.tokens.Token()
+		if err != nil {
+			log.Printf("service token: %v", err)
+			writeError(w, 500, "The request could not be completed")
+			return
+		}
+		next(w, r.WithContext(servicekit.WithBearer(r.Context(), token)))
 	})
 }
 

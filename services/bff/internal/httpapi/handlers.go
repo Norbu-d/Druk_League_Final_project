@@ -200,21 +200,42 @@ func teamJSON(t *v1.Team) map[string]string {
 	return map[string]string{"id": t.GetId(), "name": t.GetName(), "short_code": t.GetShortCode(), "dzongkhag": t.GetDzongkhag(), "tournament_id": t.GetTournamentId(), "manager_id": t.GetManagerId()}
 }
 
-func (s *Server) listTeams(w http.ResponseWriter, r *http.Request) {
+func (s *Server) teamRows(r *http.Request) ([]map[string]string, error) {
 	q := r.URL.Query()
 	items, err := collect(r.Context(), func(ctx context.Context, token string) ([]*v1.Team, string, error) {
 		out, err := s.c.Teams.ListTeams(ctx, &v1.ListTeamsRequest{TournamentId: q.Get("tournament_id"), Dzongkhag: q.Get("dzongkhag"), ManagerId: q.Get("manager_id"), PageSize: 100, PageToken: token})
 		return out.GetTeams(), out.GetNextPageToken(), err
 	})
 	if err != nil {
-		writeStatus(w, err)
-		return
+		return nil, err
 	}
 	result := make([]map[string]string, 0, len(items))
 	for _, t := range items {
 		result = append(result, teamJSON(t))
 	}
-	writeJSON(w, 200, result)
+	return result, nil
+}
+
+func (s *Server) listTeams(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.teamRows(r)
+	if err != nil {
+		writeStatus(w, err)
+		return
+	}
+	writeJSON(w, 200, rows)
+}
+
+// publicTeams is the visitor view: the same rows without the manager's account id.
+func (s *Server) publicTeams(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.teamRows(r)
+	if err != nil {
+		writeStatus(w, err)
+		return
+	}
+	for _, row := range rows {
+		delete(row, "manager_id")
+	}
+	writeJSON(w, 200, rows)
 }
 
 func (s *Server) createTeam(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +253,22 @@ func (s *Server) createTeam(w http.ResponseWriter, r *http.Request) {
 		writeStatus(w, err)
 		return
 	}
-	writeJSON(w, 201, teamJSON(out.GetTeam()))
+	team := out.GetTeam()
+	result := map[string]any{}
+	for k, v := range teamJSON(team) {
+		result[k] = v
+	}
+	// Fixture generation only uses approved registrations, so a team entered for a
+	// tournament is registered too. The admin's own entries are approved straight away; a
+	// team manager's entry waits for the admin. A failure here keeps the team and reports why.
+	if tournamentID := team.GetTournamentId(); tournamentID != "" {
+		status, reason := s.enterTeam(r.Context(), tournamentID, team.GetId())
+		result["registration_status"] = status
+		if reason != "" {
+			result["registration_error"] = reason
+		}
+	}
+	writeJSON(w, 201, result)
 }
 
 // shortCode keeps the caller's code when it is usable. The web form sends the name's
@@ -273,6 +309,28 @@ func shortCode(given, name string) string {
 // row shape the monolith returned. A Team or Score outage degrades the row instead of
 // failing the whole list.
 func (s *Server) listMatches(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.matchRows(r)
+	if err != nil {
+		writeStatus(w, err)
+		return
+	}
+	writeJSON(w, 200, rows)
+}
+
+// publicMatches is the visitor view: fixtures and results without the official's account id.
+func (s *Server) publicMatches(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.matchRows(r)
+	if err != nil {
+		writeStatus(w, err)
+		return
+	}
+	for _, row := range rows {
+		delete(row, "official_id")
+	}
+	writeJSON(w, 200, rows)
+}
+
+func (s *Server) matchRows(r *http.Request) ([]map[string]any, error) {
 	ctx := r.Context()
 	tournamentID := r.URL.Query().Get("tournament_id")
 	items, err := collect(ctx, func(ctx context.Context, token string) ([]*v1.Match, string, error) {
@@ -280,8 +338,7 @@ func (s *Server) listMatches(w http.ResponseWriter, r *http.Request) {
 		return out.GetMatches(), out.GetNextPageToken(), err
 	})
 	if err != nil {
-		writeStatus(w, err)
-		return
+		return nil, err
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i].GetKickoff(), items[j].GetKickoff()
@@ -327,7 +384,7 @@ func (s *Server) listMatches(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, row)
 	}
-	writeJSON(w, 200, result)
+	return result, nil
 }
 
 func (s *Server) createMatch(w http.ResponseWriter, r *http.Request) {
