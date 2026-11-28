@@ -22,3 +22,14 @@ R1 remains **High / High**: delivering 20 services, cross-service workflows, a b
 ## Scope decision
 
 Prometheus/Grafana dashboards, full security-scanning CI, and real AWS Lambda deployment remain stretch items. OpenTelemetry remains deferred. Automated core tests, Docker fault injection, and verified local NATS recovery remain core follow-up work because they support the project's resilience and event-driven learning outcomes.
+
+## Review — 28 Nov 2026
+
+| ID | Risk | Likelihood / impact | Mitigation | Status |
+|---|---|---|---|---|
+| R1 | Too little time for 20 services and integration | Medium / High (was High / High) | All 20 services, the gateway, the BFF and the functions are implemented and tested; remaining work is evidence and the demo | Reduced |
+| R7 | UI shows illustrative values | Low / High | Closed: the workspace reads API data only (D-001) | Closed |
+| R9 | Automated quality gates absent | Low / High | Closed: CI gates for coverage, contracts, security, images, performance and end-to-end (quality plan §4) | Closed |
+| R13 | Individual contribution is hard to evidence (one member has no commits under their own Git identity) | Medium / Medium | Record ownership in Jira and the RACI; members commit under their own identity | Open |
+| R14 | Deployed images drift from the source (found 28 Nov, D-010/D-011) | Medium / High | Rebuild every image from the release commit before each demo; part of the Definition of Done | Open until the rebuild is verified |
+| R15 | Docker Desktop instability on the demo laptop (engine lost its connection during a 30-image build) | Medium / High | Build with `COMPOSE_PARALLEL_LIMIT=4`; pre-build images the day before; keep a recorded demo video as a fallback | Open |

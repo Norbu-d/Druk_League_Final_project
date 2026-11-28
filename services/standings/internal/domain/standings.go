@@ -1,6 +1,10 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/drukleague/platform/packages/servicekit/core"
+)
 
 var (
 	ErrInvalid    = errors.New("invalid finalized match event")
@@ -15,6 +19,9 @@ type MatchFinalized struct {
 	AwayTeamID   string `json:"away_team_id"`
 	HomeScore    int32  `json:"home_score"`
 	AwayScore    int32  `json:"away_score"`
+	// Sport selects the points system; events written before sports were tracked have none
+	// and keep football's 3/1/0.
+	Sport string `json:"sport,omitempty"`
 }
 
 type Team struct{ ID, Name, Dzongkhag, TournamentID string }
@@ -24,14 +31,13 @@ type Standing struct {
 	GoalsFor, GoalsAgainst, GoalDifference, Points int32
 }
 
-// Outcome converts one side's goals into a standings delta: 3 points for a win, 1 for a draw.
+// Outcome converts one side's goals into a football standings delta: 3 points for a win, 1 for a draw.
 func Outcome(goalsFor, goalsAgainst int32) (won, drawn, lost, points int32) {
-	switch {
-	case goalsFor > goalsAgainst:
-		return 1, 0, 0, 3
-	case goalsFor == goalsAgainst:
-		return 0, 1, 0, 1
-	default:
-		return 0, 0, 1, 0
-	}
+	return OutcomeFor("", goalsFor, goalsAgainst)
+}
+
+// OutcomeFor converts one side's final score into a standings delta using the sport's
+// points system (for example basketball: 2 for a win and 1 for a loss).
+func OutcomeFor(sport string, scored, conceded int32) (won, drawn, lost, points int32) {
+	return core.RulesFor(sport).Outcome(scored, conceded)
 }

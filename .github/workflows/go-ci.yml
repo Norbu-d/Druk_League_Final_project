@@ -41,7 +41,7 @@ jobs:
       - name: Check Go formatting
         shell: bash
         run: |
-          unformatted=$(find packages services tools -type f -name '*.go' -print0 | xargs -0 gofmt -l)
+          unformatted=$(find packages services tools functions -type f -name '*.go' -print0 | xargs -0 gofmt -l)
           if [[ -n "$unformatted" ]]; then
             printf 'Go files need gofmt:\n%s\n' "$unformatted"
             exit 1
@@ -54,7 +54,7 @@ jobs:
             module=${modfile%/go.mod}
             [[ "$module" == "packages/eventkit" ]] && continue
             (cd "$module" && go mod tidy)
-          done < <(find packages services tools -type f -name go.mod | sort)
+          done < <(find packages services tools functions -type f -name go.mod | sort)
           (cd .github/security-tools && go mod tidy)
 
       - name: Ensure module manifests are committed
@@ -130,7 +130,8 @@ jobs:
         run: |
           docker compose --file deploy/docker-compose.yml build \
             api auth user team player tournament registration match score fixture standings \
-            venue official dzongkhag notification media report search analytics audit-log configuration
+            venue official dzongkhag notification media report search analytics audit-log configuration \
+            bff fn-match-report fn-standings-csv function-connector
 
       - name: Pull Trivy scanner image
         run: docker pull aquasec/trivy:0.68.2

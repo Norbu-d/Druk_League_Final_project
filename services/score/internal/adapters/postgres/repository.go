@@ -40,7 +40,7 @@ func (r *Repository) Finalize(ctx context.Context, match domain.Match, eventID, 
 		return domain.Score{}, err
 	}
 	score.Finalized = true
-	payload, err := json.Marshal(domain.MatchFinalized{EventID: eventID, MatchID: match.ID, TournamentID: match.TournamentID, HomeTeamID: match.HomeTeamID, AwayTeamID: match.AwayTeamID, HomeScore: score.HomeScore, AwayScore: score.AwayScore, FinalizedAt: finalizedAt.UTC(), FinalizedBy: finalizedBy, Reason: reason})
+	payload, err := json.Marshal(domain.MatchFinalized{EventID: eventID, MatchID: match.ID, TournamentID: match.TournamentID, HomeTeamID: match.HomeTeamID, AwayTeamID: match.AwayTeamID, HomeScore: score.HomeScore, AwayScore: score.AwayScore, FinalizedAt: finalizedAt.UTC(), FinalizedBy: finalizedBy, Reason: reason, Sport: match.Sport})
 	if err != nil {
 		return domain.Score{}, err
 	}

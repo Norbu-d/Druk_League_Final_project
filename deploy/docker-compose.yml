@@ -220,6 +220,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-local-development-secret-change-before-deployment}
       MIGRATIONS_DIR: /app/migrations
       MATCH_SERVICE_ADDR: match:50051
+      TOURNAMENT_SERVICE_ADDR: tournament:50051
       NATS_URL: nats://nats:4222
     depends_on:
       configuration:
@@ -479,6 +480,36 @@ services:
       - "127.0.0.1:3000:3000"
     depends_on:
       - prometheus
+  # Serverless functions (OpenFaaS "dockerfile" functions on the of-watchdog); see functions/README.md.
+  fn-match-report:
+    build:
+      context: ../functions/match-report
+    environment:
+      DRUKLEAGUE_API: http://bff:8080/api
+    depends_on:
+      - bff
+
+  fn-standings-csv:
+    build:
+      context: ../functions/standings-csv
+    environment:
+      DRUKLEAGUE_API: http://bff:8080/api
+    depends_on:
+      - bff
+
+  # Feeds drukleague.match.finalized events from JetStream to the match-report function.
+  function-connector:
+    build:
+      context: ..
+      dockerfile: functions/connector/Dockerfile
+    environment:
+      NATS_URL: nats://nats:4222
+      FUNCTION_NAME: match-report
+      FUNCTION_URL: http://fn-match-report:8080
+    depends_on:
+      - nats
+      - fn-match-report
+
   web:
     image: nginx:1.27-alpine
     volumes:
@@ -495,6 +526,7 @@ services:
     depends_on:
       - bff
       - media
+      - fn-standings-csv
     ports:
       - "127.0.0.1:4173:80"
 

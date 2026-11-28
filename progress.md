@@ -867,3 +867,97 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
 
 - Norbu reports that the signed-in UI acceptance flows are now complete, including Team Manager registration and the Super Admin approval path, plus the remaining checks discussed for user creation, match scheduling, official assignment, and score finalisation.
 - Detailed per-flow outcomes, screenshots, and test environment/commit were not provided in this update, so this records the user's completion report rather than independently verified evidence. Add any failures or evidence links if they become available.
+
+## 58. Norbu — Public views, viewer sign-up, registrations, squads and venues (28 Nov 2026)
+
+- Branch `feature/norbu-landing-page` (uncommitted with sections 54–55). Users had almost nothing to do: every BFF route required sign-in, nobody could sign up, and the Registration, Player and Venue services were never exposed. **Fixture generation only uses approved registrations**, so teams added on the website never got fixtures; this broke the admin's "Generate fixtures" too.
+- **BFF (`services/bff`), new routes:**
+  - `GET /api/public/{tournaments,teams,matches,standings}`: read-only, called with the BFF's own 5-minute service token (`bff-service`), never the browser's cookie. `manager_id` and `official_id` are removed from public rows.
+  - `POST /api/auth/signup`: always creates a **Viewer** (the body cannot carry a role), then signs the user in. Limited to 10 per minute in the BFF and 3 per minute per address in nginx. Team managers and officials are still created by the admin.
+  - `GET/POST /api/registrations`, `PATCH /api/registrations/{id}` (approve, or reject with a reason); `GET/POST /api/teams/{id}/players`, `PATCH /api/players/{id}`; `GET/POST /api/venues`. These forward the user's token, so each service applies its own role rules.
+  - `POST /api/teams` now also registers the team for its tournament: the admin's entries are approved immediately, a manager's wait as pending. If registration fails the team is kept and `registration_error` says why.
+  - Compose: the BFF depends on `registration`, `player` and `venue`. nginx: added the `signup` rate zone and the `/api/public/` location (`viewer_reads` zone).
+- **Web client:**
+  - Visitors see real fixtures, results and standings without signing in, with "Create free account" on the landing page, sidebar and top bar.
+  - The sign-in screen has a Create account tab.
+  - New **Registrations** page: an admin approval queue with a reject reason; managers see their own entries. It also lists teams that are linked to a tournament but were never entered.
+  - New **Squads** page: everyone signed in can view squads; the admin and the team's manager can add or edit players.
+  - **Venues** now uses the Venue service, with Add venue and a warning when a tournament's dzongkhag has no venue.
+  - The admin checklist adds "Add venues", "Approve at least two teams" and "Review team registrations". Generate fixtures shows the approved teams and venues for each tournament.
+  - Upcoming lists show live matches first, then future kick-offs, then overdue fixtures.
+  - `role-permissions.js` adds the `squads` and `registrations` pages and the `register-team`, `review-registration` and `edit-squad` actions, and allowlists the new routes, methods and query parameters.
+- Verification:
+  - `go vet` and `go test` for the BFF pass (new tests cover the service token on public routes, an ignored browser cookie, hidden account ids, sign-up role fixing and rate limit, auto-registration, registrations, players and venues). 10/10 Node role-permission tests pass.
+  - `git diff --check` and `docker compose config` pass.
+  - The BFF image was rebuilt and only `bff` and `web` were recreated. Against the real services, the public routes returned 24 tournaments, 59 teams and 45 matches (and standings) with no account ids; public `POST` returns 405, and registrations and venues return 401 without a session. Headless Chrome showed the guest overview with real data.
+  - Headless Chrome with sample data for every role at 1440px and 390px showed no script errors.
+  - **Not run against the real backend:** sign-up, entering or approving teams, adding players and adding venues (each writes records). Run them signed in on a confirmed test-only database.
+
+## 59. Norbu — Signed-in acceptance on the local test database (28 Nov 2026)
+
+- Norbu confirmed the local Docker database is test-only and asked for the full run. A Node script called the real BFF through nginx (`127.0.0.1:4173/api`) as `admin`. The password was passed only as an environment variable and was not printed or saved. The run created labelled records: tournament **"QA Check 11271912"** (Trongsa), venue **"QA Check Ground 11271912"**, team managers `qa.mgr.11271912` and `qa.mgr2.11271912` (admin-created), viewer `qa.viewer.11271912` (self sign-up), teams **QA Admin XI / QA Manager FC / QA Reject FC 11271912**, squad players, and one generated fixture. There is no Delete RPC, so removing them needs SQL.
+- **Passed (36 checks):**
+  - **Accounts:** admin sign-in; tournament and venue creation; admin-created team managers. Sign-up made a signed-in Viewer, refused a browser-chosen role (400) and refused a taken username (409).
+  - **Entries:** the admin's team was approved straight away; managers' teams waited as pending. A manager sees only their own entries; viewers get 403 on registrations; a manager cannot approve (403).
+  - **Approvals:** the admin approved one entry and rejected one; a rejection with no reason was refused (400), and the rejected team cannot re-enter (409).
+  - **Squads:** the manager added and edited players; the admin can add to any team. A shirt number over 99 was refused (400), another manager and a viewer were refused (403), and a duplicate shirt number was refused (409).
+  - **Venues and fixtures:** managers cannot add venues or generate fixtures (403). The admin generated 1 fixture, using only the two approved teams, at the Trongsa venue. Public matches hide `official_id` and public standings load.
+- **Defect found and fixed in the deployment:** the first run showed the running **player** container accepting players from a viewer and from another team's manager, and shirt number 120. The source has enforced these rules since 22 Oct (`56aa481`) and its tests pass, but the image had been built on 10 Nov from older code. The player image was rebuilt and only `player` was recreated; all squad checks then passed. Three players saved by the old build stay in **QA Manager FC 11271912** ("Bad" #120, "Intruder" #5, "Fan" #7).
+- **Follow-up:** every other service image (except `bff` and `player`) was built on 10 Nov, before its latest source commits. The flows above passed on them, but rebuild all services (`docker compose build` then `up -d`) before the demo, so the demo runs the reviewed code; check any new migrations first. The local `admin` password is still the example value from the template: change it before any shared demo.
+
+## 60. Norbu — Serverless functions, architecture, Jira re-baseline and submission documents (28 Nov 2026)
+
+- **Serverless (WEB303):** added `functions/`, built and verified on the real stack:
+  - `match-report`, an event-driven OpenFaaS function, and `standings-csv`, an HTTP function behind nginx at `/fn/standings-csv` (used by Standings → Download CSV). Both are `dockerfile` functions on the official of-watchdog 0.10.7.
+  - A JetStream **function connector** (durable consumer `function-match-report`). It retries on 5xx or network failure, sends 4xx to the DLQ and publishes each result on `drukleague.functions.match-report`.
+  - `stack.yml` for `faas-cli up`. Because faasd needs Linux, the functions run under Compose locally (change CR-006).
+  - Coverage: match-report 91.6%, standings-csv 90.5%, connector `internal/` 100%. All three are added to CI (gofmt, vet/build, coverage gate, image build and Trivy).
+  - Live: the connector replayed past `MatchFinalized` events into announcements. An official finalised the QA match 2–1, standings updated, the function fired and `standings-csv` returned the new table (8/8 checks).
+- **Architecture:** `docs/architecture.md` has Mermaid diagrams (system, events, the finalise sequence, deployment) and a dependency table taken from Compose and the code.
+- **Coverage, measured the CI way** (Linux container, throwaway PostgreSQL 17): every module is at least 80% (lowest: media 80.4%; BFF 86.8%). Windows runs report false "TEST-FAIL" results caused by file locking.
+- **CI fixes:** the BFF image was never built or scanned in CI (D-013); `.dockerignore` had two entries joined on one line (D-012).
+- **Jira re-baseline (approved by Norbu on 28 Nov):**
+  - S8 now ends 3 Dec (was 11 Jan 2027). S2, S3 and S4 were closed; all of their issues were Done, so nothing went back to the backlog. S5 was started (16–30 Nov). S6 and S7 were already closed, and their dates cannot be edited.
+  - 94 due dates were set inside each issue's sprint, with open work due 3 Dec. 8 assignees were corrected. SCRUM-7 moved to Done and SCRUM-109 to In Progress. SCRUM-99, 100, 107 and 113 moved to S8. No issues were deleted. Decisions C1–C3 kept the plan defaults: SCRUM-64/84 not reverted, SCRUM-67/69/94 kept Done, SCRUM-99 kept with Tandin.
+  - Incident: the first assignee edits used display names, which Jira did not match, so it cleared the field instead. All 8 were re-set with account ids within minutes and verified.
+- **Documents:** new `docs/project-management-plan.md` (lifecycle, RACI, scope, schedule, estimation from git data, communication, monitoring, closure), `docs/quality-plan.md`, `docs/test-execution-report.md` and `docs/lessons-learned.md` (draft for team confirmation). The WBS, risk register (R1/R7/R9 updated, R13–R15 added), change control (CR-003 to CR-008), sprint evidence, defect log (D-006 to D-014), traceability matrix (R-15 to R-17) and test-plan status were all updated.
+- **Playwright E2E:** `tests/e2e` (guest, sign-up and admin specs; uses the installed Chrome). The first run failed on every test because the Docker Desktop engine stopped responding during the image rebuild, so the app was unreachable. These are environment failures, not test results.
+- **Still open:**
+  - Restart Docker Desktop; rebuild every image with `COMPOSE_PARALLEL_LIMIT=4` (D-011); recreate the containers.
+  - Rerun Playwright and record the result; run the OWASP ZAP baseline; record the NATS outage/DLQ replay (D-005).
+  - Final report and presentation (owned by the team).
+- Nothing is committed.
+
+## 61. Norbu — Docker recovery, rebuild paused, match-report retry (28 Nov 2026)
+
+- Docker Desktop was restarted by Norbu and the engine responds again (server 29.7.2). **No app containers are running**: the stack is down until it is started.
+- A full image rebuild (`COMPOSE_PARALLEL_LIMIT=4 docker compose build`) was started, then **stopped at Norbu's request** because it made the laptop slow. The leftover `docker-compose` and `docker-buildx` processes were ended. The rebuild is still needed (D-011); run it when the laptop is not in use, or rely on the CI image job.
+- `functions/match-report`: the function now waits briefly for the Standings projection (up to 5 attempts, 400 ms apart, stopping early once both teams appear with `played > 0`). Without this, the announcement could miss the "top of the table" when it ran before Standings had applied the same `MatchFinalized` event (observed in §60). Two new tests (waits for the projection; stops after the last attempt); `go vet` passes; coverage 92.0%.
+- **Next, in a new conversation** (this one is very long and uses tokens quickly):
+  1. Rebuild the images and start the stack (`cd deploy && COMPOSE_PARALLEL_LIMIT=4 docker compose build && docker compose up -d`).
+  2. Rerun Playwright (`cd tests/e2e && npx playwright test`, with `DRUK_ADMIN_PASSWORD` set) and record the result in `docs/test-execution-report.md`.
+  3. Run the OWASP ZAP baseline and the NATS outage/DLQ replay check (D-005).
+  4. Commit and open a pull request into `development`.
+- Nothing is committed.
+
+## 62. Norbu — Sport-specific scoring and standings; fan UI by sport (28 Nov 2026)
+
+- **Problem:** every sport used football rules (scores 0–99, draws allowed, 3/1/0 points). A basketball score like 102–98 was rejected, basketball and volleyball results could be draws, and volleyball and archery tables showed "goals". The proposal lists basketball and archery rules in scope.
+- **Shared rules** in `packages/servicekit/core/sports.go` (tests: 97.8% coverage for core):
+
+  | Sport | Score unit | Max | Draws | Table points |
+  |---|---|---|---|---|
+  | Football, futsal | goals | 99 | yes | win 3, draw 1 |
+  | Basketball | points | 250 | no | win 2, loss 1 |
+  | Volleyball (best of 5) | sets | 3 | no | 3–0/3–1 win 3; 3–2 win 2, loser 1 |
+  | Archery | points | 99 | no | win 2 |
+
+  Unknown sports, and events recorded before this change, keep football rules.
+- **Score service:** reads the tournament's sport from the Tournament service (new `TOURNAMENT_SERVICE_ADDR`) and checks live scores against the sport's limit. Before locking a result it rejects draws where they are not allowed, and volleyball results that are not a finished best-of-five. It returns a clear reason ("a basketball match cannot end in a draw"), and adds `sport` to the `MatchFinalized` event (additive JSON field).
+- **Standings service:** awards points with the event's sport (`domain.OutcomeFor`). Tests cover every sport.
+- **Web app:**
+  - The score dialog shows Goals, Points or Sets and the sport's limit. Basketball gets +2/+3 buttons; volleyball shows "best of 5". Invalid results are explained before sending.
+  - Tables use the sport's column names (GF/GA/GD, PF/PA/+/−, SW/SL/SD), hide the drawn column where draws are impossible, and explain the points system.
+  - Also in this round: sport filters and grouping, a tournament page, a simpler fan dashboard, officials hidden from fans, and live auto-refresh every 15 s.
+- **Verification:** go vet and tests pass for servicekit, score and standings (score app 98.1%, adapters 100%; standings domain/app/adapters 100%). Frontend tests 10/10.
+- **Deployment note:** the rules take effect once the `score` and `standings` images are rebuilt (see D-011 and the Docker memory fix).

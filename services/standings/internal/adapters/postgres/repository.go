@@ -35,7 +35,7 @@ func (r *Repository) ApplyFinalized(ctx context.Context, event domain.MatchFinal
 		return false, tx.Commit()
 	}
 	applySide := func(team domain.Team, gf, ga int32) error {
-		won, drawn, lost, points := domain.Outcome(gf, ga)
+		won, drawn, lost, points := domain.OutcomeFor(event.Sport, gf, ga)
 		_, err := tx.ExecContext(ctx, `INSERT INTO standings(tournament_id,team_id,team_name,dzongkhag,played,won,drawn,lost,goals_for,goals_against,points) VALUES($1,$2,$3,$4,1,$5,$6,$7,$8,$9,$10) ON CONFLICT(tournament_id,team_id) DO UPDATE SET team_name=CASE WHEN EXCLUDED.team_name<>'' THEN EXCLUDED.team_name ELSE standings.team_name END,dzongkhag=CASE WHEN EXCLUDED.dzongkhag<>'' THEN EXCLUDED.dzongkhag ELSE standings.dzongkhag END,played=standings.played+1,won=standings.won+EXCLUDED.won,drawn=standings.drawn+EXCLUDED.drawn,lost=standings.lost+EXCLUDED.lost,goals_for=standings.goals_for+EXCLUDED.goals_for,goals_against=standings.goals_against+EXCLUDED.goals_against,points=standings.points+EXCLUDED.points`, event.TournamentID, team.ID, team.Name, team.Dzongkhag, won, drawn, lost, gf, ga, points)
 		return err
 	}
