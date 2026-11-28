@@ -86,3 +86,12 @@ func TestRankAndSlug(t *testing.T) {
 		t.Fatal("safe() should guard formula cells only")
 	}
 }
+
+func TestUnknownTournamentIsNotFound(t *testing.T) {
+	api := fakeAPI(http.StatusOK)
+	defer api.Close()
+	rec := call(Handler{API: api.URL + "/api", Client: api.Client()}, http.MethodGet, "?tournament_id=b2222222-2222-4222-8222-222222222222")
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown tournament: %d", rec.Code)
+	}
+}

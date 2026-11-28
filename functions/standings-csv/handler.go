@@ -52,22 +52,34 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	var rows []Row
-	if err := h.get(ctx, "/public/standings?tournament_id="+url.QueryEscape(id), &rows); err != nil {
-		http.Error(w, "standings are unavailable right now", http.StatusBadGateway)
-		return
-	}
-	name := "tournament"
+	// Resolve the tournament from the public list first and use the id the API returned, so
+	// the visitor's input never becomes part of an outgoing request (and unknown ids get 404).
 	var tournaments []struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
-	if h.get(ctx, "/public/tournaments", &tournaments) == nil {
-		for _, t := range tournaments {
-			if t.ID == id && t.Name != "" {
-				name = t.Name
-			}
+	if err := h.get(ctx, "/public/tournaments", &tournaments); err != nil {
+		http.Error(w, "standings are unavailable right now", http.StatusBadGateway)
+		return
+	}
+	var tournamentID, name string
+	for _, t := range tournaments {
+		if strings.EqualFold(t.ID, id) {
+			tournamentID, name = t.ID, t.Name
+			break
 		}
+	}
+	if tournamentID == "" {
+		http.Error(w, "tournament not found", http.StatusNotFound)
+		return
+	}
+	var rows []Row
+	if err := h.get(ctx, "/public/standings?tournament_id="+url.QueryEscape(tournamentID), &rows); err != nil {
+		http.Error(w, "standings are unavailable right now", http.StatusBadGateway)
+		return
+	}
+	if name == "" {
+		name = "tournament"
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-standings.csv"`, Slug(name)))
