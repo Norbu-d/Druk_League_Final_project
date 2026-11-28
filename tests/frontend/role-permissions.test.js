@@ -14,10 +14,10 @@ function useRole(role) {
 
 test('only the four supported roles are defined, with the expected page access', () => {
   assert.deepEqual(Object.keys(rolePages).sort(), ['match_official','super_admin','team_manager','viewer']);
-  assert.deepEqual(rolePages.super_admin, ['dashboard','tournaments','teams','squads','registrations','matches','standings','officials','users','venues','reports']);
-  assert.deepEqual(rolePages.match_official, ['dashboard','tournaments','matches','standings']);
-  assert.deepEqual(rolePages.team_manager, ['dashboard','tournaments','teams','squads','registrations','matches','standings']);
-  assert.deepEqual(rolePages.viewer, ['dashboard','tournaments','teams','squads','matches','standings']);
+  assert.deepEqual(rolePages.super_admin, ['dashboard','tournaments','tournament','teams','squads','registrations','matches','standings','officials','users','venues','reports']);
+  assert.deepEqual(rolePages.match_official, ['dashboard','tournaments','tournament','matches','standings']);
+  assert.deepEqual(rolePages.team_manager, ['dashboard','tournaments','tournament','teams','squads','registrations','matches','standings']);
+  assert.deepEqual(rolePages.viewer, ['dashboard','tournaments','tournament','teams','squads','matches','standings']);
 });
 
 test('unknown and removed roles fall back to Viewer', () => {

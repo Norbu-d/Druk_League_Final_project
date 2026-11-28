@@ -250,6 +250,31 @@
     return loadingPublic;
   }
 
+  // Live scores: every 15 s, refresh the matches (and the open table) on the pages that show
+  // scores. Skips hidden tabs, the landing page, open dialogs and focused form fields, so it
+  // never redraws under someone who is typing.
+  const LIVE_REFRESH_MS = 15000;
+  const LIVE_PAGES = ['dashboard', 'matches', 'tournament', 'standings'];
+  let refreshing = false;
+  async function refreshLive() {
+    if (refreshing || document.hidden || window.DrukLanding?.active?.() || store.data.status !== 'loaded' || !LIVE_PAGES.includes(ui.page)) return;
+    if (document.querySelector('#modal-root .modal') || !document.getElementById('auth-screen').hidden) return;
+    const focused = document.activeElement;
+    if (focused && ['INPUT', 'SELECT', 'TEXTAREA'].includes(focused.tagName)) return;
+    refreshing = true;
+    try {
+      const rows = await request(store.session.status === 'signed-in' ? '/matches' : '/public/matches');
+      if (Array.isArray(rows)) store.matches = rows.map(toMatch).filter((m) => m.id);
+      if (store.standings.tournamentId) await loadStandings(store.standings.tournamentId, { quiet: true });
+      refreshView();
+    } catch (_) {
+      // A missed refresh is harmless; the next one tries again.
+    } finally {
+      refreshing = false;
+    }
+  }
+  setInterval(refreshLive, LIVE_REFRESH_MS);
+
   /* ------------------------------------------------------------ saves */
   const id = (value, what) => { const clean = sanitizeUUID(value); if (!clean) throw new Error(`Choose a valid ${what}.`); return clean; };
   const api = {

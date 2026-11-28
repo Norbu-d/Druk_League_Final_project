@@ -1,9 +1,9 @@
 (() => {
 const rolePages = Object.freeze({
-  super_admin: Object.freeze(['dashboard','tournaments','teams','squads','registrations','matches','standings','officials','users','venues','reports']),
-  match_official: Object.freeze(['dashboard','tournaments','matches','standings']),
-  team_manager: Object.freeze(['dashboard','tournaments','teams','squads','registrations','matches','standings']),
-  viewer: Object.freeze(['dashboard','tournaments','teams','squads','matches','standings'])
+  super_admin: Object.freeze(['dashboard','tournaments','tournament','teams','squads','registrations','matches','standings','officials','users','venues','reports']),
+  match_official: Object.freeze(['dashboard','tournaments','tournament','matches','standings']),
+  team_manager: Object.freeze(['dashboard','tournaments','tournament','teams','squads','registrations','matches','standings']),
+  viewer: Object.freeze(['dashboard','tournaments','tournament','teams','squads','matches','standings'])
 });
 
 const roleActions = Object.freeze({
