@@ -12,10 +12,11 @@ test.describe('Visitor without an account', () => {
   test('guest overview shows real public data', async ({ page }) => {
     await page.goto('/#dashboard');
     await expect(page.getByRole('heading', { name: /Follow every match/ })).toBeVisible();
-    // Metrics come from /api/public/*; the stack holds saved tournaments.
-    const tournaments = page.locator('.metric', { hasText: 'Tournaments' }).locator('b');
-    await expect(tournaments).not.toHaveText('0');
-    await expect(page.locator('.match-card').first()).toBeVisible();
+    // Tournament cards come from /api/public/*; a click opens the tournament page.
+    await expect(page.locator('.t-card').first()).toBeVisible();
+    await page.locator('.t-card-link').first().click();
+    await expect(page).toHaveURL(/#tournament\/[0-9a-f-]{36}$/);
+    await expect(page.getByRole('button', { name: /^Table/ })).toBeVisible();
   });
 
   test('public pages load without signing in and hide official accounts', async ({ page }) => {
@@ -36,6 +37,14 @@ test.describe('Visitor without an account', () => {
     expect(response.status()).toBe(200);
     expect(response.headers()['content-type']).toContain('text/csv');
     expect((await response.text()).split('\n')[0]).toContain('Rank,Team,Dzongkhag');
+  });
+
+  test('sport pills filter the tournaments', async ({ page }) => {
+    await page.goto('/#tournaments');
+    const pills = page.locator('.sport-pill');
+    test.skip((await pills.count()) < 2, 'only one sport in the data');
+    await pills.nth(1).click();
+    await expect(page.locator('.sport-heading')).toHaveCount(1);
   });
 
   test('squads ask the visitor to sign in or create an account', async ({ page }) => {
