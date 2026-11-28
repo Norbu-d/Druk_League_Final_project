@@ -24,6 +24,7 @@ func main() {
 		"GRPC_ADDR",
 		"METRICS_ADDR",
 		"MATCH_SERVICE_ADDR",
+		"TOURNAMENT_SERVICE_ADDR",
 		"NATS_URL",
 	)
 	matchConn, err := servicekit.Dial(servicekit.Env("MATCH_SERVICE_ADDR", "match:50051"), servicekit.ClientOptions{Auth: servicekit.ForwardOrService, Tokens: servicekit.NewTokenSource("score-service", servicekit.Secret(), 0)})
@@ -32,6 +33,12 @@ func main() {
 	}
 	defer matchConn.Close()
 	matches := grpcclients.NewMatchReader(matchConn)
+	tournamentConn, err := servicekit.Dial(servicekit.Env("TOURNAMENT_SERVICE_ADDR", "tournament:50051"), servicekit.ClientOptions{Auth: servicekit.ForwardOrService, Tokens: servicekit.NewTokenSource("score-service", servicekit.Secret(), 0)})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tournamentConn.Close()
+	tournaments := grpcclients.NewTournamentReader(tournamentConn)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var once sync.Once
@@ -52,7 +59,7 @@ func main() {
 		if natsErr != nil {
 			return natsErr
 		}
-		drukleaguev1.RegisterScoreServiceServer(server, grpcadapter.New(app.New(repository, matches)))
+		drukleaguev1.RegisterScoreServiceServer(server, grpcadapter.New(app.New(repository, matches).WithTournaments(tournaments)))
 		return nil
 	}
 	if err := servicekit.Run("score-service", register); err != nil {

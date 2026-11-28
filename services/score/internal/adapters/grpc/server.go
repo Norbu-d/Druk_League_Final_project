@@ -52,6 +52,10 @@ func toProto(score domain.Score) *v1.Score {
 	return result
 }
 func translate(err error) error {
+	var rule domain.RuleError
+	if errors.As(err, &rule) {
+		return status.Error(codes.InvalidArgument, rule.Reason)
+	}
 	switch {
 	case errors.Is(err, domain.ErrInvalid):
 		return status.Error(codes.InvalidArgument, "score request is invalid")

@@ -77,3 +77,10 @@ func TestTranslate(t *testing.T) {
 		}
 	}
 }
+
+func TestTranslateRuleErrorKeepsItsReason(t *testing.T) {
+	err := translate(domain.RuleError{Reason: "a basketball match cannot end in a draw"})
+	if status.Code(err) != codes.InvalidArgument || status.Convert(err).Message() != "a basketball match cannot end in a draw" {
+		t.Fatalf("rule errors should reach the official with their reason: %v", err)
+	}
+}

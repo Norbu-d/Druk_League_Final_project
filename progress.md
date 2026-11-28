@@ -939,3 +939,25 @@ Whenever a Jira story is completed, add a dated entry here with its key, impleme
   3. Run the OWASP ZAP baseline and the NATS outage/DLQ replay check (D-005).
   4. Commit and open a pull request into `development`.
 - Nothing is committed.
+
+## 62. Norbu — Sport-specific scoring and standings; fan UI by sport (28 Nov 2026)
+
+- **Problem:** every sport used football rules (scores 0–99, draws allowed, 3/1/0 points). A basketball score like 102–98 was rejected, basketball and volleyball results could be draws, and volleyball and archery tables showed "goals". The proposal lists basketball and archery rules in scope.
+- **Shared rules** in `packages/servicekit/core/sports.go` (tests: 97.8% coverage for core):
+
+  | Sport | Score unit | Max | Draws | Table points |
+  |---|---|---|---|---|
+  | Football, futsal | goals | 99 | yes | win 3, draw 1 |
+  | Basketball | points | 250 | no | win 2, loss 1 |
+  | Volleyball (best of 5) | sets | 3 | no | 3–0/3–1 win 3; 3–2 win 2, loser 1 |
+  | Archery | points | 99 | no | win 2 |
+
+  Unknown sports, and events recorded before this change, keep football rules.
+- **Score service:** reads the tournament's sport from the Tournament service (new `TOURNAMENT_SERVICE_ADDR`) and checks live scores against the sport's limit. Before locking a result it rejects draws where they are not allowed, and volleyball results that are not a finished best-of-five. It returns a clear reason ("a basketball match cannot end in a draw"), and adds `sport` to the `MatchFinalized` event (additive JSON field).
+- **Standings service:** awards points with the event's sport (`domain.OutcomeFor`). Tests cover every sport.
+- **Web app:**
+  - The score dialog shows Goals, Points or Sets and the sport's limit. Basketball gets +2/+3 buttons; volleyball shows "best of 5". Invalid results are explained before sending.
+  - Tables use the sport's column names (GF/GA/GD, PF/PA/+/−, SW/SL/SD), hide the drawn column where draws are impossible, and explain the points system.
+  - Also in this round: sport filters and grouping, a tournament page, a simpler fan dashboard, officials hidden from fans, and live auto-refresh every 15 s.
+- **Verification:** go vet and tests pass for servicekit, score and standings (score app 98.1%, adapters 100%; standings domain/app/adapters 100%). Frontend tests 10/10.
+- **Deployment note:** the rules take effect once the `score` and `standings` images are rebuilt (see D-011 and the Docker memory fix).

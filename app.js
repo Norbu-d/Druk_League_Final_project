@@ -156,6 +156,26 @@ const titleCase = (s) => String(s || '').replace(/(^|\s)\S/g, (c) => c.toUpperCa
 // Tournaments are filtered and grouped by sport so a football fan never has to dig through archery.
 const SPORT_INFO = { football: { label: 'Football', emoji: '⚽' }, futsal: { label: 'Futsal', emoji: '🥅' }, basketball: { label: 'Basketball', emoji: '🏀' }, volleyball: { label: 'Volleyball', emoji: '🏐' }, archery: { label: 'Archery', emoji: '🏹' } };
 const sportKey = (s) => String(s || '').toLowerCase().trim();
+// Mirror of the server's sport rules (packages/servicekit/core/sports.go) for labels and early
+// feedback; the Score service enforces them.
+const SPORT_RULES = {
+  football: { unit: 'Goals', cols: ['GF', 'GA', 'GD'], words: ['goals for', 'goals against', 'goal difference'], max: 99, draw: true, points: '3 points for a win, 1 for a draw' },
+  futsal: { unit: 'Goals', cols: ['GF', 'GA', 'GD'], words: ['goals for', 'goals against', 'goal difference'], max: 99, draw: true, points: '3 points for a win, 1 for a draw' },
+  basketball: { unit: 'Points', cols: ['PF', 'PA', '+/−'], words: ['points for', 'points against', 'point difference'], max: 250, draw: false, quick: [2, 3], points: '2 points for a win, 1 for a loss; no draws' },
+  volleyball: { unit: 'Sets', cols: ['SW', 'SL', 'SD'], words: ['sets won', 'sets lost', 'set difference'], max: 3, draw: false, bestOf: 5, points: '3 points for a 3–0 or 3–1 win, 2 for 3–2 (the loser gets 1)' },
+  archery: { unit: 'Points', cols: ['PF', 'PA', 'PD'], words: ['points for', 'points against', 'point difference'], max: 99, draw: false, points: '2 points for a win; no draws' }
+};
+const rulesFor = (sport) => SPORT_RULES[sportKey(sport)] || SPORT_RULES.football;
+// Same checks as the Score service, so the official sees the reason before saving.
+function scoreProblem(sport, home, away, final) {
+  const r = rulesFor(sport);
+  if (![home, away].every((n) => Number.isInteger(n) && n >= 0 && n <= r.max)) return `${r.unit} must be whole numbers from 0 to ${r.max}.`;
+  if (!final) return '';
+  if (!r.draw && home === away) return `A ${sportInfo(sport).label.toLowerCase()} match cannot end in a draw.`;
+  if (r.bestOf) { const need = Math.floor(r.bestOf / 2) + 1; if (Math.max(home, away) !== need || Math.min(home, away) >= need) return `A best-of-${r.bestOf} match ends when one side wins ${need} sets.`; }
+  return '';
+}
+const standingsLegend = (sport) => { const r = rulesFor(sport); return `P played · W won${r.draw ? ' · D drawn' : ''} · L lost · ${r.cols.map((c, i) => `${c} ${r.words[i]}`).join(' · ')} · Pts points (${r.points})`; };
 const sportInfo = (s) => SPORT_INFO[sportKey(s)] || { label: titleCase(s) || 'Other', emoji: '🏅' };
 const sportOfMatch = (m) => byId(store.tournaments, m.tournamentId)?.sport || '';
 const inSport = (sport) => ui.sport === 'all' || sportKey(sport) === ui.sport;
@@ -254,10 +274,13 @@ function matchCard(m, { compact = false } = {}) {
     ${actions.length ? `<div class="match-actions">${actions.join('')}</div>` : ''}
   </article>`;
 }
-function standingsTable(rows, limit = 0) {
+// Column names follow the sport (goals, points or sets); the drawn column is hidden where draws cannot happen.
+function standingsTable(rows, limit = 0, sport = '') {
+  const r = rulesFor(sport);
   const ranked = [...rows].sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.name.localeCompare(b.name));
   const shown = limit ? ranked.slice(0, limit) : ranked;
-  return `<div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Team</th><th class="num">P</th><th class="num">W</th><th class="num">D</th><th class="num">L</th>${limit ? '' : '<th class="num">GF</th><th class="num">GA</th>'}<th class="num">GD</th><th class="num">Pts</th></tr></thead><tbody>${shown.map((t, i) => `<tr><td><span class="rank">${i + 1}</span></td><td><div class="who"><span class="crest">${esc(initials(t.name))}</span><span><strong>${esc(t.name)}</strong><small>${esc(t.dz)}</small></span></div></td><td class="num">${t.played}</td><td class="num">${t.w}</td><td class="num">${t.d}</td><td class="num">${t.l}</td>${limit ? '' : `<td class="num">${t.gf}</td><td class="num">${t.ga}</td>`}<td class="num">${t.gd > 0 ? '+' : ''}${t.gd}</td><td class="num pts">${t.pts}</td></tr>`).join('')}</tbody></table></div>`;
+  const th = (c, title) => `<th class="num" title="${esc(title)}">${esc(c)}</th>`;
+  return `<div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Team</th>${th('P', 'played')}${th('W', 'won')}${r.draw ? th('D', 'drawn') : ''}${th('L', 'lost')}${limit ? '' : th(r.cols[0], r.words[0]) + th(r.cols[1], r.words[1])}${th(r.cols[2], r.words[2])}${th('Pts', 'points')}</tr></thead><tbody>${shown.map((t, i) => `<tr><td><span class="rank">${i + 1}</span></td><td><div class="who"><span class="crest">${esc(initials(t.name))}</span><span><strong>${esc(t.name)}</strong><small>${esc(t.dz)}</small></span></div></td><td class="num">${t.played}</td><td class="num">${t.w}</td>${r.draw ? `<td class="num">${t.d}</td>` : ''}<td class="num">${t.l}</td>${limit ? '' : `<td class="num">${t.gf}</td><td class="num">${t.ga}</td>`}<td class="num">${t.gd > 0 ? '+' : ''}${t.gd}</td><td class="num pts">${t.pts}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 /* ---------------------------------------------------------------- gates */
@@ -431,8 +454,8 @@ function tournamentPage() {
   let body;
   if (ui.tTab === 'results') body = list(results, 'No results yet — they appear when officials finalise matches.');
   else if (ui.tTab === 'table') {
-    body = `<section class="panel">${s.tournamentId !== t.id || s.status === 'loading' ? empty('Loading the table…', '', { ic: 'refresh' }) : s.status === 'error' ? empty('Could not load the table', s.message, { ic: 'alert' }) : rows.length ? standingsTable(rows) : empty('No table yet', 'The table builds from finalised results: three points for a win, one for a draw.', { ic: 'chart' })}</section>
-    ${rows.length ? `<p class="standings-foot">P played · W won · D drawn · L lost · GF goals for · GA goals against · GD goal difference · Pts points</p>` : ''}`;
+    body = `<section class="panel">${s.tournamentId !== t.id || s.status === 'loading' ? empty('Loading the table…', '', { ic: 'refresh' }) : s.status === 'error' ? empty('Could not load the table', s.message, { ic: 'alert' }) : rows.length ? standingsTable(rows, 0, t.sport) : empty('No table yet', `The table builds from finalised results: ${rulesFor(t.sport).points}.`, { ic: 'chart' })}</section>
+    ${rows.length ? `<p class="standings-foot">${esc(standingsLegend(t.sport))}</p>` : ''}`;
   } else {
     body = `${live.length ? `<section class="panel live-panel"><div class="panel-head"><div><h2><span class="live-dot"></span>Live now</h2><p>Scores update automatically</p></div></div><div class="match-list">${live.map((m) => matchCard(m)).join('')}</div></section>` : ''}
     ${upcoming.length || !live.length ? `<div class="section-head"><h2>Upcoming</h2></div>${list(upcoming, 'No upcoming matches.')}` : ''}`;
@@ -452,7 +475,7 @@ function standingsPreview() {
   else if (s.status === 'loading') body = empty('Loading standings…', '', { ic: 'refresh' });
   else if (s.status === 'error') body = empty('Could not load standings', s.message, { ic: 'alert' });
   else if (!s.rows.length) body = empty('No standings yet', 'Standings appear after the first result is finalised.', { ic: 'chart' });
-  else body = standingsTable(s.rows, 5);
+  else body = standingsTable(s.rows, 5, byId(store.tournaments, s.tournamentId)?.sport);
   return panel('Standings', store.tournaments.length ? name : '', body, '<button type="button" class="link-btn" data-page="standings">Full table →</button>');
 }
 
@@ -545,7 +568,7 @@ function standingsPage() {
   else if (s.status === 'loading') body = empty('Loading standings…', '', { ic: 'refresh' });
   else if (s.status === 'error') body = empty('Could not load standings', s.message, { ic: 'alert', action: button('Try again', 'reload-standings', { cls: 'btn-primary' }) });
   else if (!s.rows.length) body = empty('No standings yet', 'Finalised match results build this table: three points for a win, one for a draw.', { ic: 'chart' });
-  else body = standingsTable(s.rows);
+  else body = standingsTable(s.rows, 0, byId(store.tournaments, s.tournamentId)?.sport);
   const updated = s.status === 'loaded' && s.updatedAt ? `Updated ${new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
   // The CSV comes from the standings-csv serverless function (public, read-only).
   const download = s.tournamentId ? `<a class="btn" href="./fn/standings-csv?tournament_id=${encodeURIComponent(s.tournamentId)}" download>${icon('download')}Download CSV</a>` : '';
@@ -554,7 +577,7 @@ function standingsPage() {
   ${sportFilter()}
   <div class="toolbar"><label class="select-wrap">Tournament<select id="standings-tournament">${choices.map((t) => `<option value="${esc(t.id)}" ${s.tournamentId === t.id ? 'selected' : ''}>${esc(t.name)} · ${esc(t.season || '')}</option>`).join('')}</select></label><span class="spacer"></span>${updated ? `<span class="chip">${icon('refresh')}${esc(updated)}</span>` : ''}</div>
   <section class="panel"><div class="panel-head"><div><h2>${esc(tournamentName(s.tournamentId))}</h2><p>${s.rows.length ? plural(s.rows.length, 'team') : 'League table'}</p></div></div>${body}</section>
-  <p class="standings-foot">P played · W won · D drawn · L lost · GF goals for · GA goals against · GD goal difference · Pts points</p>`;
+  <p class="standings-foot">${esc(standingsLegend(byId(store.tournaments, s.tournamentId)?.sport))}</p>`;
 }
 
 function usersNotice() {
@@ -904,8 +927,13 @@ function openScoreModal(id) {
   if (!m) return;
   if (m.status === 'completed') { toast(`Final result: ${m.home} ${m.resultHome}–${m.resultAway} ${m.away}.`); return; }
   const score = matchScore(m) || [0, 0];
-  const side = (key, name, value, label) => `<div class="score-side"><small>${label}</small><strong>${esc(name)}</strong><div class="stepper"><button type="button" data-action="step" data-field="${key}" data-step="-1" aria-label="${label} score down">−</button><input name="${key}" type="number" min="0" max="99" inputmode="numeric" value="${esc(value)}" aria-label="${esc(name)} score" /><button type="button" data-action="step" data-field="${key}" data-step="1" aria-label="${label} score up">+</button></div></div>`;
-  openModal('score-form', m.status === 'live' ? 'Update the score' : 'Start scoring', `${tournamentName(m.tournamentId)} · ${m.venue || 'Venue TBD'}`, `<input type="hidden" name="match" value="${esc(m.id)}" /><div class="score-grid">${side('home', m.home, score[0], 'HOME')}<span class="score-vs">vs</span>${side('away', m.away, score[1], 'AWAY')}</div><p class="score-note">Saving keeps the result open. <b>Finalising locks it</b> and updates the standings.</p>`,
+  const sport = sportOfMatch(m);
+  const r = rulesFor(sport);
+  // Basketball gets +2 and +3 buttons, so a 98-point game is not 98 taps.
+  const quick = (key, label) => (r.quick || []).map((n) => `<button type="button" class="quick-step" data-action="step" data-field="${key}" data-step="${n}" aria-label="${label} plus ${n}">+${n}</button>`).join('');
+  const side = (key, name, value, label) => `<div class="score-side"><small>${label} · ${esc(r.unit)}</small><strong>${esc(name)}</strong><div class="stepper"><button type="button" data-action="step" data-field="${key}" data-step="-1" aria-label="${label} score down">−</button><input name="${key}" type="number" min="0" max="${r.max}" inputmode="numeric" value="${esc(value)}" aria-label="${esc(name)} ${esc(r.unit.toLowerCase())}" /><button type="button" data-action="step" data-field="${key}" data-step="1" aria-label="${label} score up">+</button></div>${quick(key, label)}</div>`;
+  const rule = r.bestOf ? `Best of ${r.bestOf}: the match ends when one side wins ${Math.floor(r.bestOf / 2) + 1} sets.` : r.draw ? '' : `No draws in ${sportInfo(sport).label.toLowerCase()}.`;
+  openModal('score-form', m.status === 'live' ? 'Update the score' : 'Start scoring', `${tournamentName(m.tournamentId)} · ${m.venue || 'Venue TBD'}`, `<input type="hidden" name="match" value="${esc(m.id)}" /><div class="score-grid">${side('home', m.home, score[0], 'HOME')}<span class="score-vs">vs</span>${side('away', m.away, score[1], 'AWAY')}</div><p class="score-note">${sportInfo(sport).emoji} ${esc(sportInfo(sport).label)}${rule ? ` · ${esc(rule)}` : ''} Saving keeps the result open. <b>Finalising locks it</b> and updates the standings.</p>`,
     `${cancelButton}<button type="submit" class="btn" value="save">Save live score</button><button type="submit" class="btn btn-primary" value="finalize">Finalise result</button>`);
 }
 
@@ -1115,7 +1143,7 @@ document.addEventListener('click', (event) => {
     }
     case 'step': {
       const field = target.closest('form')?.elements[target.dataset.field];
-      if (field) field.value = Math.max(0, Math.min(99, (Number(field.value) || 0) + Number(target.dataset.step)));
+      if (field) field.value = Math.max(0, Math.min(Number(field.max) || 99, (Number(field.value) || 0) + Number(target.dataset.step)));
       break;
     }
     case 'toggle-password': {
@@ -1228,9 +1256,10 @@ document.addEventListener('submit', (event) => {
     case 'score-form': {
       const home = Number(f.home.value);
       const away = Number(f.away.value);
-      if (![home, away].every((n) => Number.isInteger(n) && n >= 0 && n <= 99)) { showFormError(form, 'Scores must be whole numbers from 0 to 99.'); return; }
       const m = byId(store.matches, f.match.value);
       const final = event.submitter?.value === 'finalize';
+      const problem = scoreProblem(sportOfMatch(m), home, away, final);
+      if (problem) { showFormError(form, problem); return; }
       if (final && !window.confirm(`Finalise ${m.home} ${home}–${away} ${m.away}? The result will be locked.`)) return;
       void runSave(form, () => (final ? api.finalize(m.id, home, away) : api.saveLive(m.id, home, away)),
         final ? `Result finalised: ${m.home} ${home}–${away} ${m.away}. Standings are updating.` : `Live score saved: ${m.home} ${home}–${away} ${m.away}.`, final ? 'Finalising…' : 'Saving…');

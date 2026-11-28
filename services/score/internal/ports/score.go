@@ -21,6 +21,11 @@ type Outbox interface {
 	PrunePublished(ctx context.Context, before time.Time) (int64, error)
 }
 
+// TournamentReader returns a tournament's sport, so scores are checked by that sport's rules.
+type TournamentReader interface {
+	Sport(ctx context.Context, tournamentID string) (string, error)
+}
+
 type MatchReader interface {
 	GetMatch(context.Context, string) (domain.Match, error)
 }
