@@ -17,7 +17,8 @@
 !services/api-gateway/migrations/
 !services/api-gateway/migrations/**
 !services/api-gateway/go.mod
-!services/api-gateway/go.sum!services/dzongkhag/go.mod
+!services/api-gateway/go.sum
+!services/dzongkhag/go.mod
 !services/dzongkhag/go.sum
 !services/dzongkhag/cmd/
 !services/dzongkhag/cmd/**
@@ -31,3 +32,6 @@
 !services/*/cmd/**
 !services/*/internal/
 !services/*/internal/**
+!functions/
+!functions/connector/
+!functions/connector/**

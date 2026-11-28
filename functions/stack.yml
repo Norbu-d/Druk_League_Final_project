@@ -1,0 +1,33 @@
+# OpenFaaS stack for DrukLeague. Deploy to OpenFaaS or faasd with:
+#   faas-cli up -f functions/stack.yml
+# Both functions use the "dockerfile" language: each folder holds a Dockerfile built on the
+# official of-watchdog. Locally (Windows/Docker Desktop, where faasd cannot run) the same
+# images run under Docker Compose; see functions/README.md.
+version: 1.0
+provider:
+  name: openfaas
+  gateway: http://127.0.0.1:8080
+
+functions:
+  match-report:
+    lang: dockerfile
+    handler: ./match-report
+    image: drukleague/fn-match-report:0.1.0
+    environment:
+      DRUKLEAGUE_API: http://bff:8080/api
+    annotations:
+      # Invoked by the function connector for every drukleague.match.finalized event.
+      topic: drukleague.match.finalized
+    labels:
+      com.openfaas.scale.min: "1"
+      com.openfaas.scale.max: "3"
+
+  standings-csv:
+    lang: dockerfile
+    handler: ./standings-csv
+    image: drukleague/fn-standings-csv:0.1.0
+    environment:
+      DRUKLEAGUE_API: http://bff:8080/api
+    labels:
+      com.openfaas.scale.min: "1"
+      com.openfaas.scale.max: "3"

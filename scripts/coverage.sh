@@ -12,7 +12,7 @@ printf '%-32s %12s\n' MODULE COVERAGE
 
 # Remove any profile left behind if a run is interrupted.
 cleanup_profiles() {
-  for dir in "$root"/packages/* "$root"/services/* "$root"/tools/*; do
+  for dir in "$root"/packages/* "$root"/services/* "$root"/tools/* "$root"/functions/*; do
     [[ -d "$dir" ]] || continue
     rm -f "$dir"/.coverage-$$.out
     rm -f "$dir"/.coverage-$$.log
@@ -22,7 +22,7 @@ cleanup_profiles() {
 trap cleanup_profiles EXIT
 trap 'cleanup_profiles; exit 1' HUP INT TERM
 
-for dir in "$root"/packages/* "$root"/services/* "$root"/tools/*; do
+for dir in "$root"/packages/* "$root"/services/* "$root"/tools/* "$root"/functions/*; do
   [[ -f "$dir/go.mod" ]] || continue
   name=${dir#"$root"/}
   case "$name" in
